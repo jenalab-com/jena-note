@@ -13,6 +13,8 @@ A native macOS WYSIWYG Markdown editor. Write without seeing Markdown symbols �
 - **Plain text support** — Opens and saves `.txt` files as plain text
 - **Recent documents** — Quick access to recently opened files; last document restores on relaunch
 - **Line spacing** — Adjustable 1×, 1.5×, 2× via toolbar
+- **Multilingual** — Korean, English, Chinese, Japanese, Spanish, German, French
+- **Light / Dark mode** — System default, Light, or Dark — switchable in Settings (⌘,)
 - **Native macOS** — Built with AppKit, NSDocument architecture, full Undo/Redo, autosave, and Retina support
 
 ### Supported Formatting
@@ -73,6 +75,9 @@ Sources/
     main.swift                  — Entry point
     AppDelegate.swift           — App lifecycle, menu setup
     HelpWindowController.swift  — Help window
+    SettingsManager.swift       — Language & appearance preferences
+    Localization.swift          — i18n translation tables (7 languages)
+    PreferencesWindowController.swift — Settings window
   document/
     MarkdownDocument.swift      — NSDocument subclass
     MarkdownSerializer.swift    — NSAttributedString ↔ CommonMark
