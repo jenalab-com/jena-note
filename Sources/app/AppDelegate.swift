@@ -6,6 +6,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private let recentMenuDelegate = RecentDocumentsMenuDelegate()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        SettingsManager.shared.applyAppearance()
         setupMenu()
     }
 
@@ -34,6 +35,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Menu Setup (코드 기반)
 
+    func rebuildMenu() {
+        setupMenu()
+    }
+
     private func setupMenu() {
         let mainMenu = NSMenu()
 
@@ -42,98 +47,102 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(appMenuItem)
         let appMenu = NSMenu()
         appMenuItem.submenu = appMenu
-        appMenu.addItem(withTitle: "Jena Note 정보", action: #selector(showAbout(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: L10n.tr("menu.app.about"), action: #selector(showAbout(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Jena Note 숨기기", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
-        let hideOthers = appMenu.addItem(withTitle: "다른 항목 숨기기", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
+        appMenu.addItem(withTitle: L10n.tr("menu.app.settings"), action: #selector(showSettings(_:)), keyEquivalent: ",")
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: L10n.tr("menu.app.hide"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        let hideOthers = appMenu.addItem(withTitle: L10n.tr("menu.app.hideOthers"), action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
         hideOthers.keyEquivalentModifierMask = [.command, .option]
-        appMenu.addItem(withTitle: "모두 보기", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: L10n.tr("menu.app.showAll"), action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Jena Note 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: L10n.tr("menu.app.quit"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 
         // 파일 메뉴
         let fileMenuItem = NSMenuItem()
         mainMenu.addItem(fileMenuItem)
-        let fileMenu = NSMenu(title: "파일")
+        let fileMenu = NSMenu(title: L10n.tr("menu.file"))
         fileMenuItem.submenu = fileMenu
-        fileMenu.addItem(withTitle: "새 문서", action: #selector(NSDocumentController.newDocument(_:)), keyEquivalent: "n")
-        fileMenu.addItem(withTitle: "열기...", action: #selector(NSDocumentController.openDocument(_:)), keyEquivalent: "o")
+        fileMenu.addItem(withTitle: L10n.tr("menu.file.new"), action: #selector(NSDocumentController.newDocument(_:)), keyEquivalent: "n")
+        fileMenu.addItem(withTitle: L10n.tr("menu.file.open"), action: #selector(NSDocumentController.openDocument(_:)), keyEquivalent: "o")
 
-        let recentMenuItem = NSMenuItem(title: "최근 열었던 항목", action: nil, keyEquivalent: "")
-        let recentMenu = NSMenu(title: "최근 열었던 항목")
+        let recentMenuItem = NSMenuItem(title: L10n.tr("menu.file.recent"), action: nil, keyEquivalent: "")
+        let recentMenu = NSMenu(title: L10n.tr("menu.file.recent"))
         recentMenu.delegate = recentMenuDelegate
         recentMenuItem.submenu = recentMenu
         fileMenu.addItem(recentMenuItem)
 
         fileMenu.addItem(.separator())
-        fileMenu.addItem(withTitle: "저장", action: #selector(NSDocument.save(_:)), keyEquivalent: "s")
-        let saveAs = fileMenu.addItem(withTitle: "다른 이름으로 저장...", action: #selector(NSDocument.saveAs(_:)), keyEquivalent: "s")
+        fileMenu.addItem(withTitle: L10n.tr("menu.file.save"), action: #selector(NSDocument.save(_:)), keyEquivalent: "s")
+        let saveAs = fileMenu.addItem(withTitle: L10n.tr("menu.file.saveAs"), action: #selector(NSDocument.saveAs(_:)), keyEquivalent: "s")
         saveAs.keyEquivalentModifierMask = [.command, .shift]
-        fileMenu.addItem(withTitle: "되돌리기", action: #selector(NSDocument.revertToSaved(_:)), keyEquivalent: "")
+        fileMenu.addItem(withTitle: L10n.tr("menu.file.revert"), action: #selector(NSDocument.revertToSaved(_:)), keyEquivalent: "")
         fileMenu.addItem(.separator())
-        fileMenu.addItem(withTitle: "닫기", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        fileMenu.addItem(withTitle: L10n.tr("menu.file.close"), action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
 
         // 편집 메뉴
         let editMenuItem = NSMenuItem()
         mainMenu.addItem(editMenuItem)
-        let editMenu = NSMenu(title: "편집")
+        let editMenu = NSMenu(title: L10n.tr("menu.edit"))
         editMenuItem.submenu = editMenu
-        editMenu.addItem(withTitle: "실행 취소", action: #selector(UndoManager.undo), keyEquivalent: "z")
-        let redo = editMenu.addItem(withTitle: "다시 실행", action: #selector(UndoManager.redo), keyEquivalent: "z")
+        editMenu.addItem(withTitle: L10n.tr("menu.edit.undo"), action: #selector(UndoManager.undo), keyEquivalent: "z")
+        let redo = editMenu.addItem(withTitle: L10n.tr("menu.edit.redo"), action: #selector(UndoManager.redo), keyEquivalent: "z")
         redo.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(.separator())
-        editMenu.addItem(withTitle: "오려두기", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        editMenu.addItem(withTitle: "복사", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        editMenu.addItem(withTitle: "붙여넣기", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        let plainPaste = editMenu.addItem(withTitle: "서식 없이 붙여넣기", action: #selector(NSTextView.pasteAsPlainText(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: L10n.tr("menu.edit.cut"), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: L10n.tr("menu.edit.copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: L10n.tr("menu.edit.paste"), action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        let plainPaste = editMenu.addItem(withTitle: L10n.tr("menu.edit.pastePlain"), action: #selector(NSTextView.pasteAsPlainText(_:)), keyEquivalent: "v")
         plainPaste.keyEquivalentModifierMask = [.command, .shift]
-        editMenu.addItem(withTitle: "전체 선택", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editMenu.addItem(withTitle: L10n.tr("menu.edit.selectAll"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editMenu.addItem(.separator())
-        editMenu.addItem(withTitle: "찾기...", action: #selector(NSTextView.performFindPanelAction(_:)), keyEquivalent: "f")
+        editMenu.addItem(withTitle: L10n.tr("menu.edit.find"), action: #selector(NSTextView.performFindPanelAction(_:)), keyEquivalent: "f")
 
         // 서식 메뉴
         let formatMenuItem = NSMenuItem()
         mainMenu.addItem(formatMenuItem)
-        let formatMenu = NSMenu(title: "서식")
+        let formatMenu = NSMenu(title: L10n.tr("menu.format"))
         formatMenuItem.submenu = formatMenu
 
-        formatMenu.addItem(withTitle: "굵게", action: #selector(EditorViewController.toggleBold), keyEquivalent: "b")
-        formatMenu.addItem(withTitle: "기울임", action: #selector(EditorViewController.toggleItalic), keyEquivalent: "i")
-        formatMenu.addItem(withTitle: "코드", action: #selector(EditorViewController.toggleInlineCode), keyEquivalent: "")
+        formatMenu.addItem(withTitle: L10n.tr("menu.format.bold"), action: #selector(EditorViewController.toggleBold), keyEquivalent: "b")
+        formatMenu.addItem(withTitle: L10n.tr("menu.format.italic"), action: #selector(EditorViewController.toggleItalic), keyEquivalent: "i")
+        formatMenu.addItem(withTitle: L10n.tr("menu.format.code"), action: #selector(EditorViewController.toggleInlineCode), keyEquivalent: "")
         formatMenu.addItem(.separator())
-        formatMenu.addItem(withTitle: "제목 1", action: #selector(EditorViewController.setHeading1), keyEquivalent: "")
-        formatMenu.addItem(withTitle: "제목 2", action: #selector(EditorViewController.setHeading2), keyEquivalent: "")
-        formatMenu.addItem(withTitle: "제목 3", action: #selector(EditorViewController.setHeading3), keyEquivalent: "")
-        formatMenu.addItem(withTitle: "본문", action: #selector(EditorViewController.setBodyText), keyEquivalent: "")
+        formatMenu.addItem(withTitle: L10n.tr("menu.format.h1"), action: #selector(EditorViewController.setHeading1), keyEquivalent: "")
+        formatMenu.addItem(withTitle: L10n.tr("menu.format.h2"), action: #selector(EditorViewController.setHeading2), keyEquivalent: "")
+        formatMenu.addItem(withTitle: L10n.tr("menu.format.h3"), action: #selector(EditorViewController.setHeading3), keyEquivalent: "")
+        formatMenu.addItem(withTitle: L10n.tr("menu.format.body"), action: #selector(EditorViewController.setBodyText), keyEquivalent: "")
         formatMenu.addItem(.separator())
-        formatMenu.addItem(withTitle: "목록", action: #selector(EditorViewController.toggleUnorderedList), keyEquivalent: "")
-        formatMenu.addItem(withTitle: "번호 목록", action: #selector(EditorViewController.toggleOrderedList), keyEquivalent: "")
-        formatMenu.addItem(withTitle: "인용", action: #selector(EditorViewController.toggleBlockquote), keyEquivalent: "")
+        formatMenu.addItem(withTitle: L10n.tr("menu.format.ul"), action: #selector(EditorViewController.toggleUnorderedList), keyEquivalent: "")
+        formatMenu.addItem(withTitle: L10n.tr("menu.format.ol"), action: #selector(EditorViewController.toggleOrderedList), keyEquivalent: "")
+        formatMenu.addItem(withTitle: L10n.tr("menu.format.quote"), action: #selector(EditorViewController.toggleBlockquote), keyEquivalent: "")
         formatMenu.addItem(.separator())
-        let linkItem = formatMenu.addItem(withTitle: "링크 삽입", action: #selector(EditorViewController.insertLink), keyEquivalent: "k")
+        let linkItem = formatMenu.addItem(withTitle: L10n.tr("menu.format.link"), action: #selector(EditorViewController.insertLink), keyEquivalent: "k")
         linkItem.keyEquivalentModifierMask = .command
 
         // 윈도우 메뉴
         let windowMenuItem = NSMenuItem()
         mainMenu.addItem(windowMenuItem)
-        let windowMenu = NSMenu(title: "윈도우")
+        let windowMenu = NSMenu(title: L10n.tr("menu.window"))
         windowMenuItem.submenu = windowMenu
-        windowMenu.addItem(withTitle: "최소화", action: #selector(NSWindow.miniaturize(_:)), keyEquivalent: "m")
-        windowMenu.addItem(withTitle: "확대/축소", action: #selector(NSWindow.zoom(_:)), keyEquivalent: "")
+        windowMenu.addItem(withTitle: L10n.tr("menu.window.minimize"), action: #selector(NSWindow.miniaturize(_:)), keyEquivalent: "m")
+        windowMenu.addItem(withTitle: L10n.tr("menu.window.zoom"), action: #selector(NSWindow.zoom(_:)), keyEquivalent: "")
         windowMenu.addItem(.separator())
-        windowMenu.addItem(withTitle: "모든 창 앞으로", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
+        windowMenu.addItem(withTitle: L10n.tr("menu.window.front"), action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
         NSApp.windowsMenu = windowMenu
 
         // 도움말 메뉴
         let helpMenuItem = NSMenuItem()
         mainMenu.addItem(helpMenuItem)
-        let helpMenu = NSMenu(title: "도움말")
+        let helpMenu = NSMenu(title: L10n.tr("menu.help"))
         helpMenuItem.submenu = helpMenu
-        let helpItem = helpMenu.addItem(withTitle: "Jena Note 도움말", action: #selector(showHelp(_:)), keyEquivalent: "?")
+        let helpItem = helpMenu.addItem(withTitle: L10n.tr("menu.help.help"), action: #selector(showHelp(_:)), keyEquivalent: "?")
         helpItem.target = self
 
         NSApp.mainMenu = mainMenu
     }
+
+    // MARK: - Actions
 
     @objc func showAbout(_ sender: Any?) {
         let credits = NSMutableAttributedString()
@@ -156,6 +165,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         ])
     }
 
+    @objc func showSettings(_ sender: Any?) {
+        PreferencesWindowController.shared.show()
+    }
+
     @objc func showHelp(_ sender: Any?) {
         HelpWindowController.shared.show()
     }
@@ -173,7 +186,7 @@ private class RecentDocumentsMenuDelegate: NSObject, NSMenuDelegate {
         menu.removeAllItems()
         let recentURLs = Array(NSDocumentController.shared.recentDocumentURLs.prefix(5))
         if recentURLs.isEmpty {
-            let empty = NSMenuItem(title: "최근 항목 없음", action: nil, keyEquivalent: "")
+            let empty = NSMenuItem(title: L10n.tr("menu.file.recent.empty"), action: nil, keyEquivalent: "")
             empty.isEnabled = false
             menu.addItem(empty)
         } else {
@@ -184,7 +197,7 @@ private class RecentDocumentsMenuDelegate: NSObject, NSMenuDelegate {
                 menu.addItem(item)
             }
             menu.addItem(.separator())
-            let clear = NSMenuItem(title: "목록 지우기", action: #selector(NSDocumentController.clearRecentDocuments(_:)), keyEquivalent: "")
+            let clear = NSMenuItem(title: L10n.tr("menu.file.recent.clear"), action: #selector(NSDocumentController.clearRecentDocuments(_:)), keyEquivalent: "")
             clear.target = NSDocumentController.shared
             menu.addItem(clear)
         }
