@@ -3,10 +3,11 @@ VERSION     = 1.0.0
 BUILD_DIR   = .build
 BUNDLE      = $(BUILD_DIR)/$(APP_NAME).app
 BINARY      = $(BUNDLE)/Contents/MacOS/$(APP_NAME)
+DMG         = $(BUILD_DIR)/$(APP_NAME)-$(VERSION).dmg
 PKG         = $(BUILD_DIR)/$(APP_NAME)-$(VERSION).pkg
 SOURCES     = $(shell find Sources -name "*.swift" | sort)
 
-.PHONY: build run install pkg clean
+.PHONY: build run install dmg pkg clean
 
 ## 개발용 빌드 + 실행
 run: build
@@ -28,6 +29,20 @@ install: build
 	@rm -rf ~/Applications/$(APP_NAME).app
 	@cp -r $(BUNDLE) ~/Applications/$(APP_NAME).app
 	@echo "✓ 설치 완료: ~/Applications/$(APP_NAME).app"
+
+## .dmg 배포용 디스크 이미지 생성
+dmg: build
+	@rm -rf /tmp/dmg-staging-$(APP_NAME)
+	@mkdir -p /tmp/dmg-staging-$(APP_NAME)
+	@cp -r $(BUNDLE) /tmp/dmg-staging-$(APP_NAME)/
+	@ln -s /Applications /tmp/dmg-staging-$(APP_NAME)/Applications
+	@chflags nohidden /tmp/dmg-staging-$(APP_NAME)/$(APP_NAME).app
+	@xattr -cr /tmp/dmg-staging-$(APP_NAME)/$(APP_NAME).app
+	@hdiutil create -volname "$(APP_NAME)" \
+		-srcfolder /tmp/dmg-staging-$(APP_NAME) \
+		-ov -format UDZO $(DMG)
+	@rm -rf /tmp/dmg-staging-$(APP_NAME)
+	@echo "✓ DMG 생성: $(DMG)"
 
 ## .pkg 인스톨러 생성
 pkg: build
