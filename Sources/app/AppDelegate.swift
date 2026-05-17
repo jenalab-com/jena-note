@@ -66,6 +66,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         fileMenu.addItem(withTitle: L10n.tr("menu.file.new"), action: #selector(NSDocumentController.newDocument(_:)), keyEquivalent: "n")
         fileMenu.addItem(withTitle: L10n.tr("menu.file.open"), action: #selector(NSDocumentController.openDocument(_:)), keyEquivalent: "o")
 
+        let addFolder = fileMenu.addItem(withTitle: L10n.tr("menu.file.addFolder"),
+                                         action: #selector(SidebarViewController.showAddFolderPanel(_:)),
+                                         keyEquivalent: "o")
+        addFolder.keyEquivalentModifierMask = [.command, .shift]
+
         let recentMenuItem = NSMenuItem(title: L10n.tr("menu.file.recent"), action: nil, keyEquivalent: "")
         let recentMenu = NSMenu(title: L10n.tr("menu.file.recent"))
         recentMenu.delegate = recentMenuDelegate
@@ -119,6 +124,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         formatMenu.addItem(.separator())
         let linkItem = formatMenu.addItem(withTitle: L10n.tr("menu.format.link"), action: #selector(EditorViewController.insertLink), keyEquivalent: "k")
         linkItem.keyEquivalentModifierMask = .command
+
+        // 보기 메뉴 (사이드바 토글)
+        let viewMenuItem = NSMenuItem()
+        mainMenu.addItem(viewMenuItem)
+        let viewMenu = NSMenu(title: L10n.tr("menu.view"))
+        viewMenuItem.submenu = viewMenu
+        let toggleSidebar = viewMenu.addItem(withTitle: L10n.tr("menu.view.toggleSidebar"),
+                                             action: #selector(EditorWindowController.toggleSidebar(_:)),
+                                             keyEquivalent: "s")
+        toggleSidebar.keyEquivalentModifierMask = [.command, .option]
 
         // 윈도우 메뉴
         let windowMenuItem = NSMenuItem()

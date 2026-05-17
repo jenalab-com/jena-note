@@ -23,28 +23,32 @@ NSDocument가 다음을 모두 처리하므로 직접 구현하지 않는다:
 의존성은 항상 **위 → 아래** 방향으로만 흐른다.
 
 ```
-┌─────────────────────────────────────────┐
-│  UI Layer                               │
-│  EditorTextView · FormatToolbar         │
-│  EditorViewController · WindowController│
-└────────────────┬────────────────────────┘
-                 │ reads / writes attributed string
-┌────────────────▼────────────────────────┐
-│  Document Layer                         │
-│  MarkdownDocument (NSDocument)          │
-└────────────────┬────────────────────────┘
-                 │ serialize / deserialize
-┌────────────────▼────────────────────────┐
-│  Infrastructure Layer                   │
-│  MarkdownSerializer                     │
-│  (NSAttributedString ↔ CommonMark .md)  │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  UI Layer                                                │
+│  EditorTextView · FormatToolbar                          │
+│  EditorViewController · EditorWindowController           │
+│  SidebarViewController (NSOutlineView)                   │
+└────────────────┬─────────────────────────┬───────────────┘
+                 │ reads/writes            │ asks to open file
+                 │ attributed string       │
+┌────────────────▼─────────────────────────▼───────────────┐
+│  Document Layer                                          │
+│  MarkdownDocument (NSDocument)                           │
+└────────────────┬─────────────────────────────────────────┘
+                 │ serialize / deserialize                  
+┌────────────────▼─────────────────────────────────────────┐
+│  Infrastructure Layer                                    │
+│  MarkdownSerializer · SyntaxHighlighter                  │
+│  FolderBookmarksStore · FolderWatcher (FSEvents)         │
+└──────────────────────────────────────────────────────────┘
 ```
 
 **규칙:**
 - UI Layer는 `MarkdownSerializer`를 직접 호출하지 않는다
 - `MarkdownDocument`는 AppKit(NSTextView 등)에 의존하지 않는다
 - `MarkdownSerializer`는 UI/Document 어느 쪽도 import하지 않는다
+- `SidebarViewController`는 `EditorViewController`를 직접 참조하지 않는다 — 통신은 NSDocumentController 호출 또는 NotificationCenter로 이루어진다
+- `FolderBookmarksStore` / `FolderWatcher`는 AppKit/UI를 import하지 않는다 (`Foundation`만)
 
 ---
 
@@ -55,19 +59,27 @@ Sources/
   app/
     main.swift                      — 진입점, NSApplication.main()
     AppDelegate.swift               — 앱 생명주기, 첫 실행 시 빈 문서 열기
+    SettingsManager.swift           — 언어/외관 설정 영속
+    Localization.swift              — L10n.tr(key)
+    PreferencesWindowController.swift / HelpWindowController.swift
   document/
     MarkdownDocument.swift          — NSDocument 서브클래스: 저장·열기 경계
     MarkdownSerializer.swift        — NSAttributedString ↔ CommonMark 변환
+    SyntaxHighlighter.swift         — 코드 블록 문법 하이라이팅
   editor/
-    EditorWindowController.swift    — NSWindowController: 창·툴바 초기화
-    EditorViewController.swift      — NSViewController: Document ↔ View 조율
+    EditorWindowController.swift    — NSWindowController: 창·툴바·SplitView 호스트
+    EditorViewController.swift      — NSViewController: Document ↔ View 조율 + 스왑
     EditorTextView.swift            — NSTextView 서브클래스: 텍스트 입력 처리
     FormatCommands.swift            — 서식 액션 (bold, italic, heading, list 등)
   toolbar/
     FormatToolbar.swift             — NSToolbar + NSToolbarDelegate
+  sidebar/                          ← 신설 (ADR-0004/0005)
+    SidebarViewController.swift     — NSOutlineView 호스트, 폴더 추가/제거 UI
+    SidebarDataSource.swift         — 트리 노드 모델 + DataSource/Delegate
+    FolderBookmarksStore.swift      — UserDefaults 영속, 변경 통지
+    FolderWatcher.swift             — FSEvents 래퍼, debounce 200ms
 Resources/
   Info.plist
-  MainMenu.xib (또는 코드 기반 메뉴)
 ```
 
 ---
@@ -177,6 +189,28 @@ Cmd+S
   → 기호 없이 서식 적용된 상태로 표시
 ```
 
+### 사이드바 파일 클릭 → 인-플레이스 문서 스왑 (ADR-0004)
+```
+사용자가 사이드바에서 .md 파일 클릭
+  → SidebarViewController가 EditorWindowController.openFile(at:) 호출
+  → 현재 document의 canClose(...) 확인 (미저장 시 시트)
+  → NSDocumentController.openDocument(withContentsOf:display:false)
+  → 기존 윈도우 컨트롤러를 currentDoc에서 removeWindowController
+  → 새 document에 addWindowController
+  → EditorViewController.loadDocumentContent() 재호출
+  → 사이드바에서 해당 행 하이라이트
+```
+
+### 사이드바 트리 갱신 (ADR-0005)
+```
+폴더 변경 (외부에서 add/rename/delete)
+  → FSEventStream 콜백 (FolderWatcher)
+  → 200ms debounce
+  → FolderBookmarksStore가 영향받은 폴더 재스캔
+  → NotificationCenter 통지
+  → SidebarDataSource.reloadTree(animating:)
+```
+
 ---
 
 ## 6. 상태 관리
@@ -248,7 +282,25 @@ clean:
 - **근거:** NSTextView와 직접 통합, Undo/Redo 자동 지원, AppKit 렌더링 최적화 활용
 - **결과:** MarkdownSerializer가 양방향 변환을 담당하며, CommonMark 완전 지원에 한계가 있을 수 있음 (복잡한 중첩 구조). 허용 가능한 트레이드오프.
 
-### ADR-0003: 단일 창 / 단일 문서
+### ADR-0003: 단일 창 / 단일 문서 — **DEPRECATED (2026-05-17, ADR-0004로 대체)**
 - **결정:** 멀티탭·멀티창 미지원 (spec Out-of-Scope 준수)
 - **근거:** 복잡도를 최소화하고 NSDocument 기본 동작을 그대로 활용
 - **결과:** 사용자는 파일마다 새 창을 열어야 함. macOS 표준 동작으로 허용 가능.
+- **폐기 사유:** 사이드바 폴더 브라우저 도입(ADR-0004) — 단일 창 안에서 사이드바로 문서를 빠르게 교체하는 UX가 핵심 가치이므로 단일-창 단일-문서 모델로는 달성 불가.
+
+### ADR-0004: SplitViewController + 인-플레이스 문서 스왑 (2026-05-17)
+- **결정:** `EditorWindowController`가 `NSSplitViewController`를 contentViewController로 호스트한다. 좌측 = `SidebarViewController`, 우측 = `EditorViewController`. 사이드바에서 파일 클릭 시 현재 창의 NSDocument를 교체한다 (`removeWindowController` → 새 Document에 `addWindowController`).
+- **근거:** 사이드바의 핵심 가치(빠른 탐색)는 클릭마다 새 창이 뜨는 모델로는 달성 불가. macOS-네이티브 NSDocument를 유지하면서도 VS Code/Obsidian 류의 인-플레이스 스왑 UX를 제공.
+- **결과:**
+  - 미저장 변경 시 `NSDocument.canClose(...)` 흐름 재사용 → 저장 확인 시트.
+  - 동일 파일이 이미 다른 창에 열려 있으면 그 창을 전면으로 (NSDocumentController 기본 동작).
+  - 멀티 창은 여전히 가능하나 권장 흐름은 단일 창 + 사이드바.
+- **트레이드오프:** `NSDocument.makeWindowControllers()`가 자동으로 만든 window controller를 빈 문서일 때는 사용하지 않고 기존 창 controller를 양도하는 분기 처리가 추가됨.
+
+### ADR-0005: FolderBookmarksStore + FolderWatcher (2026-05-17)
+- **결정:** 신설 `sidebar/` 모듈에 `FolderBookmarksStore` (UserDefaults 영속), `FolderWatcher` (FSEvents 래퍼)를 둔다. Document Layer에는 의존하지 않으며 `MarkdownDocument`도 사이드바를 모른다.
+- **근거:** 사이드바 상태는 문서와 독립적이므로 별도 인프라 레이어에 둔다. FSEvents는 폴링 대비 키 입력 예산(50ms)을 보호한다.
+- **결과:**
+  - 비-샌드박스 가정: `URL`을 path 문자열로 직렬화. MAS 배포 전환 시 `bookmarkData(options: .withSecurityScope)`로 마이그레이션 필요 (보류, 기획 로그 §11).
+  - FSEvents 콜백은 메인 스레드에서 200ms debounce 후 트리 reload.
+  - 등록 폴더 누락/볼륨 분리 등 에러 상태는 store가 보존하고 ViewController가 표시.
