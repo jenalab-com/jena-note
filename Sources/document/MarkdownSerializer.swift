@@ -11,6 +11,36 @@ extension NSAttributedString.Key {
     static let mdInlineCode = NSAttributedString.Key("MDInlineCode")
     /// 테이블 헤더 행 여부
     static let mdTableHeader = NSAttributedString.Key("MDTableHeader")
+    /// 사용자가 명시적으로 지정한 글자 색 (구조적 기본색과 구분하기 위한 플래그)
+    static let mdCustomColor = NSAttributedString.Key("MDCustomColor")
+}
+
+// MARK: - Color ↔ Hex Helpers
+
+enum MarkdownColor {
+    /// NSColor → "#RRGGBB" — 알파는 무시 (HTML span 호환)
+    static func toHex(_ color: NSColor) -> String {
+        let rgb = color.usingColorSpace(.sRGB) ?? color
+        let r = Int(round(max(0, min(1, rgb.redComponent)) * 255))
+        let g = Int(round(max(0, min(1, rgb.greenComponent)) * 255))
+        let b = Int(round(max(0, min(1, rgb.blueComponent)) * 255))
+        return String(format: "#%02X%02X%02X", r, g, b)
+    }
+
+    /// "#RRGGBB" 또는 "#RGB" → NSColor (실패 시 nil)
+    static func fromHex(_ hex: String) -> NSColor? {
+        var s = hex.trimmingCharacters(in: .whitespaces)
+        if s.hasPrefix("#") { s.removeFirst() }
+        if s.count == 3 {
+            // 3자리 → 6자리 확장 (e.g., F00 → FF0000)
+            s = s.map { "\($0)\($0)" }.joined()
+        }
+        guard s.count == 6, let value = UInt32(s, radix: 16) else { return nil }
+        let r = CGFloat((value >> 16) & 0xFF) / 255.0
+        let g = CGFloat((value >> 8) & 0xFF) / 255.0
+        let b = CGFloat(value & 0xFF) / 255.0
+        return NSColor(srgbRed: r, green: g, blue: b, alpha: 1.0)
+    }
 }
 
 // MARK: - Typography
@@ -327,22 +357,31 @@ enum MarkdownSerializer {
             // 기준 폰트에 이미 있는 trait은 사용자가 명시적으로 적용한 것이 아님
             let isBold   = fontTraits.contains(.bold)   && !baseTraits.contains(.bold)
             let isItalic = fontTraits.contains(.italic) && !baseTraits.contains(.italic)
+            let hasCustomColor = attrs[.mdCustomColor] as? Bool == true
 
+            var output: String
             if isInlineCode {
-                result += "`\(text)`"
-            } else if isBold && isItalic {
-                result += "***\(text)***"
-            } else if isBold {
-                result += "**\(text)**"
-            } else if isItalic {
-                result += "*\(text)*"
-            } else if let url = attrs[.link] as? URL {
-                result += "[\(text)](\(url.absoluteString))"
-            } else if let urlStr = attrs[.link] as? String {
-                result += "[\(text)](\(urlStr))"
+                output = "`\(text)`"
             } else {
-                result += text
+                output = text
+                if isBold && isItalic {
+                    output = "***\(output)***"
+                } else if isBold {
+                    output = "**\(output)**"
+                } else if isItalic {
+                    output = "*\(output)*"
+                }
+                if let url = attrs[.link] as? URL {
+                    output = "[\(output)](\(url.absoluteString))"
+                } else if let urlStr = attrs[.link] as? String {
+                    output = "[\(output)](\(urlStr))"
+                }
             }
+            // 색상은 가장 바깥쪽 래퍼로 — 파서가 색을 추출한 뒤 내부를 재귀 파싱
+            if hasCustomColor, let color = attrs[.foregroundColor] as? NSColor {
+                output = "<span style=\"color: \(MarkdownColor.toHex(color))\">\(output)</span>"
+            }
+            result += output
 
             i = effectiveRange.location + effectiveRange.length
         }
@@ -603,6 +642,13 @@ enum MarkdownSerializer {
         ]
 
         while !remaining.isEmpty {
+            // <span style="color: ...">...</span> — 사용자 지정 색상 (가장 먼저 검사)
+            if remaining.hasPrefix("<span "),
+               let parsed = parseColorSpan(in: remaining, baseFont: baseFont) {
+                result.append(parsed.attributed)
+                remaining = parsed.remaining
+                continue
+            }
             if remaining.hasPrefix("***"), let end = remaining.dropFirst(3).range(of: "***") {
                 let content = String(remaining[remaining.index(remaining.startIndex, offsetBy: 3)..<end.lowerBound])
                 result.append(NSAttributedString(string: content, attributes: [.font: MemoFont.boldItalic(from: baseFont), .foregroundColor: NSColor.labelColor]))
@@ -652,6 +698,47 @@ enum MarkdownSerializer {
         }
 
         return result
+    }
+
+    /// `<span style="color: #RRGGBB">...</span>`를 파싱.
+    /// 내부 텍스트는 재귀적으로 인라인 서식 파싱하여 색상 + 굵게/기울임 등의 중첩을 보존한다.
+    private static func parseColorSpan(in text: Substring, baseFont: NSFont)
+        -> (attributed: NSAttributedString, remaining: Substring)? {
+
+        guard text.hasPrefix("<span "),
+              let openEnd = text.range(of: ">") else { return nil }
+        let openTag = String(text[text.startIndex..<openEnd.upperBound])
+        // 인용 부호 정규화: 작은따옴표/큰따옴표 둘 다 허용
+        let normalized = openTag.replacingOccurrences(of: "'", with: "\"")
+        guard let colorRange = normalized.range(of: "color:") else { return nil }
+
+        let afterColor = normalized[colorRange.upperBound...]
+        // hex 값을 추출 — `#`로 시작하는 토큰만 인정 (이름색은 미지원)
+        guard let hashIdx = afterColor.firstIndex(of: "#") else { return nil }
+        let hexStart = hashIdx
+        var hexEnd = afterColor.index(after: hexStart)
+        while hexEnd < afterColor.endIndex,
+              let scalar = afterColor[hexEnd].unicodeScalars.first,
+              CharacterSet.alphanumerics.contains(scalar) {
+            hexEnd = afterColor.index(after: hexEnd)
+        }
+        let hex = String(afterColor[hexStart..<hexEnd])
+        guard let color = MarkdownColor.fromHex(hex) else { return nil }
+
+        let afterOpen = text[openEnd.upperBound...]
+        guard let closeRange = afterOpen.range(of: "</span>") else { return nil }
+        let inner = String(afterOpen[afterOpen.startIndex..<closeRange.lowerBound])
+
+        // 내부 콘텐츠 재귀 파싱 → 색상·플래그를 전체 범위에 덧씌움
+        let innerParsed = parseInline(inner, baseFont: baseFont)
+        let mutable = NSMutableAttributedString(attributedString: innerParsed)
+        let fullRange = NSRange(location: 0, length: mutable.length)
+        mutable.addAttributes([
+            .foregroundColor: color,
+            .mdCustomColor: true
+        ], range: fullRange)
+
+        return (mutable, afterOpen[closeRange.upperBound...])
     }
 
     private static func findItalicEnd(in text: Substring, marker: String) -> Range<Substring.Index>? {
