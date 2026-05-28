@@ -124,6 +124,25 @@ class EditorViewController: NSViewController {
         applyLineSpacing(multiplier)
     }
 
+    /// 툴바의 NSColorWell이 색상 변경을 통지할 때 호출된다.
+    /// 선택 범위가 있을 때만 색을 적용한다.
+    @objc func changeTextColor(_ sender: Any?) {
+        guard let well = sender as? NSColorWell else { return }
+        FormatCommands.applyTextColor(textView, color: well.color)
+    }
+
+    /// 메뉴 > 서식 > 글자 색… — NSColorPanel을 직접 띄운다.
+    @objc func showColorPanel(_ sender: Any?) {
+        let panel = NSColorPanel.shared
+        panel.setTarget(self)
+        panel.setAction(#selector(colorPanelDidChange(_:)))
+        panel.makeKeyAndOrderFront(nil)
+    }
+
+    @objc private func colorPanelDidChange(_ sender: NSColorPanel) {
+        FormatCommands.applyTextColor(textView, color: sender.color)
+    }
+
     private func applyLineSpacing(_ multiplier: CGFloat) {
         guard let storage = textView.textStorage else { return }
         let fullRange = NSRange(location: 0, length: storage.length)
@@ -178,7 +197,8 @@ class EditorViewController: NSViewController {
             #selector(setHeading1), #selector(setHeading2), #selector(setHeading3),
             #selector(setBodyText), #selector(toggleUnorderedList), #selector(toggleOrderedList),
             #selector(toggleBlockquote), #selector(insertLink), #selector(insertHorizontalRule),
-            #selector(changeLineSpacing)
+            #selector(changeLineSpacing),
+            #selector(changeTextColor), #selector(showColorPanel)
         ]
         if formatSelectors.contains(aSelector) { return true }
         return super.responds(to: aSelector)

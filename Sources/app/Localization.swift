@@ -82,6 +82,7 @@ enum L10n {
         "menu.format.ol":       "번호 목록",
         "menu.format.quote":    "인용",
         "menu.format.link":     "링크 삽입",
+        "menu.format.textColor":"글자 색...",
         // Window Menu
         "menu.window":          "윈도우",
         "menu.window.minimize": "최소화",
@@ -110,6 +111,7 @@ enum L10n {
         "toolbar.quote":        "인용",
         "toolbar.link":         "링크",
         "toolbar.hr":           "구분선",
+        "toolbar.textColor":    "글자 색",
         "toolbar.lineSpacing":  "줄 간격",
         // Misc
         "untitled":             "제목 없음",
@@ -231,6 +233,7 @@ enum L10n {
         "menu.format.ol":       "Numbered List",
         "menu.format.quote":    "Blockquote",
         "menu.format.link":     "Insert Link",
+        "menu.format.textColor":"Text Color...",
         "menu.window":          "Window",
         "menu.window.minimize": "Minimize",
         "menu.window.zoom":     "Zoom",
@@ -255,6 +258,7 @@ enum L10n {
         "toolbar.quote":        "Quote",
         "toolbar.link":         "Link",
         "toolbar.hr":           "Divider",
+        "toolbar.textColor":    "Text Color",
         "toolbar.lineSpacing":  "Line Spacing",
         "untitled":             "Untitled",
         "link.title":           "Insert Link",

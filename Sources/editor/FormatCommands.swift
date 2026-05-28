@@ -58,6 +58,29 @@ enum FormatCommands {
         textView.didChangeText()
     }
 
+    /// 선택 범위의 글자 색을 변경하고 `.mdCustomColor` 플래그를 부여한다.
+    /// labelColor와 동일하면 색을 제거 (구조적 기본색으로 되돌림).
+    static func applyTextColor(_ textView: NSTextView, color: NSColor) {
+        guard let storage = textView.textStorage else { return }
+        let range = textView.selectedRange()
+        guard range.length > 0 else { return }
+
+        textView.shouldChangeText(in: range, replacementString: nil)
+        // labelColor 또는 거의 같은 색이면 사용자 색상 해제
+        let labelHex = MarkdownColor.toHex(NSColor.labelColor)
+        let pickedHex = MarkdownColor.toHex(color)
+        if labelHex == pickedHex {
+            storage.removeAttribute(.mdCustomColor, range: range)
+            storage.addAttribute(.foregroundColor, value: NSColor.labelColor, range: range)
+        } else {
+            storage.addAttributes([
+                .foregroundColor: color,
+                .mdCustomColor: true
+            ], range: range)
+        }
+        textView.didChangeText()
+    }
+
     static func insertLink(_ textView: NSTextView, url: String) {
         guard let storage = textView.textStorage else { return }
         let range = textView.selectedRange()

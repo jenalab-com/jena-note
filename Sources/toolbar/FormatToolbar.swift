@@ -16,6 +16,7 @@ class FormatToolbar: NSToolbar {
     private static let itemBlockquote   = NSToolbarItem.Identifier("blockquote")
     private static let itemLink         = NSToolbarItem.Identifier("link")
     private static let itemHR            = NSToolbarItem.Identifier("horizontalRule")
+    private static let itemColor         = NSToolbarItem.Identifier("textColor")
     private static let itemLineSpacing   = NSToolbarItem.Identifier("lineSpacing")
 
     // 상태 표시용 버튼 참조
@@ -85,6 +86,7 @@ extension FormatToolbar: NSToolbarDelegate {
             FormatToolbar.itemLink,
             FormatToolbar.itemHR,
             .space,
+            FormatToolbar.itemColor,
             FormatToolbar.itemLineSpacing,
             .flexibleSpace
         ]
@@ -146,6 +148,8 @@ extension FormatToolbar: NSToolbarDelegate {
         case FormatToolbar.itemHR:
             return makeItem(itemIdentifier, label: "구분선", systemImage: "minus",
                             action: #selector(EditorViewController.insertHorizontalRule))
+        case FormatToolbar.itemColor:
+            return makeColorWellItem(itemIdentifier)
         case FormatToolbar.itemLineSpacing:
             return makeLineSpacingItem(itemIdentifier)
         default:
@@ -199,10 +203,30 @@ extension FormatToolbar: NSToolbarDelegate {
         return item
     }
 
+    private func makeColorWellItem(_ identifier: NSToolbarItem.Identifier) -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: identifier)
+        let label = L10n.tr("toolbar.textColor")
+        item.label = label
+        item.toolTip = label
+
+        let well = NSColorWell(frame: NSRect(x: 0, y: 0, width: 32, height: 26))
+        well.color = .labelColor
+        // NSColorWell도 NSToolbarItem.view 안에서 책임 체인 디스패치가 불안정 —
+        // FormatToolbar.target에 직접 묶는다 (line spacing과 동일한 처방).
+        well.target = target
+        well.action = #selector(EditorViewController.changeTextColor(_:))
+        well.translatesAutoresizingMaskIntoConstraints = false
+        well.widthAnchor.constraint(equalToConstant: 32).isActive = true
+        well.heightAnchor.constraint(equalToConstant: 22).isActive = true
+        item.view = well
+        return item
+    }
+
     private func makeLineSpacingItem(_ identifier: NSToolbarItem.Identifier) -> NSToolbarItem {
         let item = NSToolbarItem(itemIdentifier: identifier)
-        item.label = "줄 간격"
-        item.toolTip = "줄 간격"
+        let label = L10n.tr("toolbar.lineSpacing")
+        item.label = label
+        item.toolTip = label
 
         let seg = NSSegmentedControl(frame: NSRect(x: 0, y: 0, width: 96, height: 26))
         seg.segmentCount = 3
@@ -212,7 +236,13 @@ extension FormatToolbar: NSToolbarDelegate {
         seg.trackingMode = .selectOne
         seg.selectedSegment = 0
         seg.action = #selector(EditorViewController.changeLineSpacing(_:))
-        seg.target = nil
+        // NSSegmentedControl in NSToolbarItem.view does not reliably traverse
+        // the responder chain when target is nil on macOS — bind directly to
+        // the editor view controller via FormatToolbar.target.
+        seg.target = target
+        seg.translatesAutoresizingMaskIntoConstraints = false
+        seg.widthAnchor.constraint(equalToConstant: 96).isActive = true
+        seg.heightAnchor.constraint(equalToConstant: 26).isActive = true
         item.view = seg
         return item
     }

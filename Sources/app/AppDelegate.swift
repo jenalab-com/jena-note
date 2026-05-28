@@ -124,6 +124,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         formatMenu.addItem(.separator())
         let linkItem = formatMenu.addItem(withTitle: L10n.tr("menu.format.link"), action: #selector(EditorViewController.insertLink), keyEquivalent: "k")
         linkItem.keyEquivalentModifierMask = .command
+        formatMenu.addItem(.separator())
+        formatMenu.addItem(withTitle: L10n.tr("menu.format.textColor"),
+                           action: #selector(EditorViewController.showColorPanel(_:)),
+                           keyEquivalent: "")
 
         // 보기 메뉴 (사이드바 토글)
         let viewMenuItem = NSMenuItem()
