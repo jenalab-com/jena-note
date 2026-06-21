@@ -54,30 +54,42 @@ NSDocument가 다음을 모두 처리하므로 직접 구현하지 않는다:
 
 ## 3. 폴더 구조 (Feature-first)
 
+SPM 패키지 구조: `Sources/JenaNote`(진입점·main), `Sources/JenaNoteKit`(기능 모듈), `Tests/JenaNoteKitTests`(단위 테스트).
+
 ```
 Sources/
-  app/
+  JenaNote/
     main.swift                      — 진입점, NSApplication.main()
-    AppDelegate.swift               — 앱 생명주기, 첫 실행 시 빈 문서 열기
-    SettingsManager.swift           — 언어/외관 설정 영속
-    Localization.swift              — L10n.tr(key)
-    PreferencesWindowController.swift / HelpWindowController.swift
-  document/
-    MarkdownDocument.swift          — NSDocument 서브클래스: 저장·열기 경계
-    MarkdownSerializer.swift        — NSAttributedString ↔ CommonMark 변환
-    SyntaxHighlighter.swift         — 코드 블록 문법 하이라이팅
-  editor/
-    EditorWindowController.swift    — NSWindowController: 창·툴바·SplitView 호스트
-    EditorViewController.swift      — NSViewController: Document ↔ View 조율 + 스왑
-    EditorTextView.swift            — NSTextView 서브클래스: 텍스트 입력 처리
-    FormatCommands.swift            — 서식 액션 (bold, italic, heading, list 등)
-  toolbar/
-    FormatToolbar.swift             — NSToolbar + NSToolbarDelegate
-  sidebar/                          ← 신설 (ADR-0004/0005)
-    SidebarViewController.swift     — NSOutlineView 호스트, 폴더 추가/제거 UI
-    SidebarDataSource.swift         — 트리 노드 모델 + DataSource/Delegate
-    FolderBookmarksStore.swift      — UserDefaults 영속, 변경 통지
-    FolderWatcher.swift             — FSEvents 래퍼, debounce 200ms
+  JenaNoteKit/
+    app/
+      AppDelegate.swift             — 앱 생명주기, 첫 실행 시 빈 문서 열기
+      SettingsManager.swift         — 언어/외관/읽기 설정 영속
+      Localization.swift            — L10n.tr(key), 7개 언어
+      PreferencesWindowController.swift / HelpWindowController.swift
+    document/
+      MarkdownDocument.swift        — NSDocument 서브클래스: 저장·열기 경계
+      MarkdownSerializer.swift      — NSAttributedString ↔ CommonMark 변환
+      SyntaxHighlighter.swift       — 코드 블록 문법 하이라이팅
+    editor/
+      EditorWindowController.swift  — NSWindowController: 창·툴바·SplitView 호스트
+      EditorViewController.swift    — NSViewController: Document ↔ View 조율 + 스왑
+      EditorTextView.swift          — NSTextView 서브클래스: 텍스트 입력 처리
+      FormatCommands.swift          — 서식 액션 (bold, italic, heading, list 등)
+      ReaderViewController.swift    — 읽기 전용 조판·스크롤/페이징·폰트 배율 (ADR-0006)
+      ReaderMetrics.swift           — 컬럼폭·페이지 높이 순수 함수 (단위 테스트 가능)
+    toolbar/
+      FormatToolbar.swift           — NSToolbar + NSToolbarDelegate
+      ReaderToolbar.swift           — 읽기 모드 전용 NSToolbar (ADR-0006)
+    sidebar/                        ← 신설 (ADR-0004/0005)
+      SidebarViewController.swift   — NSOutlineView 호스트, 폴더 추가/제거 UI
+      SidebarDataSource.swift       — 트리 노드 모델 + DataSource/Delegate
+      FolderBookmarksStore.swift    — UserDefaults 영속, 변경 통지
+      FolderWatcher.swift           — FSEvents 래퍼, debounce 200ms
+Tests/
+  JenaNoteKitTests/
+    ReaderMetricsTests.swift        — columnWidth·snappedPageHeight 단위 테스트
+    ReadingSettingsTests.swift      — SettingsManager 읽기 설정 영속 테스트
+    SmokeTests.swift                — 모듈 링크 스모크 테스트
 Resources/
   Info.plist
 ```
@@ -146,6 +158,21 @@ func applyItalic(to textView: NSTextView) { ... }
 func applyHeading(_ level: Int, to textView: NSTextView) { ... }
 func applyList(ordered: Bool, to textView: NSTextView) { ... }
 ```
+
+### ReaderViewController
+```
+역할: 읽기 전용 조판·스크롤/페이징·폰트 배율. 원본 document.content는 절대 수정하지 않는다.
+- init(content:): 이미 파싱된 NSAttributedString을 받아 저장
+- loadView(): 고정폭 컬럼(ReaderMetrics.columnWidth) 중앙 정렬 레이아웃, 하단 페이지 인디케이터
+- setFontScale(_:): 배율 적용·영속. ReaderMetrics.scaled로 원본을 건드리지 않고 표시본만 생성
+- setPageMode(_:): 스크롤 ↔ 페이징 전환. 페이징 시 세로 스크롤러 숨김·elasticity 제거
+- scrollToCurrentPage(): 뷰 높이를 줄 높이 정수배(snappedPageHeight)로 끊어 offset 점프
+- updatePageIndicator(): 페이징 모드에서만 "‹ N / M ›" 표시, 스크롤 모드에선 숨김
+- updateContent(_:): 문서 교체 시(파일 스왑) 원본 갱신 후 재렌더
+- goToNextPage() / goToPreviousPage(): 좌우 방향키 또는 외부 툴바 호출
+```
+
+**금지:** document 또는 NSTextStorage에 쓰기, 파일 I/O 직접 호출
 
 ---
 
@@ -249,24 +276,28 @@ Format > Bold        → EditorViewController.toggleBold  (커스텀 액션)
 
 ## 8. 빌드 구조
 
-jenaMemory와 동일하게 **Makefile + swiftc 직접 컴파일** 방식을 따른다.
+**SPM(Swift Package Manager) + Makefile 래핑** 방식을 따른다. `Package.swift`가 타겟을 정의하고, `Makefile`이 빌드·런·테스트·설치를 래핑한다.
 
 ```makefile
-APP_NAME   = JenaMemo
-VERSION    = 1.0.0
-BUILD_DIR  = .build
-SOURCES    = Sources/**/*.swift
-
+# 주요 Makefile 타겟
 build:
-    swiftc -framework AppKit -O $(SOURCES) -o $(BUILD_DIR)/$(APP_NAME)
+    swift build -c release --product JenaNote
     # .app 번들 구성 (Info.plist, Resources 복사)
 
 run: build
-    open $(BUILD_DIR)/$(APP_NAME).app
+    open .build/JenaNote.app
+
+test:
+    swift test
 
 clean:
-    rm -rf $(BUILD_DIR)
+    rm -rf .build
 ```
+
+**패키지 구조:**
+- `Sources/JenaNote` — `@main` 진입점 (AppKit 의존)
+- `Sources/JenaNoteKit` — 기능 모듈 (라이브러리 타겟, 단위 테스트 가능)
+- `Tests/JenaNoteKitTests` — 순수 함수(ReaderMetrics, SettingsManager 등) 단위 테스트
 
 ---
 
@@ -304,3 +335,8 @@ clean:
   - 비-샌드박스 가정: `URL`을 path 문자열로 직렬화. MAS 배포 전환 시 `bookmarkData(options: .withSecurityScope)`로 마이그레이션 필요 (보류, 기획 로그 §11).
   - FSEvents 콜백은 메인 스레드에서 200ms debounce 후 트리 reload.
   - 등록 폴더 누락/볼륨 분리 등 에러 상태는 store가 보존하고 ViewController가 표시.
+
+### ADR-0006: 읽기 모드 = split 우측 item 스왑 + 세로 구간 점프식 가로 페이지네이션 (2026-06-21)
+- **결정:** 읽기 모드를 별도 창이 아닌 `EditorWindowController` 우측 split item을 `ReaderViewController`로 교체하는 방식으로 구현한다. 가로 페이지 넘김은 단일 컬럼 레이아웃을 뷰 높이(줄 높이 정수배) 단위로 끊어 scroll offset을 점프시켜 근사한다.
+- **근거:** 사이드바·툴바·문서 스왑(ADR-0004) 재사용. NSTextView 물리적 페이지 분할의 무게를 피하면서 전자책 UX 대부분을 얻는다. 회귀 테스트를 위해 SPM 도입(ReaderMetrics 순수 함수 검증).
+- **트레이드오프:** 진짜 조판 페이지네이션(가변 줄 수, 고아/미망인 제어) 미지원. 페이지 바닥 여백 발생 가능. 읽기 모드는 읽기 전용이라 문서 변경 위험 없음.
