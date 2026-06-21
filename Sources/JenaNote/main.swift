@@ -1,4 +1,5 @@
 import AppKit
+import JenaNoteKit
 
 let app = NSApplication.shared
 app.setActivationPolicy(.regular)
