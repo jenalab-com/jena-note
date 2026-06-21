@@ -21,7 +21,7 @@ class EditorWindowController: NSWindowController {
     convenience init() {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 980, height: 640),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -179,11 +179,25 @@ class EditorWindowController: NSWindowController {
         readerVC?.setFontScale(cur + 0.1)
     }
 
+    @objc func changeReaderFont(_ sender: Any?) {
+        guard let seg = sender as? NSSegmentedControl else { return }
+        let font: SettingsManager.ReadingFont = (seg.selectedSegment == 1) ? .sans : .serif
+        readerVC?.setFont(font)
+    }
+
+    @objc func changeReaderLineSpacing(_ sender: Any?) {
+        guard let seg = sender as? NSSegmentedControl else { return }
+        let values: [CGFloat] = [1.2, 1.5, 2.0]
+        let v = values[min(max(seg.selectedSegment, 0), values.count - 1)]
+        readerVC?.setLineSpacing(v)
+    }
+
     override func responds(to aSelector: Selector!) -> Bool {
         let sels: [Selector] = [
             #selector(toggleReadingMode(_:)), #selector(enterReadingMode(_:)),
             #selector(exitReadingMode(_:)), #selector(changeReaderPageMode(_:)),
-            #selector(decreaseReaderFont(_:)), #selector(increaseReaderFont(_:))
+            #selector(decreaseReaderFont(_:)), #selector(increaseReaderFont(_:)),
+            #selector(changeReaderFont(_:)), #selector(changeReaderLineSpacing(_:))
         ]
         if sels.contains(aSelector) { return true }
         return super.responds(to: aSelector)

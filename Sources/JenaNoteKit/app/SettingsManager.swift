@@ -13,6 +13,8 @@ final class SettingsManager {
         static let readingPageMode = "jn_readingPageMode"
         static let readingFontScale = "jn_readingFontScale"
         static let readingLineLength = "jn_readingLineLength"
+        static let readingFont = "jn_readingFont"
+        static let readingLineSpacing = "jn_readingLineSpacing"
     }
 
     // MARK: - Language
@@ -44,6 +46,12 @@ final class SettingsManager {
     enum ReadingPageMode: String, CaseIterable {
         case scroll = "scroll"
         case paged  = "paged"
+    }
+
+    /// 읽기 모드 본문 글꼴. 한글 기준 명조(serif) / 고딕(sans).
+    enum ReadingFont: String, CaseIterable {
+        case serif = "serif"   // 명조 (AppleMyungjo)
+        case sans  = "sans"    // 고딕 (시스템)
     }
 
     // MARK: - Appearance
@@ -116,6 +124,27 @@ final class SettingsManager {
             return v ?? 35
         }
         set { defaults.set(newValue, forKey: Key.readingLineLength) }
+    }
+
+    var readingFont: ReadingFont {
+        get {
+            guard let raw = defaults.string(forKey: Key.readingFont),
+                  let f = ReadingFont(rawValue: raw) else { return .serif }
+            return f
+        }
+        set { defaults.set(newValue.rawValue, forKey: Key.readingFont) }
+    }
+
+    /// 본문 줄 높이 배수. 기본 1.5(넉넉하게), 범위 1.0~2.5.
+    var readingLineSpacing: CGFloat {
+        get {
+            let v = defaults.object(forKey: Key.readingLineSpacing) as? Double
+            return CGFloat(v ?? 1.5)
+        }
+        set {
+            let clamped = min(max(newValue, 1.0), 2.5)
+            defaults.set(Double(clamped), forKey: Key.readingLineSpacing)
+        }
     }
 
     // MARK: - Apply
