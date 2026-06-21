@@ -101,6 +101,79 @@ class ReaderViewController: NSViewController {
     func setPageMode(_ mode: SettingsManager.ReadingPageMode) {
         pageMode = mode
         SettingsManager.shared.readingPageMode = mode
-        // Task 5에서 paged 레이아웃 분기 구현
+        let paged = (mode == .paged)
+        scrollView.hasVerticalScroller = !paged
+        scrollView.verticalScrollElasticity = paged ? .none : .allowed
+        currentPage = 0
+        scrollToCurrentPage()
     }
+
+    // MARK: - Paging State
+    private var currentPage: Int = 0
+
+    private var lineHeightEstimate: CGFloat {
+        guard let lm = textView.layoutManager, textView.textStorage?.length ?? 0 > 0 else {
+            let f = NSFont(descriptor: MemoFont.body.fontDescriptor,
+                           size: MemoFont.body.pointSize * scale) ?? MemoFont.body
+            return f.ascender - f.descender + f.leading + 2
+        }
+        return lm.defaultLineHeight(for: NSFont(descriptor: MemoFont.body.fontDescriptor,
+                                                size: MemoFont.body.pointSize * scale) ?? MemoFont.body)
+    }
+
+    private var pageHeight: CGFloat {
+        let visible = scrollView.contentView.bounds.height
+        return ReaderMetrics.snappedPageHeight(viewHeight: visible, lineHeight: lineHeightEstimate)
+    }
+
+    private var totalContentHeight: CGFloat {
+        (textView.layoutManager?.usedRect(for: textView.textContainer!).height ?? 0)
+            + textView.textContainerInset.height * 2
+    }
+
+    private var pageCount: Int {
+        max(1, Int(ceil(totalContentHeight / max(pageHeight, 1))))
+    }
+
+    var pageInfo: (current: Int, total: Int) { (currentPage + 1, pageCount) }
+
+    func goToNextPage() {
+        guard currentPage < pageCount - 1 else { return }
+        currentPage += 1
+        scrollToCurrentPage()
+    }
+
+    func goToPreviousPage() {
+        guard currentPage > 0 else { return }
+        currentPage -= 1
+        scrollToCurrentPage()
+    }
+
+    private func scrollToCurrentPage() {
+        let y = CGFloat(currentPage) * pageHeight
+        scrollView.contentView.scroll(to: NSPoint(x: 0, y: y))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+        NotificationCenter.default.post(name: .readerPageChanged, object: self)
+    }
+
+    // MARK: - Keyboard Paging
+    override func keyDown(with event: NSEvent) {
+        guard pageMode == .paged else { super.keyDown(with: event); return }
+        switch event.keyCode {
+        case 124: goToNextPage()      // →
+        case 123: goToPreviousPage()  // ←
+        default: super.keyDown(with: event)
+        }
+    }
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        view.window?.makeFirstResponder(self)
+    }
+}
+
+extension Notification.Name {
+    static let readerPageChanged = Notification.Name("jn_readerPageChanged")
 }
