@@ -171,6 +171,9 @@ class ReaderViewController: NSViewController {
     override func viewDidAppear() {
         super.viewDidAppear()
         view.window?.makeFirstResponder(self)
+        // 영속화된 page mode 를 레이아웃 완료(non-zero bounds) 후 한 번 적용.
+        // pageHeight 가 라이브 bounds 로 정확히 계산되고 scroll→paged 깜빡임도 없다.
+        setPageMode(SettingsManager.shared.readingPageMode)
     }
 }
 
