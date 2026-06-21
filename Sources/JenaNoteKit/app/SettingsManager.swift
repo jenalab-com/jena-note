@@ -10,6 +10,9 @@ final class SettingsManager {
     private enum Key {
         static let language = "jn_language"
         static let appearance = "jn_appearance"
+        static let readingPageMode = "jn_readingPageMode"
+        static let readingFontScale = "jn_readingFontScale"
+        static let readingLineLength = "jn_readingLineLength"
     }
 
     // MARK: - Language
@@ -34,6 +37,13 @@ final class SettingsManager {
             case .fr: return "Français"
             }
         }
+    }
+
+    // MARK: - Reading Mode
+
+    enum ReadingPageMode: String, CaseIterable {
+        case scroll = "scroll"
+        case paged  = "paged"
     }
 
     // MARK: - Appearance
@@ -78,6 +88,34 @@ final class SettingsManager {
             defaults.set(newValue.rawValue, forKey: Key.appearance)
             applyAppearance()
         }
+    }
+
+    var readingPageMode: ReadingPageMode {
+        get {
+            guard let raw = defaults.string(forKey: Key.readingPageMode),
+                  let mode = ReadingPageMode(rawValue: raw) else { return .scroll }
+            return mode
+        }
+        set { defaults.set(newValue.rawValue, forKey: Key.readingPageMode) }
+    }
+
+    var readingFontScale: CGFloat {
+        get {
+            let v = defaults.object(forKey: Key.readingFontScale) as? Double
+            return CGFloat(v ?? 1.0)
+        }
+        set {
+            let clamped = min(max(newValue, 0.8), 2.0)
+            defaults.set(Double(clamped), forKey: Key.readingFontScale)
+        }
+    }
+
+    var readingLineLength: Int {
+        get {
+            let v = defaults.object(forKey: Key.readingLineLength) as? Int
+            return v ?? 35
+        }
+        set { defaults.set(newValue, forKey: Key.readingLineLength) }
     }
 
     // MARK: - Apply
