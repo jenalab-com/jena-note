@@ -30,6 +30,7 @@ class ReaderViewController: NSViewController {
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = true
+        scrollView.backgroundColor = .textBackgroundColor
 
         let textContainer = NSTextContainer(containerSize: NSSize(
             width: 0, height: CGFloat.greatestFiniteMagnitude))
@@ -196,6 +197,17 @@ class ReaderViewController: NSViewController {
     }
 
     override var acceptsFirstResponder: Bool { true }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        // 창 리사이즈로 pageHeight(라이브 bounds 의존)·pageCount 가 바뀌면
+        // currentPage 가 범위를 벗어나 콘텐츠 밖으로 스크롤될 수 있다.
+        // paged 모드에서만 re-clamp + 인디케이터 갱신. scroll 모드는 no-op.
+        guard pageMode == .paged else { return }
+        let maxPage = max(0, pageCount - 1)
+        if currentPage > maxPage { currentPage = maxPage }
+        scrollToCurrentPage()
+    }
 
     override func viewDidAppear() {
         super.viewDidAppear()
