@@ -15,6 +15,8 @@ final class SettingsManager {
         static let readingLineLength = "jn_readingLineLength"
         static let readingFont = "jn_readingFont"
         static let readingLineSpacing = "jn_readingLineSpacing"
+        static let sidebarSortKey = "jn_sidebarSortKey"
+        static let sidebarSortOrder = "jn_sidebarSortOrder"
     }
 
     // MARK: - Language
@@ -52,6 +54,20 @@ final class SettingsManager {
     enum ReadingFont: String, CaseIterable {
         case serif = "serif"   // 명조 (AppleMyungjo)
         case sans  = "sans"    // 고딕 (시스템)
+    }
+
+    // MARK: - Sidebar Sort
+
+    /// 사이드바 파일·폴더 정렬 기준.
+    enum SidebarSortKey: String, CaseIterable {
+        case name = "name"   // 이름순
+        case date = "date"   // 수정일순
+    }
+
+    /// 정렬 방향.
+    enum SidebarSortOrder: String, CaseIterable {
+        case ascending  = "asc"   // 오름차순 (이름 A→Z / 날짜 과거→최근)
+        case descending = "desc"  // 내림차순 (이름 Z→A / 날짜 최근→과거)
     }
 
     // MARK: - Appearance
@@ -145,6 +161,24 @@ final class SettingsManager {
             let clamped = min(max(newValue, 1.0), 2.5)
             defaults.set(Double(clamped), forKey: Key.readingLineSpacing)
         }
+    }
+
+    var sidebarSortKey: SidebarSortKey {
+        get {
+            guard let raw = defaults.string(forKey: Key.sidebarSortKey),
+                  let key = SidebarSortKey(rawValue: raw) else { return .name }
+            return key
+        }
+        set { defaults.set(newValue.rawValue, forKey: Key.sidebarSortKey) }
+    }
+
+    var sidebarSortOrder: SidebarSortOrder {
+        get {
+            guard let raw = defaults.string(forKey: Key.sidebarSortOrder),
+                  let order = SidebarSortOrder(rawValue: raw) else { return .ascending }
+            return order
+        }
+        set { defaults.set(newValue.rawValue, forKey: Key.sidebarSortOrder) }
     }
 
     // MARK: - Apply
