@@ -18,6 +18,7 @@ class FormatToolbar: NSToolbar {
     private static let itemHR            = NSToolbarItem.Identifier("horizontalRule")
     private static let itemColor         = NSToolbarItem.Identifier("textColor")
     private static let itemLineSpacing   = NSToolbarItem.Identifier("lineSpacing")
+    private static let itemReadingMode   = NSToolbarItem.Identifier("readingMode")
 
     // 상태 표시용 버튼 참조
     private weak var boldButton: NSButton?
@@ -88,6 +89,8 @@ extension FormatToolbar: NSToolbarDelegate {
             .space,
             FormatToolbar.itemColor,
             FormatToolbar.itemLineSpacing,
+            .space,
+            FormatToolbar.itemReadingMode,
             .flexibleSpace
         ]
     }
@@ -152,6 +155,9 @@ extension FormatToolbar: NSToolbarDelegate {
             return makeColorWellItem(itemIdentifier)
         case FormatToolbar.itemLineSpacing:
             return makeLineSpacingItem(itemIdentifier)
+        case FormatToolbar.itemReadingMode:
+            return makeItem(itemIdentifier, label: L10n.tr("menu.view.readingMode"), systemImage: "book",
+                            action: #selector(EditorWindowController.toggleReadingMode(_:)))
         default:
             return nil
         }

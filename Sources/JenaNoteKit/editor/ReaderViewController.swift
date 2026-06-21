@@ -1,5 +1,31 @@
 import AppKit
 
+/// 페이징 모드에서 자유 스크롤을 막고 스크롤 제스처를 페이지 넘김으로 변환하는 스크롤뷰.
+final class PagingScrollView: NSScrollView {
+    var isPaging = false
+    /// true = 다음 페이지(아래로), false = 이전 페이지(위로)
+    var onPage: ((Bool) -> Void)?
+    private var armed = true
+
+    override func scrollWheel(with event: NSEvent) {
+        guard isPaging else { super.scrollWheel(with: event); return }
+        // 관성(momentum) 구간은 무시 — 한 번의 제스처가 여러 페이지를 넘기지 않게.
+        if event.momentumPhase != [] { return }
+
+        let dy = event.scrollingDeltaY
+        if event.phase == [] && event.momentumPhase == [] {
+            // 마우스 휠(비연속): 매 노치마다 한 페이지.
+            if abs(dy) > 0.5 { onPage?(dy < 0) }
+            return
+        }
+        // 트랙패드(연속 제스처): 제스처당 한 번만.
+        if event.phase == .began { armed = true }
+        guard armed, abs(dy) > 2 else { return }
+        armed = false
+        onPage?(dy < 0)
+    }
+}
+
 /// 읽기 전용 "책 보기" 뷰. document.content(이미 파싱된 NSAttributedString)를
 /// 받아 한글 35자 컬럼으로 조판한다. 원본은 절대 수정하지 않는다.
 class ReaderViewController: NSViewController {
@@ -8,11 +34,12 @@ class ReaderViewController: NSViewController {
     private var sourceContent: NSAttributedString
     private var scale: CGFloat = SettingsManager.shared.readingFontScale
     private var pageMode: SettingsManager.ReadingPageMode = SettingsManager.shared.readingPageMode
+    private var fontFamily: SettingsManager.ReadingFont = SettingsManager.shared.readingFont
+    private var lineSpacing: CGFloat = SettingsManager.shared.readingLineSpacing
 
     // MARK: - Views
-    private var scrollView: NSScrollView!
+    private var scrollView: PagingScrollView!
     private var textView: NSTextView!
-    private var widthConstraint: NSLayoutConstraint!
     private weak var pageIndicator: NSTextField?
 
     // MARK: - Init
@@ -24,13 +51,16 @@ class ReaderViewController: NSViewController {
 
     // MARK: - Layout
     override func loadView() {
-        scrollView = NSScrollView()
+        scrollView = PagingScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = true
         scrollView.backgroundColor = .textBackgroundColor
+        scrollView.onPage = { [weak self] down in
+            if down { self?.goToNextPage() } else { self?.goToPreviousPage() }
+        }
 
         let textContainer = NSTextContainer(containerSize: NSSize(
             width: 0, height: CGFloat.greatestFiniteMagnitude))
@@ -40,32 +70,22 @@ class ReaderViewController: NSViewController {
         let textStorage = NSTextStorage()
         textStorage.addLayoutManager(layoutManager)
 
-        textView = NSTextView(frame: .zero, textContainer: textContainer)
+        textView = NSTextView(frame: scrollView.bounds, textContainer: textContainer)
         textView.isEditable = false
         textView.isSelectable = true
         textView.drawsBackground = false
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude,
+                                  height: CGFloat.greatestFiniteMagnitude)
+        // 에디터와 동일한 정석: textView 가 documentView 로서 스크롤뷰 폭을 꽉 채우고
+        // (autoresizingMask + widthTracksTextView), 세로로만 늘어나 정상 스크롤된다.
+        // 컬럼 가운데 정렬은 좌우 textContainerInset 으로 표현(폭은 viewDidLayout 에서 갱신).
         textView.textContainerInset = NSSize(width: 0, height: 48)
-        textView.translatesAutoresizingMaskIntoConstraints = false
 
         scrollView.documentView = textView
-
-        // 컬럼을 고정폭으로 두고 가로 가운데 정렬.
-        // documentView 의 height 는 텍스트 내용이 결정하도록 top 만 고정하고
-        // bottom 은 contentView 에 >= 로 묶어 세로 스크롤이 동작하게 한다.
-        let column = columnWidthForCurrentSettings()
-        let contentView = scrollView.contentView
-        widthConstraint = textView.widthAnchor.constraint(equalToConstant: column)
-        let bottomConstraint = textView.bottomAnchor.constraint(
-            greaterThanOrEqualTo: contentView.bottomAnchor)
-        bottomConstraint.priority = .defaultLow
-        NSLayoutConstraint.activate([
-            widthConstraint,
-            textView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            textView.topAnchor.constraint(equalTo: contentView.topAnchor),
-            bottomConstraint
-        ])
 
         // 하단 페이지 인디케이터 (페이징 모드에서만 표시)
         let indicator = NSTextField(labelWithString: "")
@@ -90,23 +110,39 @@ class ReaderViewController: NSViewController {
     // MARK: - Rendering
     private func columnWidthForCurrentSettings() -> CGFloat {
         let chars = SettingsManager.shared.readingLineLength
-        // 한글 전각 글리프 advance 실측 (시스템 폰트 fallback 보정)
-        let probeFont = NSFont(descriptor: MemoFont.body.fontDescriptor,
-                               size: MemoFont.body.pointSize * scale) ?? MemoFont.body
+        // 본문 글리프 advance 실측 (현재 폰트·배율 기준)
+        let size = MemoFont.body.pointSize * scale
+        let probeFont = ReaderMetrics.readerFont(family: fontFamily, size: size, traits: [])
         let advance = ("한" as NSString).size(withAttributes: [.font: probeFont]).width
         return ReaderMetrics.columnWidth(charCount: chars, glyphAdvance: advance)
     }
 
     private func renderContent() {
         guard let storage = textView.textStorage else { return }
-        let display = ReaderMetrics.scaled(sourceContent, by: scale)
+        let display = ReaderMetrics.styled(sourceContent, scale: scale,
+                                           font: fontFamily, lineHeightMultiple: lineSpacing)
         storage.setAttributedString(display)
-        widthConstraint.constant = columnWidthForCurrentSettings()
+        updateColumnInset()
+        invalidatePaging()
+        if pageMode == .paged { scrollToCurrentPage() }
+    }
+
+    /// 스크롤뷰 폭에 맞춰 좌우 inset 을 갱신해 컬럼을 가운데 둔다.
+    private func updateColumnInset() {
+        let avail = scrollView.contentView.bounds.width
+        guard avail > 0 else { return }
+        let column = columnWidthForCurrentSettings()
+        let side = max(24, (avail - column) / 2)
+        if abs(textView.textContainerInset.width - side) > 0.5 {
+            textView.textContainerInset = NSSize(width: side, height: 48)
+            invalidatePaging()
+        }
     }
 
     // MARK: - Public API
     func updateContent(_ content: NSAttributedString) {
         sourceContent = content
+        currentPage = 0
         renderContent()
     }
 
@@ -116,48 +152,90 @@ class ReaderViewController: NSViewController {
         renderContent()
     }
 
+    func setFont(_ family: SettingsManager.ReadingFont) {
+        fontFamily = family
+        SettingsManager.shared.readingFont = family
+        renderContent()
+    }
+
+    func setLineSpacing(_ value: CGFloat) {
+        lineSpacing = min(max(value, 1.0), 2.5)
+        SettingsManager.shared.readingLineSpacing = lineSpacing
+        renderContent()
+    }
+
+    var currentLineSpacing: CGFloat { lineSpacing }
+    var currentFont: SettingsManager.ReadingFont { fontFamily }
+
     func setPageMode(_ mode: SettingsManager.ReadingPageMode) {
         pageMode = mode
         SettingsManager.shared.readingPageMode = mode
         let paged = (mode == .paged)
+        scrollView.isPaging = paged
         scrollView.hasVerticalScroller = !paged
         scrollView.verticalScrollElasticity = paged ? .none : .allowed
-        currentPage = 0
-        scrollToCurrentPage()
+        if paged {
+            currentPage = 0
+            invalidatePaging()
+            scrollToCurrentPage()
+        } else {
+            scrollView.contentView.scroll(to: .zero)
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+        }
         updatePageIndicator()
     }
 
-    // MARK: - Paging State
+    // MARK: - Line-aligned Paging
     private var currentPage: Int = 0
+    private var pageStartsCache: [CGFloat]?
 
-    private var lineHeightEstimate: CGFloat {
-        guard let lm = textView.layoutManager, textView.textStorage?.length ?? 0 > 0 else {
-            let f = NSFont(descriptor: MemoFont.body.fontDescriptor,
-                           size: MemoFont.body.pointSize * scale) ?? MemoFont.body
-            return f.ascender - f.descender + f.leading + 2
+    private func invalidatePaging() { pageStartsCache = nil }
+
+    /// 각 페이지의 시작 y(documentView 좌표). 페이지 경계를 실제 줄 경계에 맞춰
+    /// 줄이 잘리지 않게 한다. 페이지 하단에 걸치는 줄은 통째로 다음 페이지로 넘긴다.
+    private var pageStarts: [CGFloat] {
+        if let cached = pageStartsCache { return cached }
+        let starts = computePageStarts()
+        pageStartsCache = starts
+        return starts
+    }
+
+    private func computePageStarts() -> [CGFloat] {
+        guard let lm = textView.layoutManager, let tc = textView.textContainer else { return [0] }
+        lm.ensureLayout(for: tc)
+        let inset = textView.textContainerInset.height
+        let visible = max(1, scrollView.contentView.bounds.height)
+        let totalHeight = lm.usedRect(for: tc).height
+        if totalHeight <= visible { return [0] }
+
+        var starts: [CGFloat] = [0]        // documentView 좌표 (inset 포함)
+        var pageTop: CGFloat = 0           // container 좌표 (inset 제외)
+
+        // 안전장치: 최악의 경우라도 줄 수 이상 반복하지 않게 상한을 둔다.
+        let maxPages = Int(ceil(totalHeight / max(1, lm.defaultLineHeight(for: MemoFont.body)))) + 2
+        var guardCount = 0
+
+        while pageTop + visible < totalHeight && guardCount < maxPages {
+            guardCount += 1
+            let probeY = min(pageTop + visible, totalHeight - 1)
+            let glyphIdx = lm.glyphIndex(for: NSPoint(x: 2, y: probeY), in: tc)
+            var lineRange = NSRange()
+            let lineRect = lm.lineFragmentRect(forGlyphAt: glyphIdx, effectiveRange: &lineRange)
+            var nextTop = lineRect.minY
+            // 페이지 하단 줄이 페이지 top 과 같으면(한 줄이 visible 보다 큰 극단) 강제 전진.
+            if nextTop <= pageTop + 1 {
+                nextTop = pageTop + visible
+            }
+            starts.append(nextTop + inset)
+            pageTop = nextTop
         }
-        return lm.defaultLineHeight(for: NSFont(descriptor: MemoFont.body.fontDescriptor,
-                                                size: MemoFont.body.pointSize * scale) ?? MemoFont.body)
+        return starts
     }
 
-    private var pageHeight: CGFloat {
-        let visible = scrollView.contentView.bounds.height
-        return ReaderMetrics.snappedPageHeight(viewHeight: visible, lineHeight: lineHeightEstimate)
-    }
-
-    private var totalContentHeight: CGFloat {
-        (textView.layoutManager?.usedRect(for: textView.textContainer!).height ?? 0)
-            + textView.textContainerInset.height * 2
-    }
-
-    private var pageCount: Int {
-        max(1, Int(ceil(totalContentHeight / max(pageHeight, 1))))
-    }
-
-    var pageInfo: (current: Int, total: Int) { (currentPage + 1, pageCount) }
+    var pageInfo: (current: Int, total: Int) { (currentPage + 1, pageStarts.count) }
 
     func goToNextPage() {
-        guard currentPage < pageCount - 1 else { return }
+        guard currentPage < pageStarts.count - 1 else { return }
         currentPage += 1
         scrollToCurrentPage()
     }
@@ -169,8 +247,10 @@ class ReaderViewController: NSViewController {
     }
 
     private func scrollToCurrentPage() {
-        let y = CGFloat(currentPage) * pageHeight
-        scrollView.contentView.scroll(to: NSPoint(x: 0, y: y))
+        let starts = pageStarts
+        guard !starts.isEmpty else { return }
+        currentPage = min(max(0, currentPage), starts.count - 1)
+        scrollView.contentView.scroll(to: NSPoint(x: 0, y: starts[currentPage]))
         scrollView.reflectScrolledClipView(scrollView.contentView)
         NotificationCenter.default.post(name: .readerPageChanged, object: self)
         updatePageIndicator()
@@ -200,20 +280,17 @@ class ReaderViewController: NSViewController {
 
     override func viewDidLayout() {
         super.viewDidLayout()
-        // 창 리사이즈로 pageHeight(라이브 bounds 의존)·pageCount 가 바뀌면
-        // currentPage 가 범위를 벗어나 콘텐츠 밖으로 스크롤될 수 있다.
-        // paged 모드에서만 re-clamp + 인디케이터 갱신. scroll 모드는 no-op.
+        // 폭/높이가 바뀌면 컬럼 inset·페이지 분할을 다시 계산한다.
+        updateColumnInset()
+        invalidatePaging()
         guard pageMode == .paged else { return }
-        let maxPage = max(0, pageCount - 1)
-        if currentPage > maxPage { currentPage = maxPage }
-        scrollToCurrentPage()
+        scrollToCurrentPage()  // currentPage clamp 은 scrollToCurrentPage 내부에서 처리
     }
 
     override func viewDidAppear() {
         super.viewDidAppear()
         view.window?.makeFirstResponder(self)
         // 영속화된 page mode 를 레이아웃 완료(non-zero bounds) 후 한 번 적용.
-        // pageHeight 가 라이브 bounds 로 정확히 계산되고 scroll→paged 깜빡임도 없다.
         setPageMode(SettingsManager.shared.readingPageMode)
     }
 }

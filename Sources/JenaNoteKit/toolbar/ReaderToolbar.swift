@@ -6,6 +6,8 @@ class ReaderToolbar: NSToolbar {
 
     private static let itemExit  = NSToolbarItem.Identifier("readerExit")
     private static let itemMode  = NSToolbarItem.Identifier("readerPageMode")
+    private static let itemFontFamily = NSToolbarItem.Identifier("readerFontFamily")
+    private static let itemLineSpacing = NSToolbarItem.Identifier("readerLineSpacing")
     private static let itemFontDown = NSToolbarItem.Identifier("readerFontDown")
     private static let itemFontUp   = NSToolbarItem.Identifier("readerFontUp")
 
@@ -23,6 +25,8 @@ extension ReaderToolbar: NSToolbarDelegate {
     func toolbarDefaultItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] {
         [.flexibleSpace, ReaderToolbar.itemExit, .space,
          ReaderToolbar.itemMode, .space,
+         ReaderToolbar.itemFontFamily, .space,
+         ReaderToolbar.itemLineSpacing, .space,
          ReaderToolbar.itemFontDown, ReaderToolbar.itemFontUp, .flexibleSpace]
     }
 
@@ -57,6 +61,18 @@ extension ReaderToolbar: NSToolbarDelegate {
             seg.heightAnchor.constraint(equalToConstant: 26).isActive = true
             item.view = seg
             return item
+        case ReaderToolbar.itemFontFamily:
+            return segmentItem(id, label: L10n.tr("reader.font"),
+                               labels: [L10n.tr("reader.serif"), L10n.tr("reader.sans")],
+                               selected: SettingsManager.shared.readingFont == .sans ? 1 : 0,
+                               action: #selector(EditorWindowController.changeReaderFont(_:)))
+        case ReaderToolbar.itemLineSpacing:
+            let ls = SettingsManager.shared.readingLineSpacing
+            let sel = ls <= 1.35 ? 0 : (ls >= 1.75 ? 2 : 1)
+            return segmentItem(id, label: L10n.tr("reader.lineSpacing"),
+                               labels: [L10n.tr("reader.lineTight"), L10n.tr("reader.lineNormal"), L10n.tr("reader.lineWide")],
+                               selected: sel,
+                               action: #selector(EditorWindowController.changeReaderLineSpacing(_:)))
         case ReaderToolbar.itemFontDown:
             return iconItem(id, label: L10n.tr("reader.fontDown"), symbol: "textformat.size.smaller",
                             action: #selector(EditorWindowController.decreaseReaderFont(_:)))
@@ -66,6 +82,26 @@ extension ReaderToolbar: NSToolbarDelegate {
         default:
             return nil
         }
+    }
+
+    private func segmentItem(_ id: NSToolbarItem.Identifier, label: String,
+                             labels: [String], selected: Int, action: Selector) -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: id)
+        item.label = label; item.toolTip = label
+        let width = CGFloat(labels.count) * 44
+        let seg = NSSegmentedControl(frame: NSRect(x: 0, y: 0, width: width, height: 26))
+        seg.segmentCount = labels.count
+        for (i, l) in labels.enumerated() { seg.setLabel(l, forSegment: i) }
+        seg.trackingMode = .selectOne
+        seg.selectedSegment = selected
+        // 세그먼트는 책임 체인을 안 타므로 target 에 직접 바인딩(FormatToolbar 와 동일 처방).
+        seg.target = target
+        seg.action = action
+        seg.translatesAutoresizingMaskIntoConstraints = false
+        seg.widthAnchor.constraint(equalToConstant: width).isActive = true
+        seg.heightAnchor.constraint(equalToConstant: 26).isActive = true
+        item.view = seg
+        return item
     }
 
     private func iconItem(_ id: NSToolbarItem.Identifier, label: String,
