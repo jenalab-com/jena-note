@@ -117,11 +117,10 @@ class EditorWindowController: NSWindowController {
 
     @objc func enterReadingMode(_ sender: Any?) {
         guard !isReadingMode, let doc = document as? MarkdownDocument else { return }
-        // 편집 내용 flush 보장 — 읽기 화면이 최신 편집본을 조판하도록.
-        if let storage = editorVC.textView.textStorage {
-            doc.textDidChange(storage)
-        }
-        let reader = ReaderViewController(content: doc.content)
+        // 라이브 텍스트 스토리지의 스냅샷을 직접 전달 — 읽기 화면이 최신 미저장
+        // 편집본을 조판하되, 문서의 change count 는 건드리지 않는다 (원본 불변).
+        let liveContent = editorVC.textView.textStorage.map { NSAttributedString(attributedString: $0) } ?? doc.content
+        let reader = ReaderViewController(content: liveContent)
         readerVC = reader
         swapRightPane(to: reader)
 
@@ -132,13 +131,9 @@ class EditorWindowController: NSWindowController {
 
         isReadingMode = true
 
-        // carry-over #2: setPageMode 는 contentView.bounds.height(라이브) 를 읽어
-        // pageHeight 를 계산하므로, split item 설치/레이아웃이 끝난 다음 런루프에서
-        // 호출해야 페이지 높이가 0-bounds 로 계산되지 않는다.
-        DispatchQueue.main.async { [weak self, weak reader] in
-            reader?.setPageMode(SettingsManager.shared.readingPageMode)
-            self?.window?.makeFirstResponder(reader)
-        }
+        // 영속화된 page mode 적용은 ReaderViewController.viewDidAppear 로 위임한다.
+        // 레이아웃이 끝난(non-zero bounds) AppKit 순서 지점에서 호출돼야
+        // pageHeight 가 0-bounds 로 계산되지 않고, scroll→paged 깜빡임도 없다.
     }
 
     @objc func exitReadingMode(_ sender: Any?) {
