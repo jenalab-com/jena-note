@@ -335,6 +335,15 @@ enum L10n {
     ]
 
     private static let zh: [String: String] = [
+        // View Menu (reader)
+        "menu.view.readingMode":"阅读模式",
+        // Reader toolbar
+        "reader.exit":          "编辑",
+        "reader.pageMode":      "翻页方式",
+        "reader.scroll":        "滚动",
+        "reader.paged":         "翻页",
+        "reader.fontDown":      "缩小",
+        "reader.fontUp":        "放大",
         "menu.app.about":       "关于 Jena Note",
         "menu.app.hide":        "隐藏 Jena Note",
         "menu.app.hideOthers":  "隐藏其他",
@@ -457,6 +466,15 @@ enum L10n {
     ]
 
     private static let ja: [String: String] = [
+        // View Menu (reader)
+        "menu.view.readingMode":"読書モード",
+        // Reader toolbar
+        "reader.exit":          "編集",
+        "reader.pageMode":      "ページ方式",
+        "reader.scroll":        "スクロール",
+        "reader.paged":         "ページ",
+        "reader.fontDown":      "小さく",
+        "reader.fontUp":        "大きく",
         "menu.app.about":       "Jena Note について",
         "menu.app.hide":        "Jena Note を隠す",
         "menu.app.hideOthers":  "他を隠す",
@@ -579,6 +597,15 @@ enum L10n {
     ]
 
     private static let es: [String: String] = [
+        // View Menu (reader)
+        "menu.view.readingMode":"Modo lectura",
+        // Reader toolbar
+        "reader.exit":          "Editar",
+        "reader.pageMode":      "Modo de página",
+        "reader.scroll":        "Desplazar",
+        "reader.paged":         "Páginas",
+        "reader.fontDown":      "Reducir",
+        "reader.fontUp":        "Ampliar",
         "menu.app.about":       "Acerca de Jena Note",
         "menu.app.hide":        "Ocultar Jena Note",
         "menu.app.hideOthers":  "Ocultar otros",
@@ -701,6 +728,15 @@ enum L10n {
     ]
 
     private static let de: [String: String] = [
+        // View Menu (reader)
+        "menu.view.readingMode":"Lesemodus",
+        // Reader toolbar
+        "reader.exit":          "Bearbeiten",
+        "reader.pageMode":      "Seitenmodus",
+        "reader.scroll":        "Scrollen",
+        "reader.paged":         "Seiten",
+        "reader.fontDown":      "Kleiner",
+        "reader.fontUp":        "Größer",
         "menu.app.about":       "Über Jena Note",
         "menu.app.hide":        "Jena Note ausblenden",
         "menu.app.hideOthers":  "Andere ausblenden",
@@ -823,6 +859,15 @@ enum L10n {
     ]
 
     private static let fr: [String: String] = [
+        // View Menu (reader)
+        "menu.view.readingMode":"Mode lecture",
+        // Reader toolbar
+        "reader.exit":          "Éditer",
+        "reader.pageMode":      "Mode page",
+        "reader.scroll":        "Défilement",
+        "reader.paged":         "Pages",
+        "reader.fontDown":      "Réduire",
+        "reader.fontUp":        "Agrandir",
         "menu.app.about":       "À propos de Jena Note",
         "menu.app.hide":        "Masquer Jena Note",
         "menu.app.hideOthers":  "Masquer les autres",

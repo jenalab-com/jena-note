@@ -13,6 +13,7 @@ class ReaderViewController: NSViewController {
     private var scrollView: NSScrollView!
     private var textView: NSTextView!
     private var widthConstraint: NSLayoutConstraint!
+    private weak var pageIndicator: NSTextField?
 
     // MARK: - Init
     init(content: NSAttributedString) {
@@ -65,6 +66,22 @@ class ReaderViewController: NSViewController {
             bottomConstraint
         ])
 
+        // 하단 페이지 인디케이터 (페이징 모드에서만 표시)
+        let indicator = NSTextField(labelWithString: "")
+        indicator.alignment = .center
+        indicator.textColor = .secondaryLabelColor
+        indicator.font = NSFont.systemFont(ofSize: 11)
+        indicator.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(indicator)
+        NSLayoutConstraint.activate([
+            indicator.centerXAnchor.constraint(equalTo: scrollView.centerXAnchor),
+            indicator.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: -8)
+        ])
+        self.pageIndicator = indicator
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(updatePageIndicator),
+            name: .readerPageChanged, object: self)
+
         view = scrollView
         renderContent()
     }
@@ -106,6 +123,7 @@ class ReaderViewController: NSViewController {
         scrollView.verticalScrollElasticity = paged ? .none : .allowed
         currentPage = 0
         scrollToCurrentPage()
+        updatePageIndicator()
     }
 
     // MARK: - Paging State
@@ -154,7 +172,18 @@ class ReaderViewController: NSViewController {
         scrollView.contentView.scroll(to: NSPoint(x: 0, y: y))
         scrollView.reflectScrolledClipView(scrollView.contentView)
         NotificationCenter.default.post(name: .readerPageChanged, object: self)
+        updatePageIndicator()
     }
+
+    // MARK: - Page Indicator
+    @objc private func updatePageIndicator() {
+        guard pageMode == .paged else { pageIndicator?.isHidden = true; return }
+        let info = pageInfo
+        pageIndicator?.isHidden = false
+        pageIndicator?.stringValue = "‹ \(info.current) / \(info.total) ›"
+    }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
 
     // MARK: - Keyboard Paging
     override func keyDown(with event: NSEvent) {
