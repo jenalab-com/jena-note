@@ -14,13 +14,15 @@ final class SidebarNode {
     let isDirectory: Bool
     let isRoot: Bool          // 사용자가 등록한 최상위 폴더
     var isMissing: Bool       // 디스크에서 접근 불가
+    var modificationDate: Date // 날짜순 정렬용 수정일
     var children: [SidebarNode]?
 
-    init(url: URL, isDirectory: Bool, isRoot: Bool, isMissing: Bool = false) {
+    init(url: URL, isDirectory: Bool, isRoot: Bool, isMissing: Bool = false, modificationDate: Date = .distantPast) {
         self.url = url
         self.isDirectory = isDirectory
         self.isRoot = isRoot
         self.isMissing = isMissing
+        self.modificationDate = modificationDate
     }
 }
 
@@ -35,6 +37,7 @@ final class SidebarViewController: NSViewController {
     private var headerView: NSView!
     private var emptyStateView: NSView!
     private var addButton: NSButton!
+    private var sortButton: NSButton!
 
     private var roots: [SidebarNode] = []
     /// 펼침 상태 보존용 (URL 경로 기준)
@@ -102,6 +105,16 @@ final class SidebarViewController: NSViewController {
         addButton.translatesAutoresizingMaskIntoConstraints = false
         headerView.addSubview(addButton)
 
+        sortButton = NSButton(frame: .zero)
+        sortButton.image = NSImage(systemSymbolName: "arrow.up.arrow.down", accessibilityDescription: L10n.tr("sidebar.sort.tooltip"))
+        sortButton.isBordered = false
+        sortButton.bezelStyle = .inline
+        sortButton.target = self
+        sortButton.action = #selector(showSortMenu(_:))
+        sortButton.toolTip = L10n.tr("sidebar.sort.tooltip")
+        sortButton.translatesAutoresizingMaskIntoConstraints = false
+        headerView.addSubview(sortButton)
+
         NSLayoutConstraint.activate([
             headerView.topAnchor.constraint(equalTo: container.topAnchor),
             headerView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
@@ -114,7 +127,12 @@ final class SidebarViewController: NSViewController {
             addButton.trailingAnchor.constraint(equalTo: headerView.trailingAnchor, constant: -8),
             addButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
             addButton.widthAnchor.constraint(equalToConstant: 22),
-            addButton.heightAnchor.constraint(equalToConstant: 22)
+            addButton.heightAnchor.constraint(equalToConstant: 22),
+
+            sortButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -2),
+            sortButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+            sortButton.widthAnchor.constraint(equalToConstant: 22),
+            sortButton.heightAnchor.constraint(equalToConstant: 22)
         ])
     }
 
@@ -231,30 +249,61 @@ final class SidebarViewController: NSViewController {
 
     private func scanDirectory(_ url: URL) -> [SidebarNode] {
         let fm = FileManager.default
+        let keys: [URLResourceKey] = [.isDirectoryKey, .contentModificationDateKey]
         guard let entries = try? fm.contentsOfDirectory(at: url,
-                                                       includingPropertiesForKeys: [.isDirectoryKey],
+                                                       includingPropertiesForKeys: keys,
                                                        options: [.skipsHiddenFiles]) else { return [] }
         var subdirs: [SidebarNode] = []
         var files: [SidebarNode] = []
 
         for entry in entries {
-            let isDir = (try? entry.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+            let values = try? entry.resourceValues(forKeys: Set(keys))
+            let isDir = values?.isDirectory ?? false
+            let modDate = values?.contentModificationDate ?? .distantPast
             if isDir {
                 // 안에 .md가 하나라도 있으면 표시
                 let children = scanDirectory(entry)
                 if !children.isEmpty {
-                    let node = SidebarNode(url: entry, isDirectory: true, isRoot: false)
+                    let node = SidebarNode(url: entry, isDirectory: true, isRoot: false, modificationDate: modDate)
                     node.children = children
                     subdirs.append(node)
                 }
             } else if entry.pathExtension.lowercased() == "md" {
-                files.append(SidebarNode(url: entry, isDirectory: false, isRoot: false))
+                files.append(SidebarNode(url: entry, isDirectory: false, isRoot: false, modificationDate: modDate))
             }
         }
 
-        subdirs.sort { $0.url.lastPathComponent.localizedCaseInsensitiveCompare($1.url.lastPathComponent) == .orderedAscending }
-        files.sort { $0.url.lastPathComponent.localizedCaseInsensitiveCompare($1.url.lastPathComponent) == .orderedAscending }
+        // 폴더 먼저, 파일 나중 — 각 그룹 안에서 설정대로 정렬
+        sortNodes(&subdirs)
+        sortNodes(&files)
         return subdirs + files
+    }
+
+    /// 현재 설정(기준·방향)에 따라 노드 배열을 제자리 정렬한다.
+    private func sortNodes(_ nodes: inout [SidebarNode]) {
+        let key = SettingsManager.shared.sidebarSortKey
+        let ascending = SettingsManager.shared.sidebarSortOrder == .ascending
+
+        nodes.sort { a, b in
+            let order: ComparisonResult
+            switch key {
+            case .name:
+                order = a.url.lastPathComponent.localizedCaseInsensitiveCompare(b.url.lastPathComponent)
+            case .date:
+                if a.modificationDate == b.modificationDate {
+                    order = .orderedSame
+                } else {
+                    order = a.modificationDate < b.modificationDate ? .orderedAscending : .orderedDescending
+                }
+            }
+            switch order {
+            case .orderedAscending:  return ascending
+            case .orderedDescending: return !ascending
+            case .orderedSame:
+                // 동률이면 이름 오름차순으로 안정적 정렬
+                return a.url.lastPathComponent.localizedCaseInsensitiveCompare(b.url.lastPathComponent) == .orderedAscending
+            }
+        }
     }
 
     private func captureExpansionState() {
@@ -362,6 +411,60 @@ final class SidebarViewController: NSViewController {
             let response = panel.runModal()
             completion(response)
         }
+    }
+
+    // MARK: Sort
+
+    @objc private func showSortMenu(_ sender: NSButton) {
+        let menu = makeSortMenu()
+        let origin = NSPoint(x: 0, y: sender.bounds.height + 4)
+        menu.popUp(positioning: nil, at: origin, in: sender)
+    }
+
+    private func makeSortMenu() -> NSMenu {
+        let settings = SettingsManager.shared
+        let menu = NSMenu()
+
+        let byName = NSMenuItem(title: L10n.tr("sidebar.sort.name"),
+                                action: #selector(selectSortByName(_:)), keyEquivalent: "")
+        byName.target = self
+        byName.state = settings.sidebarSortKey == .name ? .on : .off
+        menu.addItem(byName)
+
+        let byDate = NSMenuItem(title: L10n.tr("sidebar.sort.date"),
+                                action: #selector(selectSortByDate(_:)), keyEquivalent: "")
+        byDate.target = self
+        byDate.state = settings.sidebarSortKey == .date ? .on : .off
+        menu.addItem(byDate)
+
+        menu.addItem(.separator())
+
+        let asc = NSMenuItem(title: L10n.tr("sidebar.sort.asc"),
+                             action: #selector(selectSortAscending(_:)), keyEquivalent: "")
+        asc.target = self
+        asc.state = settings.sidebarSortOrder == .ascending ? .on : .off
+        menu.addItem(asc)
+
+        let desc = NSMenuItem(title: L10n.tr("sidebar.sort.desc"),
+                              action: #selector(selectSortDescending(_:)), keyEquivalent: "")
+        desc.target = self
+        desc.state = settings.sidebarSortOrder == .descending ? .on : .off
+        menu.addItem(desc)
+
+        return menu
+    }
+
+    @objc private func selectSortByName(_ sender: Any?) { applySort(key: .name) }
+    @objc private func selectSortByDate(_ sender: Any?) { applySort(key: .date) }
+    @objc private func selectSortAscending(_ sender: Any?) { applySort(order: .ascending) }
+    @objc private func selectSortDescending(_ sender: Any?) { applySort(order: .descending) }
+
+    private func applySort(key: SettingsManager.SidebarSortKey? = nil,
+                           order: SettingsManager.SidebarSortOrder? = nil) {
+        let settings = SettingsManager.shared
+        if let key = key { settings.sidebarSortKey = key }
+        if let order = order { settings.sidebarSortOrder = order }
+        reloadTree()
     }
 
     @objc private func outlineRowClicked(_ sender: Any?) {
