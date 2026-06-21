@@ -143,6 +143,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                                              keyEquivalent: "s")
         toggleSidebar.keyEquivalentModifierMask = [.command, .option]
 
+        viewMenu.addItem(.separator())
+        let readingMode = viewMenu.addItem(withTitle: L10n.tr("menu.view.readingMode"),
+                                           action: #selector(EditorWindowController.toggleReadingMode(_:)),
+                                           keyEquivalent: "r")
+        readingMode.keyEquivalentModifierMask = [.command, .shift]
+
         // 윈도우 메뉴
         let windowMenuItem = NSMenuItem()
         mainMenu.addItem(windowMenuItem)

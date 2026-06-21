@@ -9,6 +9,13 @@ class EditorWindowController: NSWindowController {
     private var splitVC: NSSplitViewController!
     private var lastNotifiedMissingURL: URL?
 
+    // MARK: - Reading Mode State (ADR-0006)
+
+    private(set) var isReadingMode = false
+    private var readerVC: ReaderViewController?
+    private var formatToolbar: FormatToolbar?
+    private var readerToolbar: ReaderToolbar?
+
     // MARK: - Init
 
     convenience init() {
@@ -68,6 +75,7 @@ class EditorWindowController: NSWindowController {
         let toolbar = FormatToolbar(identifier: NSToolbar.Identifier("FormatToolbar"))
         toolbar.target = editorVC
         window.toolbar = toolbar
+        formatToolbar = toolbar
     }
 
     // MARK: - Document → View 연결
@@ -99,6 +107,91 @@ class EditorWindowController: NSWindowController {
 
     @objc func toggleSidebar(_ sender: Any?) {
         splitVC.toggleSidebar(sender)
+    }
+
+    // MARK: - Reading Mode (ADR-0006)
+
+    @objc func toggleReadingMode(_ sender: Any?) {
+        isReadingMode ? exitReadingMode(sender) : enterReadingMode(sender)
+    }
+
+    @objc func enterReadingMode(_ sender: Any?) {
+        guard !isReadingMode, let doc = document as? MarkdownDocument else { return }
+        // 편집 내용 flush 보장 — 읽기 화면이 최신 편집본을 조판하도록.
+        if let storage = editorVC.textView.textStorage {
+            doc.textDidChange(storage)
+        }
+        let reader = ReaderViewController(content: doc.content)
+        readerVC = reader
+        swapRightPane(to: reader)
+
+        let rToolbar = ReaderToolbar(identifier: NSToolbar.Identifier("ReaderToolbar"))
+        rToolbar.target = self
+        window?.toolbar = rToolbar
+        readerToolbar = rToolbar
+
+        isReadingMode = true
+
+        // carry-over #2: setPageMode 는 contentView.bounds.height(라이브) 를 읽어
+        // pageHeight 를 계산하므로, split item 설치/레이아웃이 끝난 다음 런루프에서
+        // 호출해야 페이지 높이가 0-bounds 로 계산되지 않는다.
+        DispatchQueue.main.async { [weak self, weak reader] in
+            reader?.setPageMode(SettingsManager.shared.readingPageMode)
+            self?.window?.makeFirstResponder(reader)
+        }
+    }
+
+    @objc func exitReadingMode(_ sender: Any?) {
+        guard isReadingMode else { return }
+        swapRightPane(to: editorVC)
+        if let f = formatToolbar {
+            window?.toolbar = f
+        } else if let window = window {
+            setupToolbar(for: window)
+        }
+        editorVC.loadDocumentContent()
+        readerVC = nil
+        readerToolbar = nil
+        isReadingMode = false
+    }
+
+    private func swapRightPane(to vc: NSViewController) {
+        guard let split = window?.contentViewController as? NSSplitViewController else { return }
+        // 우측(인덱스 1) item 교체. 좌측 사이드바는 유지.
+        if split.splitViewItems.count > 1 {
+            split.removeSplitViewItem(split.splitViewItems[1])
+        }
+        let item = NSSplitViewItem(viewController: vc)
+        item.minimumThickness = 360
+        split.addSplitViewItem(item)
+    }
+
+    // MARK: - Reader Toolbar Actions
+
+    @objc func changeReaderPageMode(_ sender: Any?) {
+        guard let seg = sender as? NSSegmentedControl else { return }
+        let mode: SettingsManager.ReadingPageMode = (seg.selectedSegment == 1) ? .paged : .scroll
+        readerVC?.setPageMode(mode)
+    }
+
+    @objc func decreaseReaderFont(_ sender: Any?) {
+        let cur = SettingsManager.shared.readingFontScale
+        readerVC?.setFontScale(cur - 0.1)
+    }
+
+    @objc func increaseReaderFont(_ sender: Any?) {
+        let cur = SettingsManager.shared.readingFontScale
+        readerVC?.setFontScale(cur + 0.1)
+    }
+
+    override func responds(to aSelector: Selector!) -> Bool {
+        let sels: [Selector] = [
+            #selector(toggleReadingMode(_:)), #selector(enterReadingMode(_:)),
+            #selector(exitReadingMode(_:)), #selector(changeReaderPageMode(_:)),
+            #selector(decreaseReaderFont(_:)), #selector(increaseReaderFont(_:))
+        ]
+        if sels.contains(aSelector) { return true }
+        return super.responds(to: aSelector)
     }
 
     // MARK: - Sidebar Selection Sync
@@ -216,6 +309,10 @@ extension EditorWindowController: SidebarFileOpener {
             newDoc.addWindowController(self)
 
             self.editorVC.loadDocumentContent()
+            // 읽기 모드 중 사이드바로 문서를 바꿨다면 읽기 화면 내용도 새 문서로 갱신.
+            if self.isReadingMode, let newDoc = self.document as? MarkdownDocument {
+                self.readerVC?.updateContent(newDoc.content)
+            }
             self.window?.makeKeyAndOrderFront(nil)
             self.synchronizeWindowTitleWithDocumentName()
             self.updateSidebarSelection()

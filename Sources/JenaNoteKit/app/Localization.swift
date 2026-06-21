@@ -38,6 +38,14 @@ enum L10n {
         // View Menu
         "menu.view":            "보기",
         "menu.view.toggleSidebar": "사이드바 표시/숨기기",
+        "menu.view.readingMode": "읽기 모드",
+        // Reader toolbar
+        "reader.exit":          "편집으로",
+        "reader.pageMode":      "보기 방식",
+        "reader.scroll":        "스크롤",
+        "reader.paged":         "페이징",
+        "reader.fontDown":      "글자 작게",
+        "reader.fontUp":        "글자 크게",
         // Sidebar
         "sidebar.title":        "폴더",
         "sidebar.empty.message": "폴더를 추가해 시작하세요",
@@ -194,6 +202,13 @@ enum L10n {
         "menu.file.close":      "Close",
         "menu.view":            "View",
         "menu.view.toggleSidebar":"Toggle Sidebar",
+        "menu.view.readingMode":"Reading Mode",
+        "reader.exit":          "Edit",
+        "reader.pageMode":      "Layout",
+        "reader.scroll":        "Scroll",
+        "reader.paged":         "Paged",
+        "reader.fontDown":      "Smaller Text",
+        "reader.fontUp":        "Larger Text",
         "sidebar.title":        "Folders",
         "sidebar.empty.message":"Add a folder to get started",
         "sidebar.empty.button": "Add Folder…",
