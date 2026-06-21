@@ -5,24 +5,23 @@ BUNDLE      = $(BUILD_DIR)/$(APP_NAME).app
 BINARY      = $(BUNDLE)/Contents/MacOS/$(APP_NAME)
 DMG         = $(BUILD_DIR)/$(APP_NAME)-$(VERSION).dmg
 PKG         = $(BUILD_DIR)/$(APP_NAME)-$(VERSION).pkg
-SOURCES     = $(shell find Sources -name "*.swift" | sort)
 
-.PHONY: build run install dmg pkg clean
+.PHONY: build run install dmg pkg clean test
 
-## 개발용 빌드 + 실행
 run: build
 	@open $(BUNDLE)
 
-## .app 번들 빌드
-build: $(BINARY)
-
-$(BINARY): $(SOURCES) Resources/Info.plist
+build:
+	swift build -c release --product $(APP_NAME)
 	@mkdir -p $(BUNDLE)/Contents/MacOS
 	@mkdir -p $(BUNDLE)/Contents/Resources
-	swiftc -framework AppKit -O $(SOURCES) -o $(BINARY)
+	@cp .build/release/$(APP_NAME) $(BINARY)
 	@cp Resources/Info.plist $(BUNDLE)/Contents/Info.plist
 	@[ -f Resources/$(APP_NAME).icns ] && cp Resources/$(APP_NAME).icns $(BUNDLE)/Contents/Resources/$(APP_NAME).icns || true
 	@echo "✓ 빌드 완료: $(BUNDLE)"
+
+test:
+	swift test
 
 ## ~/Applications 에 설치
 install: build

@@ -1,20 +1,24 @@
 import AppKit
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+public class AppDelegate: NSObject, NSApplicationDelegate {
+
+    public override init() {
+        super.init()
+    }
 
     // NSMenu가 delegate를 weak으로 참조하므로 강참조 유지
     private let recentMenuDelegate = RecentDocumentsMenuDelegate()
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    public func applicationDidFinishLaunching(_ notification: Notification) {
         SettingsManager.shared.applyAppearance()
         setupMenu()
     }
 
-    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
+    public func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
         return true
     }
 
-    func applicationOpenUntitledFile(_ sender: NSApplication) -> Bool {
+    public func applicationOpenUntitledFile(_ sender: NSApplication) -> Bool {
         // 최근 문서가 있으면 복원, 없으면 빈 문서 생성
         if let lastURL = NSDocumentController.shared.recentDocumentURLs.first,
            FileManager.default.fileExists(atPath: lastURL.path) {
@@ -29,7 +33,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+    public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
     }
 
