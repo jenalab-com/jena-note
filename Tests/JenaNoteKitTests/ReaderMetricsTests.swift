@@ -41,6 +41,10 @@ final class ReaderMetricsTests: XCTestCase {
         XCTAssertEqual(ReaderMetrics.snappedPageHeight(viewHeight: 10, lineHeight: 30), 30, accuracy: 0.01)
     }
 
+    func testSnappedPageHeightZeroLineHeightReturnsZero() {
+        XCTAssertEqual(ReaderMetrics.snappedPageHeight(viewHeight: 100, lineHeight: 0), 0, accuracy: 0.01)
+    }
+
     func testColumnWidth() {
         XCTAssertEqual(ReaderMetrics.columnWidth(charCount: 35, glyphAdvance: 15), 525, accuracy: 0.01)
     }

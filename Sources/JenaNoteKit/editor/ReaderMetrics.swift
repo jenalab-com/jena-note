@@ -22,7 +22,7 @@ enum ReaderMetrics {
 
     /// 페이지 높이를 줄 높이의 정수배로 내림 — 페이지 경계 줄 잘림 방지.
     static func snappedPageHeight(viewHeight: CGFloat, lineHeight: CGFloat) -> CGFloat {
-        guard lineHeight > 0 else { return viewHeight }
+        guard lineHeight > 0 else { return 0 }
         let lines = floor(viewHeight / lineHeight)
         return max(lineHeight, lines * lineHeight)
     }
