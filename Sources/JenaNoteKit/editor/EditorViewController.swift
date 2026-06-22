@@ -67,6 +67,14 @@ class EditorViewController: NSViewController {
             textView.typingAttributes = textView.defaultTypingAttributes()
         }
         textView.relayoutImageAttachments()
+        updateStatusBarCharCount()
+    }
+
+    /// 현재 텍스트의 글자수를 윈도우 하단 상태바에 반영한다.
+    private func updateStatusBarCharCount() {
+        guard let storage = textView.textStorage else { return }
+        let controller = view.window?.windowController as? EditorWindowController
+        controller?.updateCharCount(for: storage.string)
     }
 
     // MARK: - Format Actions (Responder Chain)
@@ -272,6 +280,7 @@ extension EditorViewController: NSTextViewDelegate {
     func textDidChange(_ notification: Notification) {
         guard let storage = textView.textStorage else { return }
         document?.textDidChange(storage)
+        updateStatusBarCharCount()
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {

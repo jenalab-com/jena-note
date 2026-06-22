@@ -7,6 +7,7 @@ class EditorWindowController: NSWindowController {
     private(set) var sidebarVC: SidebarViewController!
     private(set) var editorVC: EditorViewController!
     private var splitVC: NSSplitViewController!
+    private let statusBar = StatusBarView()
     private var lastNotifiedMissingURL: URL?
 
     // MARK: - Reading Mode State (ADR-0006)
@@ -51,12 +52,11 @@ class EditorWindowController: NSWindowController {
         split.addSplitViewItem(sidebarItem)
         split.addSplitViewItem(editorItem)
 
-        window.contentViewController = split
-
         self.sidebarVC = sidebar
         self.editorVC = editor
         self.splitVC = split
 
+        setupContentLayout(window: window, split: split)
         setupToolbar(for: window)
 
         NotificationCenter.default.addObserver(
@@ -67,6 +67,46 @@ class EditorWindowController: NSWindowController {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+    }
+
+    // MARK: - Content Layout (윈도우 하단 상태바)
+
+    /// split 뷰(위) + 상태바(아래 고정)를 컨테이너에 형제로 담아 윈도우 콘텐츠로 둔다.
+    /// jena-image 의 검증된 패턴 — `addChild(split)` 로 split VC 를 컨테이너 VC 의 자식으로
+    /// 등록해야 사이드바-타이틀바 통합이 유지된다. (이 등록을 빠뜨리면 통합이 깨진다.)
+    private func setupContentLayout(window: NSWindow, split: NSSplitViewController) {
+        let container = NSView()
+
+        split.view.translatesAutoresizingMaskIntoConstraints = false
+        statusBar.translatesAutoresizingMaskIntoConstraints = false
+
+        container.addSubview(split.view)
+        container.addSubview(statusBar)
+
+        NSLayoutConstraint.activate([
+            split.view.topAnchor.constraint(equalTo: container.topAnchor),
+            split.view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            split.view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            split.view.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
+
+            statusBar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            statusBar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            statusBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            statusBar.heightAnchor.constraint(equalToConstant: StatusBarView.barHeight),
+        ])
+
+        let containerVC = NSViewController()
+        containerVC.view = container
+        containerVC.addChild(split)
+        window.contentViewController = containerVC
+    }
+
+    /// 텍스트로부터 글자수를 계산해 상태바를 갱신한다.
+    func updateCharCount(for text: String) {
+        let counts = TextMetrics.counts(for: text)
+        let noSpaces = TextMetrics.formatted(counts.noSpaces)
+        let withSpaces = TextMetrics.formatted(counts.withSpaces)
+        statusBar.setCharCountText(String(format: L10n.tr("status.charCount"), noSpaces, withSpaces))
     }
 
     // MARK: - Toolbar
@@ -151,7 +191,8 @@ class EditorWindowController: NSWindowController {
     }
 
     private func swapRightPane(to vc: NSViewController) {
-        guard let split = window?.contentViewController as? NSSplitViewController else { return }
+        // 컨테이너로 감싸 contentViewController 캐스팅이 불가하므로 splitVC 를 직접 참조한다.
+        guard let split = splitVC else { return }
         // 우측(인덱스 1) item 교체. 좌측 사이드바는 유지.
         if split.splitViewItems.count > 1 {
             split.removeSplitViewItem(split.splitViewItems[1])
