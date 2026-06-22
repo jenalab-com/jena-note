@@ -10,6 +10,7 @@ class ReaderToolbar: NSToolbar {
     private static let itemLineSpacing = NSToolbarItem.Identifier("readerLineSpacing")
     private static let itemFontDown = NSToolbarItem.Identifier("readerFontDown")
     private static let itemFontUp   = NSToolbarItem.Identifier("readerFontUp")
+    private static let itemWidth = NSToolbarItem.Identifier("readerWidth")
 
     override init(identifier: NSToolbar.Identifier) {
         super.init(identifier: identifier)
@@ -25,6 +26,7 @@ extension ReaderToolbar: NSToolbarDelegate {
     func toolbarDefaultItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] {
         [.flexibleSpace, ReaderToolbar.itemExit, .space,
          ReaderToolbar.itemMode, .space,
+         ReaderToolbar.itemWidth, .space,
          ReaderToolbar.itemFontFamily, .space,
          ReaderToolbar.itemLineSpacing, .space,
          ReaderToolbar.itemFontDown, ReaderToolbar.itemFontUp, .flexibleSpace]
@@ -61,6 +63,11 @@ extension ReaderToolbar: NSToolbarDelegate {
             seg.heightAnchor.constraint(equalToConstant: 26).isActive = true
             item.view = seg
             return item
+        case ReaderToolbar.itemWidth:
+            return segmentItem(id, label: L10n.tr("reader.width"),
+                               labels: [L10n.tr("reader.widthMobile"), L10n.tr("reader.widthBook")],
+                               selected: 1,   // 매 진입 시 기본은 '책' (저장하지 않음)
+                               action: #selector(EditorWindowController.changeReaderWidth(_:)))
         case ReaderToolbar.itemFontFamily:
             return segmentItem(id, label: L10n.tr("reader.font"),
                                labels: [L10n.tr("reader.serif"), L10n.tr("reader.sans")],
