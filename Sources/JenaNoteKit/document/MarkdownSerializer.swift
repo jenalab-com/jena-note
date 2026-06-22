@@ -13,6 +13,12 @@ extension NSAttributedString.Key {
     static let mdTableHeader = NSAttributedString.Key("MDTableHeader")
     /// 사용자가 명시적으로 지정한 글자 색 (구조적 기본색과 구분하기 위한 플래그)
     static let mdCustomColor = NSAttributedString.Key("MDCustomColor")
+    /// 이미지 첨부의 노트 기준 상대 경로 (직렬화 시 `![]()`로 복원)
+    static let mdImageRelPath = NSAttributedString.Key("MDImageRelPath")
+    /// 이미지 첨부의 alt 텍스트
+    static let mdImageAlt = NSAttributedString.Key("MDImageAlt")
+    /// 이미지 표시 폭(px) — 지정 시 `<img width>`로 직렬화, 없으면 창 너비 자동 맞춤
+    static let mdImageWidth = NSAttributedString.Key("MDImageWidth")
 }
 
 // MARK: - Color ↔ Hex Helpers
@@ -92,7 +98,9 @@ enum MarkdownSerializer {
 
     // MARK: Parse: Markdown String → NSAttributedString
 
-    static func parse(_ markdown: String) -> NSAttributedString {
+    /// - Parameter baseURL: 노트 파일이 위치한 폴더. 이미지 `![](상대경로)`를 로드할 기준.
+    ///   nil이면 이미지는 빈 첨부(경로만 보존)로 파싱된다.
+    static func parse(_ markdown: String, baseURL: URL? = nil) -> NSAttributedString {
         let result = NSMutableAttributedString()
         let lines = markdown.components(separatedBy: "\n")
         var i = 0
@@ -134,23 +142,23 @@ enum MarkdownSerializer {
 
             // Heading
             if line.hasPrefix("### ") {
-                result.append(makeHeading(String(line.dropFirst(4)), level: 3))
+                result.append(makeHeading(String(line.dropFirst(4)), level: 3, baseURL: baseURL))
             } else if line.hasPrefix("## ") {
-                result.append(makeHeading(String(line.dropFirst(3)), level: 2))
+                result.append(makeHeading(String(line.dropFirst(3)), level: 2, baseURL: baseURL))
             } else if line.hasPrefix("# ") {
-                result.append(makeHeading(String(line.dropFirst(2)), level: 1))
+                result.append(makeHeading(String(line.dropFirst(2)), level: 1, baseURL: baseURL))
             }
             // Blockquote
             else if line.hasPrefix("> ") {
-                result.append(makeBlockquote(String(line.dropFirst(2))))
+                result.append(makeBlockquote(String(line.dropFirst(2)), baseURL: baseURL))
             }
             // Unordered list
             else if line.hasPrefix("- ") || line.hasPrefix("* ") || line.hasPrefix("+ ") {
-                result.append(makeListItem(String(line.dropFirst(2)), ordered: false, index: 0))
+                result.append(makeListItem(String(line.dropFirst(2)), ordered: false, index: 0, baseURL: baseURL))
             }
             // Ordered list
             else if let (idx, rest) = parseOrderedListPrefix(line) {
-                result.append(makeListItem(rest, ordered: true, index: idx))
+                result.append(makeListItem(rest, ordered: true, index: idx, baseURL: baseURL))
             }
             // Empty line → 빈 줄 보존 (textView에서 빈 줄로 표시)
             else if line.isEmpty {
@@ -162,7 +170,7 @@ enum MarkdownSerializer {
             }
             // Body paragraph
             else {
-                result.append(makeParagraph(line))
+                result.append(makeParagraph(line, baseURL: baseURL))
             }
 
             i += 1
@@ -351,6 +359,22 @@ enum MarkdownSerializer {
             let clampedRange = NSRange(location: clampedStart, length: max(0, clampedEnd - clampedStart))
             let text = (attributed.string as NSString).substring(with: clampedRange)
 
+            // 이미지 첨부 — 폭 지정이 있으면 `<img>` 태그, 없으면 `![alt](경로)`로 직렬화.
+            // (attachment 문자 U+FFFC를 대체) 경로 없는 첨부는 제외해 깨진 문자가 새어나가지 않게 한다.
+            if attrs[.attachment] != nil {
+                if let relPath = attrs[.mdImageRelPath] as? String {
+                    let alt = attrs[.mdImageAlt] as? String ?? ""
+                    if let width = attrs[.mdImageWidth] as? Int, width > 0 {
+                        let altAttr = alt.isEmpty ? "" : " alt=\"\(alt)\""
+                        result += "<img src=\"\(relPath)\"\(altAttr) width=\"\(width)\">"
+                    } else {
+                        result += "![\(alt)](\(relPath))"
+                    }
+                }
+                i = effectiveRange.location + effectiveRange.length
+                continue
+            }
+
             let isInlineCode = attrs[.mdInlineCode] as? Bool == true
             let font = attrs[.font] as? NSFont ?? MemoFont.body
             let fontTraits = font.fontDescriptor.symbolicTraits
@@ -522,7 +546,7 @@ enum MarkdownSerializer {
 
     // MARK: - Private: Block Builders
 
-    private static func makeHeading(_ text: String, level: Int) -> NSAttributedString {
+    private static func makeHeading(_ text: String, level: Int, baseURL: URL? = nil) -> NSAttributedString {
         let font: NSFont
         let blockType: String
         switch level {
@@ -536,21 +560,21 @@ enum MarkdownSerializer {
             .mdBlockType: blockType,
             .paragraphStyle: headingParagraphStyle()
         ]
-        let inline = parseInline(text, baseFont: font)
+        let inline = parseInline(text, baseFont: font, baseURL: baseURL)
         let result = NSMutableAttributedString(string: "", attributes: attrs)
         result.append(inline)
         result.append(NSAttributedString(string: "\n", attributes: attrs))
         return result
     }
 
-    private static func makeBlockquote(_ text: String) -> NSAttributedString {
+    private static func makeBlockquote(_ text: String, baseURL: URL? = nil) -> NSAttributedString {
         let attrs: [NSAttributedString.Key: Any] = [
             .font: MemoFont.body,
             .foregroundColor: NSColor.secondaryLabelColor,
             .mdBlockType: "blockquote",
             .paragraphStyle: blockquoteParagraphStyle()
         ]
-        let fullInline = NSMutableAttributedString(attributedString: parseInline(text, baseFont: MemoFont.body))
+        let fullInline = NSMutableAttributedString(attributedString: parseInline(text, baseFont: MemoFont.body, baseURL: baseURL))
         // 구조 속성만 추가 — font/foregroundColor는 parseInline이 설정한 bold/italic 유지
         let structuralAttrs: [NSAttributedString.Key: Any] = [
             .mdBlockType: "blockquote",
@@ -561,7 +585,7 @@ enum MarkdownSerializer {
         return fullInline
     }
 
-    private static func makeListItem(_ text: String, ordered: Bool, index: Int) -> NSAttributedString {
+    private static func makeListItem(_ text: String, ordered: Bool, index: Int, baseURL: URL? = nil) -> NSAttributedString {
         let blockType = ordered ? "ol" : "ul"
         var attrs: [NSAttributedString.Key: Any] = [
             .font: MemoFont.body,
@@ -572,7 +596,7 @@ enum MarkdownSerializer {
         if ordered { attrs[.mdListIndex] = index }
 
         let prefix = ordered ? "\(index).\t" : "•\t"
-        let inline = parseInline(text, baseFont: MemoFont.body)
+        let inline = parseInline(text, baseFont: MemoFont.body, baseURL: baseURL)
         let result = NSMutableAttributedString(string: prefix, attributes: attrs)
         let inlineMutable = NSMutableAttributedString(attributedString: inline)
         // 구조 속성만 추가 — font/foregroundColor는 parseInline이 설정한 bold/italic 유지
@@ -618,8 +642,8 @@ enum MarkdownSerializer {
         return result
     }
 
-    private static func makeParagraph(_ text: String) -> NSAttributedString {
-        let inline = parseInline(text, baseFont: MemoFont.body)
+    private static func makeParagraph(_ text: String, baseURL: URL? = nil) -> NSAttributedString {
+        let inline = parseInline(text, baseFont: MemoFont.body, baseURL: baseURL)
         let result = NSMutableAttributedString(attributedString: inline)
         // 구조 속성(mdBlockType, paragraphStyle)만 추가 — font/foregroundColor는 parseInline이 설정한 값 유지
         let structuralAttrs: [NSAttributedString.Key: Any] = [
@@ -633,7 +657,7 @@ enum MarkdownSerializer {
 
     // MARK: - Private: Inline Parser
 
-    static func parseInline(_ text: String, baseFont: NSFont) -> NSAttributedString {
+    static func parseInline(_ text: String, baseFont: NSFont, baseURL: URL? = nil) -> NSAttributedString {
         let result = NSMutableAttributedString()
         var remaining = text[...]
         let defaultAttrs: [NSAttributedString.Key: Any] = [
@@ -647,6 +671,24 @@ enum MarkdownSerializer {
                let parsed = parseColorSpan(in: remaining, baseFont: baseFont) {
                 result.append(parsed.attributed)
                 remaining = parsed.remaining
+                continue
+            }
+            // HTML 이미지 태그 <img src="..." width="..."> — 폭 지정 이미지
+            if remaining.hasPrefix("<img "),
+               let parsed = parseImageTag(in: remaining, baseURL: baseURL) {
+                result.append(parsed.attributed)
+                remaining = parsed.remaining
+                continue
+            }
+            // 이미지 ![alt](path) — 링크 `[...](...)` 검사보다 먼저 와야 `![`가 가로채진다
+            if remaining.hasPrefix("!["),
+               let textEnd = remaining.range(of: "]("),
+               let urlEnd = remaining[textEnd.upperBound...].range(of: ")") {
+                let altStart = remaining.index(remaining.startIndex, offsetBy: 2)
+                let alt = String(remaining[altStart..<textEnd.lowerBound])
+                let path = String(remaining[textEnd.upperBound..<urlEnd.lowerBound])
+                result.append(makeImageAttachment(relPath: path, alt: alt, baseURL: baseURL))
+                remaining = remaining[urlEnd.upperBound...]
                 continue
             }
             if remaining.hasPrefix("***"), let end = remaining.dropFirst(3).range(of: "***") {
@@ -739,6 +781,68 @@ enum MarkdownSerializer {
         ], range: fullRange)
 
         return (mutable, afterOpen[closeRange.upperBound...])
+    }
+
+    // MARK: - Image Attachment
+
+    /// 상대경로 + alt로 NSTextAttachment 기반 attributed string 생성.
+    /// baseURL이 있으면 실제 이미지를 로드해 표시하고, 없으면 경로만 보존한다.
+    /// `bounds` 초기값은 폭 지정(있으면)·원본 기준이며, 텍스트뷰에 올라간 뒤
+    /// `EditorTextView.relayoutImageAttachments()`가 창 너비에 맞춰 다시 계산한다.
+    static func makeImageAttachment(relPath: String, alt: String, width: Int? = nil, baseURL: URL?) -> NSAttributedString {
+        let attachment = NSTextAttachment()
+        if let baseURL = baseURL {
+            let fileURL = URL(fileURLWithPath: relPath, relativeTo: baseURL).standardizedFileURL
+            if let image = NSImage(contentsOf: fileURL) {
+                attachment.image = image
+                let cap = width.map { CGFloat($0) } ?? image.size.width
+                attachment.bounds = imageBounds(for: image.size, maxWidth: cap)
+            }
+        }
+        let str = NSMutableAttributedString(attributedString: NSAttributedString(attachment: attachment))
+        var attrs: [NSAttributedString.Key: Any] = [
+            .mdImageRelPath: relPath,
+            .mdImageAlt: alt,
+            .mdBlockType: "body"
+        ]
+        if let width = width, width > 0 { attrs[.mdImageWidth] = width }
+        str.addAttributes(attrs, range: NSRange(location: 0, length: str.length))
+        return str
+    }
+
+    /// 원본 크기를 maxWidth 안으로 비율 유지 축소한 bounds. (원본이 더 작으면 그대로)
+    static func imageBounds(for size: NSSize, maxWidth: CGFloat) -> CGRect {
+        let cap = max(1, maxWidth)
+        guard size.width > 0, size.height > 0 else {
+            return CGRect(x: 0, y: 0, width: cap, height: 200)
+        }
+        if size.width <= cap {
+            return CGRect(x: 0, y: 0, width: size.width, height: size.height)
+        }
+        let scale = cap / size.width
+        return CGRect(x: 0, y: 0, width: cap, height: size.height * scale)
+    }
+
+    /// `<img src="..." alt="..." width="...">`를 파싱. src 필수, alt/width 선택.
+    private static func parseImageTag(in text: Substring, baseURL: URL?)
+        -> (attributed: NSAttributedString, remaining: Substring)? {
+        guard text.hasPrefix("<img "), let closeRange = text.range(of: ">") else { return nil }
+        let tag = String(text[text.startIndex..<closeRange.upperBound])
+        guard let src = htmlAttribute("src", in: tag) else { return nil }
+        let alt = htmlAttribute("alt", in: tag) ?? ""
+        let width = htmlAttribute("width", in: tag).flatMap { Int($0) }
+        let attributed = makeImageAttachment(relPath: src, alt: alt, width: width, baseURL: baseURL)
+        return (attributed, text[closeRange.upperBound...])
+    }
+
+    /// HTML 태그 문자열에서 `name="value"`(또는 작은따옴표) 속성 값을 추출한다.
+    private static func htmlAttribute(_ name: String, in tag: String) -> String? {
+        guard let nameRange = tag.range(of: "\(name)=") else { return nil }
+        var rest = tag[nameRange.upperBound...]
+        guard let quote = rest.first, quote == "\"" || quote == "'" else { return nil }
+        rest = rest.dropFirst()
+        guard let end = rest.firstIndex(of: quote) else { return nil }
+        return String(rest[rest.startIndex..<end])
     }
 
     private static func findItalicEnd(in text: Substring, marker: String) -> Range<Substring.Index>? {

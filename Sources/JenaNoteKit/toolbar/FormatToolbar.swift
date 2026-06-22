@@ -15,6 +15,7 @@ class FormatToolbar: NSToolbar {
     private static let itemOL           = NSToolbarItem.Identifier("orderedList")
     private static let itemBlockquote   = NSToolbarItem.Identifier("blockquote")
     private static let itemLink         = NSToolbarItem.Identifier("link")
+    private static let itemImage         = NSToolbarItem.Identifier("image")
     private static let itemHR            = NSToolbarItem.Identifier("horizontalRule")
     private static let itemColor         = NSToolbarItem.Identifier("textColor")
     private static let itemLineSpacing   = NSToolbarItem.Identifier("lineSpacing")
@@ -85,6 +86,7 @@ extension FormatToolbar: NSToolbarDelegate {
             FormatToolbar.itemBlockquote,
             .space,
             FormatToolbar.itemLink,
+            FormatToolbar.itemImage,
             FormatToolbar.itemHR,
             .space,
             FormatToolbar.itemColor,
@@ -148,6 +150,9 @@ extension FormatToolbar: NSToolbarDelegate {
             let item = makeItem(itemIdentifier, label: "링크", systemImage: "link",
                                 action: #selector(EditorViewController.insertLink))
             linkButton = item.view as? NSButton; return item
+        case FormatToolbar.itemImage:
+            return makeItem(itemIdentifier, label: "이미지", systemImage: "photo",
+                            action: #selector(EditorViewController.insertImage))
         case FormatToolbar.itemHR:
             return makeItem(itemIdentifier, label: "구분선", systemImage: "minus",
                             action: #selector(EditorViewController.insertHorizontalRule))

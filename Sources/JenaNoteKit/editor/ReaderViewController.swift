@@ -112,7 +112,8 @@ class ReaderViewController: NSViewController {
 
     private func styledContent() -> NSAttributedString {
         ReaderMetrics.styled(sourceContent, scale: scale,
-                             font: fontFamily, lineHeightMultiple: lineSpacing)
+                             font: fontFamily, lineHeightMultiple: lineSpacing,
+                             maxImageWidth: columnWidthForCurrentSettings())
     }
 
     private func renderContent() {

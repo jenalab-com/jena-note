@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 
 // MARK: - File-Open Protocol (loose coupling)
 
@@ -6,6 +7,9 @@ import AppKit
 @objc protocol SidebarFileOpener: AnyObject {
     func openFileFromSidebar(at url: URL)
 }
+
+/// 사이드바에서 인식하는 이미지 파일 확장자.
+let sidebarImageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "heic", "heif", "webp", "tiff", "tif", "bmp"]
 
 // MARK: - Tree Node
 
@@ -39,9 +43,24 @@ final class SidebarViewController: NSViewController {
     private var addButton: NSButton!
     private var sortButton: NSButton!
 
+    /// 폴더 / 이미지 탭 전환
+    private var tabControl: NSSegmentedControl!
+    /// 이미지 탭의 폴더+이미지 트리
+    private var imageScrollView: NSScrollView!
+    private var imageOutlineView: NSOutlineView!
+    private var imageEmptyLabel: NSTextField!
+
     private var roots: [SidebarNode] = []
     /// 펼침 상태 보존용 (URL 경로 기준)
     private var expandedPaths: Set<String> = []
+
+    /// 이미지 탭 트리의 루트 노드들 (폴더 + 이미지 파일, 이미지가 든 폴더만)
+    private var imageRoots: [SidebarNode] = []
+    /// 썸네일 캐시 (경로 기준)
+    private var thumbnailCache: [String: NSImage] = [:]
+
+    private enum Tab: Int { case folders = 0, images = 1 }
+    private var selectedTab: Tab = .folders
 
     private let store = FolderBookmarksStore.shared
     private let watcher = FolderWatcher.shared
@@ -56,10 +75,13 @@ final class SidebarViewController: NSViewController {
         container.wantsLayer = true
 
         setupHeader(in: container)
+        setupTab(in: container)
         setupOutline(in: container)
+        setupImageList(in: container)
         setupEmptyState(in: container)
 
         view = container
+        updateTabVisibility()
     }
 
     override func viewDidLoad() {
@@ -136,6 +158,22 @@ final class SidebarViewController: NSViewController {
         ])
     }
 
+    private func setupTab(in container: NSView) {
+        tabControl = NSSegmentedControl(labels: [L10n.tr("sidebar.tab.folders"), L10n.tr("sidebar.tab.images")],
+                                        trackingMode: .selectOne, target: self, action: #selector(tabChanged(_:)))
+        tabControl.segmentStyle = .automatic
+        tabControl.selectedSegment = 0
+        tabControl.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(tabControl)
+
+        NSLayoutConstraint.activate([
+            tabControl.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 2),
+            tabControl.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
+            tabControl.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
+            tabControl.heightAnchor.constraint(equalToConstant: 24)
+        ])
+    }
+
     private func setupOutline(in container: NSView) {
         scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
@@ -170,10 +208,63 @@ final class SidebarViewController: NSViewController {
         scrollView.documentView = outlineView
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: headerView.bottomAnchor),
+            scrollView.topAnchor.constraint(equalTo: tabControl.bottomAnchor, constant: 4),
             scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+        ])
+    }
+
+    private func setupImageList(in container: NSView) {
+        imageScrollView = NSScrollView()
+        imageScrollView.hasVerticalScroller = true
+        imageScrollView.hasHorizontalScroller = false
+        imageScrollView.borderType = .noBorder
+        imageScrollView.drawsBackground = false
+        imageScrollView.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(imageScrollView)
+
+        imageOutlineView = ImagePreviewOutlineView()
+        imageOutlineView.headerView = nil
+        imageOutlineView.indentationPerLevel = 14
+        imageOutlineView.rowSizeStyle = .default
+        imageOutlineView.style = .sourceList
+        imageOutlineView.allowsMultipleSelection = false
+        imageOutlineView.autoresizesOutlineColumn = false
+        imageOutlineView.usesAutomaticRowHeights = false
+        imageOutlineView.rowHeight = 24
+        imageOutlineView.target = self
+        imageOutlineView.action = #selector(imageOutlineRowClicked(_:))
+        imageOutlineView.setDraggingSourceOperationMask(.copy, forLocal: false)
+
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("image"))
+        column.isEditable = false
+        column.resizingMask = .autoresizingMask
+        imageOutlineView.addTableColumn(column)
+        imageOutlineView.outlineTableColumn = column
+        imageOutlineView.dataSource = self
+        imageOutlineView.delegate = self
+
+        imageScrollView.documentView = imageOutlineView
+
+        imageEmptyLabel = NSTextField(labelWithString: L10n.tr("sidebar.images.empty"))
+        imageEmptyLabel.font = NSFont.systemFont(ofSize: 12)
+        imageEmptyLabel.textColor = NSColor.secondaryLabelColor
+        imageEmptyLabel.alignment = .center
+        imageEmptyLabel.lineBreakMode = .byWordWrapping
+        imageEmptyLabel.maximumNumberOfLines = 0
+        imageEmptyLabel.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(imageEmptyLabel)
+
+        NSLayoutConstraint.activate([
+            imageScrollView.topAnchor.constraint(equalTo: tabControl.bottomAnchor, constant: 4),
+            imageScrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            imageScrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            imageScrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+
+            imageEmptyLabel.topAnchor.constraint(equalTo: tabControl.bottomAnchor, constant: 60),
+            imageEmptyLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            imageEmptyLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16)
         ])
     }
 
@@ -197,7 +288,7 @@ final class SidebarViewController: NSViewController {
         emptyStateView.addSubview(button)
 
         NSLayoutConstraint.activate([
-            emptyStateView.topAnchor.constraint(equalTo: headerView.bottomAnchor),
+            emptyStateView.topAnchor.constraint(equalTo: tabControl.bottomAnchor),
             emptyStateView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
             emptyStateView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
             emptyStateView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
@@ -343,9 +434,121 @@ final class SidebarViewController: NSViewController {
     }
 
     private func updateEmptyState() {
+        guard selectedTab == .folders else {
+            scrollView.isHidden = true
+            emptyStateView.isHidden = true
+            return
+        }
         let isEmpty = roots.isEmpty
         emptyStateView.isHidden = !isEmpty
         scrollView.isHidden = isEmpty
+    }
+
+    // MARK: - Tab Switching
+
+    @objc private func tabChanged(_ sender: NSSegmentedControl) {
+        selectedTab = Tab(rawValue: sender.selectedSegment) ?? .folders
+        if selectedTab == .images {
+            reloadImageTree()
+        }
+        updateTabVisibility()
+    }
+
+    private func updateTabVisibility() {
+        let showImages = selectedTab == .images
+        imageScrollView.isHidden = !showImages
+        imageEmptyLabel.isHidden = !showImages || !isImageTreeEmpty
+        if showImages {
+            scrollView.isHidden = true
+            emptyStateView.isHidden = true
+        } else {
+            updateEmptyState()
+        }
+    }
+
+    // MARK: - Image Scanning
+
+    private func reloadImageTree() {
+        imageRoots = store.folders.map { url -> SidebarNode in
+            let accessible = store.isAccessible(url)
+            let node = SidebarNode(url: url, isDirectory: true, isRoot: true, isMissing: !accessible)
+            node.children = accessible ? scanImageTree(url) : []
+            return node
+        }
+        imageOutlineView.reloadData()
+        for root in imageRoots { imageOutlineView.expandItem(root) }
+        if selectedTab == .images {
+            imageEmptyLabel.isHidden = !isImageTreeEmpty
+        }
+    }
+
+    /// 모든 루트의 트리에 이미지가 하나도 없으면 true.
+    private var isImageTreeEmpty: Bool {
+        imageRoots.allSatisfy { ($0.children?.isEmpty ?? true) }
+    }
+
+    /// 폴더를 재귀 스캔해 이미지 파일과 (이미지를 포함한) 하위 폴더만 트리로 구성한다.
+    private func scanImageTree(_ url: URL) -> [SidebarNode] {
+        let fm = FileManager.default
+        let keys: [URLResourceKey] = [.isDirectoryKey, .contentModificationDateKey]
+        guard let entries = try? fm.contentsOfDirectory(at: url,
+                                                        includingPropertiesForKeys: keys,
+                                                        options: [.skipsHiddenFiles]) else { return [] }
+        var subdirs: [SidebarNode] = []
+        var files: [SidebarNode] = []
+
+        for entry in entries {
+            let values = try? entry.resourceValues(forKeys: Set(keys))
+            let isDir = values?.isDirectory ?? false
+            let modDate = values?.contentModificationDate ?? .distantPast
+            if isDir {
+                let children = scanImageTree(entry)
+                if !children.isEmpty {
+                    let node = SidebarNode(url: entry, isDirectory: true, isRoot: false, modificationDate: modDate)
+                    node.children = children
+                    subdirs.append(node)
+                }
+            } else if sidebarImageExtensions.contains(entry.pathExtension.lowercased()) {
+                files.append(SidebarNode(url: entry, isDirectory: false, isRoot: false, modificationDate: modDate))
+            }
+        }
+
+        sortNodes(&subdirs)
+        sortNodes(&files)
+        return subdirs + files
+    }
+
+    /// 캐시된 썸네일을 반환하거나 새로 다운샘플링한다.
+    private func thumbnail(for url: URL) -> NSImage? {
+        let key = url.path
+        if let cached = thumbnailCache[key] { return cached }
+        guard let img = SidebarViewController.downsampledImage(at: url, maxPixel: 72) else { return nil }
+        thumbnailCache[key] = img
+        return img
+    }
+
+    /// ImageIO로 최대 변 maxPixel 이하 썸네일을 만든다 (메모리 절약).
+    static func downsampledImage(at url: URL, maxPixel: CGFloat) -> NSImage? {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let opts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+            kCGImageSourceCreateThumbnailWithTransform: true
+        ]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return nil }
+        return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+    }
+
+    @objc private func imageOutlineRowClicked(_ sender: Any?) {
+        let row = imageOutlineView.clickedRow
+        guard row >= 0, let node = imageOutlineView.item(atRow: row) as? SidebarNode else { return }
+        // 폴더는 펼침/접기만. 이미지는 드래그로 본문에 삽입(클릭 동작 없음 — 미리보기는 hover 팝업).
+        guard node.isDirectory else { return }
+        if imageOutlineView.isItemExpanded(node) {
+            imageOutlineView.collapseItem(node)
+        } else {
+            imageOutlineView.expandItem(node)
+        }
     }
 
     private func highlightCurrentFile() {
@@ -384,10 +587,12 @@ final class SidebarViewController: NSViewController {
     @objc private func handleBookmarksChange() {
         startWatching()
         reloadTree()
+        if selectedTab == .images { reloadImageTree() }
     }
 
     @objc private func handleContentsChange() {
         reloadTree()
+        if selectedTab == .images { reloadImageTree() }
     }
 
     // MARK: - Actions
@@ -514,14 +719,19 @@ final class SidebarViewController: NSViewController {
 
 extension SidebarViewController: NSOutlineViewDataSource {
 
+    /// 폴더 탭과 이미지 탭이 같은 dataSource를 공유 — outline 인스턴스로 루트를 가른다.
+    private func roots(for outlineView: NSOutlineView) -> [SidebarNode] {
+        outlineView === imageOutlineView ? imageRoots : roots
+    }
+
     func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
-        if item == nil { return roots.count }
+        if item == nil { return roots(for: outlineView).count }
         guard let node = item as? SidebarNode else { return 0 }
         return node.children?.count ?? 0
     }
 
     func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
-        if item == nil { return roots[index] }
+        if item == nil { return roots(for: outlineView)[index] }
         guard let node = item as? SidebarNode, let children = node.children else { return SidebarNode(url: URL(fileURLWithPath: "/"), isDirectory: false, isRoot: false) }
         return children[index]
     }
@@ -529,6 +739,13 @@ extension SidebarViewController: NSOutlineViewDataSource {
     func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
         guard let node = item as? SidebarNode else { return false }
         return node.isDirectory && !(node.children?.isEmpty ?? true)
+    }
+
+    /// 이미지 노드를 본문으로 드래그할 수 있도록 파일 URL을 pasteboard에 싣는다 (드롭 삽입과 연동).
+    func outlineView(_ outlineView: NSOutlineView, pasteboardWriterForItem item: Any) -> NSPasteboardWriting? {
+        guard outlineView === imageOutlineView,
+              let node = item as? SidebarNode, !node.isDirectory else { return nil }
+        return node.url as NSURL
     }
 }
 
@@ -538,6 +755,22 @@ extension SidebarViewController: NSOutlineViewDelegate {
 
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
         guard let node = item as? SidebarNode else { return nil }
+
+        // 이미지 탭 트리: 폴더 아이콘 / 작은 썸네일 + 파일명
+        if outlineView === imageOutlineView {
+            let identifier = NSUserInterfaceItemIdentifier("ImageTreeCell")
+            let cell: NSTableCellView = (outlineView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView) ?? makeCell(identifier: identifier)
+            cell.textField?.stringValue = displayName(for: node)
+            if node.isDirectory {
+                cell.imageView?.image = icon(for: node)
+            } else {
+                cell.imageView?.image = thumbnail(for: node.url)
+                    ?? NSImage(systemSymbolName: "photo", accessibilityDescription: nil)
+            }
+            cell.textField?.textColor = node.isMissing ? NSColor.systemOrange : NSColor.labelColor
+            return cell
+        }
+
         let identifier = NSUserInterfaceItemIdentifier("SidebarCell")
         let cell: NSTableCellView = (outlineView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView) ?? makeCell(identifier: identifier)
         cell.textField?.stringValue = displayName(for: node)

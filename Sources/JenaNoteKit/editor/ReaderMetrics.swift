@@ -26,7 +26,8 @@ enum ReaderMetrics {
     static func styled(_ content: NSAttributedString,
                        scale: CGFloat,
                        font family: SettingsManager.ReadingFont,
-                       lineHeightMultiple: CGFloat) -> NSAttributedString {
+                       lineHeightMultiple: CGFloat,
+                       maxImageWidth: CGFloat = .greatestFiniteMagnitude) -> NSAttributedString {
         let result = NSMutableAttributedString(attributedString: content)
         let full = NSRange(location: 0, length: result.length)
 
@@ -42,19 +43,53 @@ enum ReaderMetrics {
             result.addAttribute(.font, value: f, range: range)
         }
 
-        // 2) 행간: 모든 문단의 lineHeightMultiple 설정 (정렬 등 기존 속성 유지)
-        var paraChanges: [(NSRange, NSParagraphStyle)] = []
-        result.enumerateAttribute(.paragraphStyle, in: full) { value, range, _ in
-            let base = (value as? NSParagraphStyle) ?? .default
+        // 2) 행간: 문단별 lineHeightMultiple 설정 (정렬 등 기존 속성 유지).
+        //    단, 이미지 첨부가 든 문단은 제외한다 — 이미지 줄에 배수를 곱하면
+        //    줄 높이(=이미지 높이)에 배수가 곱해져 이미지 위아래로 큰 공백이 생긴다.
+        let nsstr = result.string as NSString
+        var loc = 0
+        while loc < result.length {
+            let paraRange = nsstr.paragraphRange(for: NSRange(location: loc, length: 0))
+            loc = NSMaxRange(paraRange)
+            if rangeContainsAttachment(result, paraRange) { continue }
+            let base = (result.attribute(.paragraphStyle, at: paraRange.location, effectiveRange: nil) as? NSParagraphStyle) ?? .default
             let m = (base.mutableCopy() as? NSMutableParagraphStyle) ?? NSMutableParagraphStyle()
             m.lineHeightMultiple = lineHeightMultiple
-            paraChanges.append((range, m))
+            result.addAttribute(.paragraphStyle, value: m, range: paraRange)
         }
-        for (range, p) in paraChanges {
-            result.addAttribute(.paragraphStyle, value: p, range: range)
+
+        // 3) 이미지: 읽기 컬럼 폭에 맞춰 크기 조정.
+        //    원본 첨부 객체는 에디터와 공유될 수 있으므로 복제본으로 교체한다(원본 불변).
+        if maxImageWidth.isFinite {
+            var attChanges: [(NSRange, NSTextAttachment)] = []
+            result.enumerateAttribute(.attachment, in: full) { value, range, _ in
+                guard let original = value as? NSTextAttachment, let image = original.image else { return }
+                let copy = NSTextAttachment()
+                copy.image = image
+                let cap: CGFloat
+                if let w = result.attribute(.mdImageWidth, at: range.location, effectiveRange: nil) as? Int, w > 0 {
+                    cap = min(CGFloat(w), maxImageWidth)
+                } else {
+                    cap = maxImageWidth
+                }
+                copy.bounds = MarkdownSerializer.imageBounds(for: image.size, maxWidth: cap)
+                attChanges.append((range, copy))
+            }
+            for (range, att) in attChanges {
+                result.addAttribute(.attachment, value: att, range: range)
+            }
         }
 
         return result
+    }
+
+    /// 주어진 범위에 이미지 첨부(NSTextAttachment)가 하나라도 있는지.
+    private static func rangeContainsAttachment(_ s: NSAttributedString, _ range: NSRange) -> Bool {
+        var found = false
+        s.enumerateAttribute(.attachment, in: range) { value, _, stop in
+            if value != nil { found = true; stop.pointee = true }
+        }
+        return found
     }
 
     /// 패밀리·크기·trait에 맞는 읽기 모드 폰트. 명조는 AppleMyungjo, 고딕은 시스템 폰트.
