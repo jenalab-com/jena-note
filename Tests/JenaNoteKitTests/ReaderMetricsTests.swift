@@ -48,4 +48,14 @@ final class ReaderMetricsTests: XCTestCase {
     func testColumnWidth() {
         XCTAssertEqual(ReaderMetrics.columnWidth(charCount: 35, glyphAdvance: 15), 525, accuracy: 0.01)
     }
+
+    func testMobileColumnWidthIsFixed() {
+        XCTAssertEqual(ReaderMetrics.mobileColumnWidth, 360, accuracy: 0.01)
+    }
+
+    func testMobileColumnWidthNarrowerThanDefaultBookColumn() {
+        // 모바일 고정 폭은 기본 책 폭(한글 35자 × advance)보다 좁아야 한다.
+        let bookWidth = ReaderMetrics.columnWidth(charCount: 35, glyphAdvance: 15)
+        XCTAssertLessThan(ReaderMetrics.mobileColumnWidth, bookWidth)
+    }
 }

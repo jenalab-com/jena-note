@@ -117,6 +117,10 @@ enum ReaderMetrics {
         return max(lineHeight, lines * lineHeight)
     }
 
+    /// 모바일 읽기 폭 — iPhone 본문 폭(화면 ~390 − 좌우 여백) 느낌의 고정 컬럼 폭.
+    /// "책"(글자수 기반)과 달리 폰트 크기와 무관한 고정 px다.
+    static let mobileColumnWidth: CGFloat = 360
+
     /// 글자 수 × 글리프 advance = 컬럼 폭.
     static func columnWidth(charCount: Int, glyphAdvance: CGFloat) -> CGFloat {
         return CGFloat(charCount) * glyphAdvance

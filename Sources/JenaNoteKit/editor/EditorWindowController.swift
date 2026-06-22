@@ -169,6 +169,12 @@ class EditorWindowController: NSWindowController {
         readerVC?.setPageMode(mode)
     }
 
+    @objc func changeReaderWidth(_ sender: Any?) {
+        guard let seg = sender as? NSSegmentedControl else { return }
+        let mode: ReaderViewController.WidthMode = (seg.selectedSegment == 0) ? .mobile : .book
+        readerVC?.setWidthMode(mode)
+    }
+
     @objc func decreaseReaderFont(_ sender: Any?) {
         let cur = SettingsManager.shared.readingFontScale
         readerVC?.setFontScale(cur - 0.1)
@@ -196,6 +202,7 @@ class EditorWindowController: NSWindowController {
         let sels: [Selector] = [
             #selector(toggleReadingMode(_:)), #selector(enterReadingMode(_:)),
             #selector(exitReadingMode(_:)), #selector(changeReaderPageMode(_:)),
+            #selector(changeReaderWidth(_:)),
             #selector(decreaseReaderFont(_:)), #selector(increaseReaderFont(_:)),
             #selector(changeReaderFont(_:)), #selector(changeReaderLineSpacing(_:))
         ]

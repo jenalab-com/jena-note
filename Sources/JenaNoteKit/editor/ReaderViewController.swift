@@ -36,12 +36,19 @@ final class PagedHostView: NSView {
 ///   컨테이너에 안 들어가는 줄은 통째로 다음 페이지로 흐르므로 줄이 잘리지 않는다.
 class ReaderViewController: NSViewController {
 
+    /// 읽기 단(컬럼) 폭 프리셋. 저장하지 않으며 매 진입 시 .book 으로 시작한다.
+    enum WidthMode {
+        case book      // 글자수(readingLineLength) 기반 — 기존 폭
+        case mobile    // 모바일 화면 폭(고정 px)
+    }
+
     // MARK: - State
     private var sourceContent: NSAttributedString
     private var scale: CGFloat = SettingsManager.shared.readingFontScale
     private var pageMode: SettingsManager.ReadingPageMode = SettingsManager.shared.readingPageMode
     private var fontFamily: SettingsManager.ReadingFont = SettingsManager.shared.readingFont
     private var lineSpacing: CGFloat = SettingsManager.shared.readingLineSpacing
+    private var widthMode: WidthMode = .book
 
     // MARK: - Scroll-mode views
     private var scrollView: NSScrollView!
@@ -103,11 +110,16 @@ class ReaderViewController: NSViewController {
 
     // MARK: - Rendering
     private func columnWidthForCurrentSettings() -> CGFloat {
-        let chars = SettingsManager.shared.readingLineLength
-        let size = MemoFont.body.pointSize * scale
-        let probeFont = ReaderMetrics.readerFont(family: fontFamily, size: size, traits: [])
-        let advance = ("한" as NSString).size(withAttributes: [.font: probeFont]).width
-        return ReaderMetrics.columnWidth(charCount: chars, glyphAdvance: advance)
+        switch widthMode {
+        case .mobile:
+            return ReaderMetrics.mobileColumnWidth
+        case .book:
+            let chars = SettingsManager.shared.readingLineLength
+            let size = MemoFont.body.pointSize * scale
+            let probeFont = ReaderMetrics.readerFont(family: fontFamily, size: size, traits: [])
+            let advance = ("한" as NSString).size(withAttributes: [.font: probeFont]).width
+            return ReaderMetrics.columnWidth(charCount: chars, glyphAdvance: advance)
+        }
     }
 
     private func styledContent() -> NSAttributedString {
@@ -162,6 +174,13 @@ class ReaderViewController: NSViewController {
 
     var currentLineSpacing: CGFloat { lineSpacing }
     var currentFont: SettingsManager.ReadingFont { fontFamily }
+
+    /// 읽기 단 폭 프리셋 토글. 저장하지 않으며 현재 모드(스크롤/페이징) 양쪽에 반영된다.
+    func setWidthMode(_ mode: WidthMode) {
+        widthMode = mode
+        renderContent()
+    }
+    var currentWidthMode: WidthMode { widthMode }
 
     func setPageMode(_ mode: SettingsManager.ReadingPageMode) {
         pageMode = mode
