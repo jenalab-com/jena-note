@@ -320,6 +320,9 @@ final class SidebarViewController: NSViewController {
 
     private func reloadTree() {
         captureExpansionState()
+        // reloadData()는 스크롤을 맨 위로 되돌리므로, 보던 위치를 저장했다가 복원한다
+        // (외부 파일 변경으로 갱신될 때 스크롤이 튀지 않도록).
+        let savedOrigin = scrollView.contentView.bounds.origin
 
         roots = store.folders.map { url -> SidebarNode in
             let accessible = store.isAccessible(url)
@@ -336,6 +339,9 @@ final class SidebarViewController: NSViewController {
         restoreExpansionState()
         updateEmptyState()
         highlightCurrentFile()
+
+        scrollView.contentView.scroll(to: savedOrigin)
+        scrollView.reflectScrolledClipView(scrollView.contentView)
     }
 
     private func scanDirectory(_ url: URL) -> [SidebarNode] {
@@ -469,6 +475,7 @@ final class SidebarViewController: NSViewController {
     // MARK: - Image Scanning
 
     private func reloadImageTree() {
+        let savedOrigin = imageScrollView.contentView.bounds.origin
         imageRoots = store.folders.map { url -> SidebarNode in
             let accessible = store.isAccessible(url)
             let node = SidebarNode(url: url, isDirectory: true, isRoot: true, isMissing: !accessible)
@@ -480,6 +487,8 @@ final class SidebarViewController: NSViewController {
         if selectedTab == .images {
             imageEmptyLabel.isHidden = !isImageTreeEmpty
         }
+        imageScrollView.contentView.scroll(to: savedOrigin)
+        imageScrollView.reflectScrolledClipView(imageScrollView.contentView)
     }
 
     /// 모든 루트의 트리에 이미지가 하나도 없으면 true.
