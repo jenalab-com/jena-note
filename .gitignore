@@ -7,10 +7,11 @@
 *.swp
 *~
 
-# Xcode
+# Xcode / JetBrains
 *.xcodeproj
 *.xcworkspace
 xcuserdata/
+.idea/
 
 # Swift Package Manager
 .swiftpm/
