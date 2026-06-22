@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 
 class EditorViewController: NSViewController {
 
@@ -65,6 +66,7 @@ class EditorViewController: NSViewController {
         if storage.length == 0 {
             textView.typingAttributes = textView.defaultTypingAttributes()
         }
+        textView.relayoutImageAttachments()
     }
 
     // MARK: - Format Actions (Responder Chain)
@@ -115,6 +117,65 @@ class EditorViewController: NSViewController {
 
     @objc func insertHorizontalRule(_ sender: Any?) {
         FormatCommands.insertHorizontalRule(textView)
+    }
+
+    // MARK: - Image Insertion
+
+    /// 툴바 이미지 버튼 → 이미지 선택 → attachments로 복사 → 커서 위치에 삽입.
+    @objc func insertImage(_ sender: Any?) {
+        guard let doc = document, let window = view.window else { return }
+        // 미저장 새 문서는 attachments를 둘 폴더(노트 위치)가 없음 → 먼저 저장 유도
+        guard doc.fileURL != nil else {
+            promptSaveBeforeAttaching(doc, in: window)
+            return
+        }
+        presentImagePicker(for: doc, in: window)
+    }
+
+    private func promptSaveBeforeAttaching(_ doc: MarkdownDocument, in window: NSWindow) {
+        let alert = NSAlert()
+        alert.messageText = "먼저 노트를 저장해주세요"
+        alert.informativeText = "이미지는 노트 옆 attachments 폴더에 저장돼요. 노트를 저장한 뒤 다시 첨부해주세요."
+        alert.addButton(withTitle: "저장…")
+        alert.addButton(withTitle: "취소")
+        alert.beginSheetModal(for: window) { resp in
+            if resp == .alertFirstButtonReturn {
+                doc.save(withDelegate: nil, didSave: nil, contextInfo: nil)
+            }
+        }
+    }
+
+    private func presentImagePicker(for doc: MarkdownDocument, in window: NSWindow) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        if #available(macOS 11.0, *) {
+            panel.allowedContentTypes = [.image]
+        } else {
+            panel.allowedFileTypes = ["png", "jpg", "jpeg", "gif", "heic", "webp", "tiff", "bmp"]
+        }
+        panel.beginSheetModal(for: window) { [weak self] resp in
+            guard let self = self, resp == .OK, let url = panel.url else { return }
+            self.attachImage(from: url, to: doc)
+        }
+    }
+
+    /// 선택한 이미지 파일을 attachments로 복사하고 커서 위치에 삽입한다.
+    func attachImage(from url: URL, to doc: MarkdownDocument) {
+        do {
+            let relPath = try doc.importImage(from: url)
+            let alt = url.deletingPathExtension().lastPathComponent
+            textView.insertImageAttachment(
+                relPath: relPath, alt: alt,
+                baseURL: doc.attachmentBaseURL,
+                at: textView.selectedRange().location
+            )
+        } catch {
+            if let window = view.window {
+                presentError(error, modalFor: window, delegate: nil, didPresent: nil, contextInfo: nil)
+            }
+        }
     }
 
     @objc func changeLineSpacing(_ sender: Any?) {
@@ -197,7 +258,7 @@ class EditorViewController: NSViewController {
             #selector(setHeading1), #selector(setHeading2), #selector(setHeading3),
             #selector(setBodyText), #selector(toggleUnorderedList), #selector(toggleOrderedList),
             #selector(toggleBlockquote), #selector(insertLink), #selector(insertHorizontalRule),
-            #selector(changeLineSpacing),
+            #selector(insertImage), #selector(changeLineSpacing),
             #selector(changeTextColor), #selector(showColorPanel)
         ]
         if formatSelectors.contains(aSelector) { return true }
