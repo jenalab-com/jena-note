@@ -86,6 +86,20 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         let saveAs = fileMenu.addItem(withTitle: L10n.tr("menu.file.saveAs"), action: #selector(NSDocument.saveAs(_:)), keyEquivalent: "s")
         saveAs.keyEquivalentModifierMask = [.command, .shift]
         fileMenu.addItem(withTitle: L10n.tr("menu.file.revert"), action: #selector(NSDocument.revertToSaved(_:)), keyEquivalent: "")
+
+        // 내보내기 서브메뉴 (Save As 흐름 바깥의 독립 동작)
+        fileMenu.addItem(.separator())
+        let exportItem = NSMenuItem(title: L10n.tr("menu.file.export"), action: nil, keyEquivalent: "")
+        let exportMenu = NSMenu(title: L10n.tr("menu.file.export"))
+        let exportDocx = exportMenu.addItem(withTitle: L10n.tr("menu.file.export.docx"),
+                                            action: #selector(ExportController.exportDocx(_:)), keyEquivalent: "")
+        exportDocx.target = ExportController.shared
+        let exportHwpx = exportMenu.addItem(withTitle: L10n.tr("menu.file.export.hwpx"),
+                                            action: #selector(ExportController.exportHwpx(_:)), keyEquivalent: "")
+        exportHwpx.target = ExportController.shared
+        exportItem.submenu = exportMenu
+        fileMenu.addItem(exportItem)
+
         fileMenu.addItem(.separator())
         fileMenu.addItem(withTitle: L10n.tr("menu.file.close"), action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
 
