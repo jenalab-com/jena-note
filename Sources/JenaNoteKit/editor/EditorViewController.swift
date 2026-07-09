@@ -12,6 +12,10 @@ class EditorViewController: NSViewController {
         return view.window?.windowController?.document as? MarkdownDocument
     }
 
+    /// 마지막으로 로드한 문서 — 문서가 바뀐 로드인지(→ 맨 위로), 같은 문서의
+    /// 재로드인지(읽기 모드 복귀·외부 리로드 → 보던 위치 유지) 구분용.
+    private weak var lastLoadedDocument: MarkdownDocument?
+
     // MARK: - View Lifecycle
 
     override func loadView() {
@@ -67,6 +71,11 @@ class EditorViewController: NSViewController {
             textView.typingAttributes = textView.defaultTypingAttributes()
         }
         textView.relayoutImageAttachments()
+        if lastLoadedDocument !== doc {
+            lastLoadedDocument = doc
+            textView.setSelectedRange(NSRange(location: 0, length: 0))
+            textView.scroll(.zero)
+        }
         updateStatusBarCharCount()
     }
 
