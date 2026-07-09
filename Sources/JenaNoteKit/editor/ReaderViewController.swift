@@ -148,10 +148,13 @@ class ReaderViewController: NSViewController {
     }
 
     // MARK: - Public API
-    func updateContent(_ content: NSAttributedString) {
+    /// 표시할 내용을 교체한다. 문서 전환이면 첫 페이지·맨 위로, 같은 문서의 리로드면
+    /// `resetPage: false` 로 읽던 위치를 유지한다(페이지 수가 줄면 클램프).
+    func updateContent(_ content: NSAttributedString, resetPage: Bool = true) {
         sourceContent = content
-        currentPage = 0
+        if resetPage { currentPage = 0 }
         renderContent()
+        if resetPage { textView.scroll(.zero) }
     }
 
     func setFontScale(_ newScale: CGFloat) {

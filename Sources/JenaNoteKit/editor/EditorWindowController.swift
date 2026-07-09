@@ -63,6 +63,10 @@ class EditorWindowController: NSWindowController {
             self, selector: #selector(handleExternalContentsChange),
             name: .folderContentsDidChange, object: nil
         )
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(handleDocumentReloadedFromDisk(_:)),
+            name: .documentDidReloadFromDisk, object: nil
+        )
     }
 
     deinit {
@@ -261,12 +265,15 @@ class EditorWindowController: NSWindowController {
     // MARK: - External Change Detection
 
     @objc private func handleExternalContentsChange() {
-        guard let doc = document as? NSDocument,
+        guard let doc = document as? MarkdownDocument,
               let url = doc.fileURL else { return }
 
         let exists = FileManager.default.fileExists(atPath: url.path)
         if exists {
             lastNotifiedMissingURL = nil
+            // 외부(다른 앱·에이전트)가 파일을 고쳐 쓴 경우 — 미저장 편집이 없으면
+            // 조용히 다시 읽는다. 리로드되면 .documentDidReloadFromDisk 로 뷰가 따라온다.
+            doc.reloadFromDiskIfClean()
             return
         }
         // 동일 URL에 대해 중복 알림 방지
@@ -289,6 +296,20 @@ class EditorWindowController: NSWindowController {
             }
             // 사용자가 닫기를 선택해도 작업 보존 — 자동으로 close하지 않음
         }
+    }
+
+    /// 문서가 디스크에서 다시 읽힌 뒤(수동 되돌리기·외부 변경 자동 리로드)
+    /// 현재 모드에 맞는 화면과 글자수를 새 content 로 맞춘다.
+    @objc private func handleDocumentReloadedFromDisk(_ note: Notification) {
+        guard let doc = document as? MarkdownDocument,
+              (note.object as? MarkdownDocument) === doc else { return }
+        if isReadingMode {
+            // 같은 문서의 리로드이므로 읽던 페이지는 유지한다(범위 밖이면 클램프).
+            readerVC?.updateContent(doc.content, resetPage: false)
+        } else {
+            editorVC.loadDocumentContent()
+        }
+        updateCharCount(for: doc.content.string)
     }
 }
 
@@ -367,8 +388,11 @@ extension EditorWindowController: SidebarFileOpener {
 
             self.editorVC.loadDocumentContent()
             // 읽기 모드 중 사이드바로 문서를 바꿨다면 읽기 화면 내용도 새 문서로 갱신.
+            // (에디터 뷰는 윈도우에서 분리돼 있어 loadDocumentContent 가 조용히
+            //  건너뛰므로, 글자수도 여기서 직접 새 문서 기준으로 맞춘다.)
             if self.isReadingMode, let newDoc = self.document as? MarkdownDocument {
                 self.readerVC?.updateContent(newDoc.content)
+                self.updateCharCount(for: newDoc.content.string)
             }
             self.window?.makeKeyAndOrderFront(nil)
             self.synchronizeWindowTitleWithDocumentName()

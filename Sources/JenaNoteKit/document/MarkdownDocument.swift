@@ -68,6 +68,31 @@ class MarkdownDocument: NSDocument {
         updateChangeCount(.changeDone)
     }
 
+    // MARK: - External Change Reload
+
+    /// 디스크의 파일이 외부에서 바뀌었고 미저장 편집이 없으면 조용히 다시 읽는다.
+    /// FSEvents(.folderContentsDidChange) 경유로 호출되며, 수정 시각 비교로
+    /// 중복 리로드를 막는다. 미저장 편집이 있으면 덮어쓰지 않고 건너뛴다.
+    func reloadFromDiskIfClean() {
+        guard let url = fileURL, !isDocumentEdited else { return }
+        guard let diskDate = (try? FileManager.default
+            .attributesOfItem(atPath: url.path))?[.modificationDate] as? Date else { return }
+        if let known = fileModificationDate, diskDate <= known { return }
+        guard let type = fileType else { return }
+        do {
+            try revert(toContentsOf: url, ofType: type)
+            fileModificationDate = diskDate
+        } catch {
+            // 읽기 실패(잠금·부분 쓰기 등)는 다음 변경 이벤트에서 재시도된다.
+        }
+    }
+
+    /// 되돌리기(수동 메뉴·자동 리로드 공통)가 content 를 교체한 뒤 뷰가 따라오도록 알린다.
+    override func revert(toContentsOf url: URL, ofType typeName: String) throws {
+        try super.revert(toContentsOf: url, ofType: typeName)
+        NotificationCenter.default.post(name: .documentDidReloadFromDisk, object: self)
+    }
+
     // MARK: - Image Attachment
 
     /// 이미지를 노트 옆 `attachments/` 폴더로 복사하고, 노트 기준 상대경로를 반환한다.
@@ -97,4 +122,10 @@ class MarkdownDocument: NSDocument {
         } while fm.fileExists(atPath: candidate.path)
         return candidate
     }
+}
+
+extension Notification.Name {
+    /// 문서가 디스크에서 다시 읽혔음(수동 되돌리기·외부 변경 자동 리로드).
+    /// object 는 해당 MarkdownDocument.
+    static let documentDidReloadFromDisk = Notification.Name("JNDocumentDidReloadFromDisk")
 }
