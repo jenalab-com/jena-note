@@ -154,7 +154,12 @@ class ReaderViewController: NSViewController {
         sourceContent = content
         if resetPage { currentPage = 0 }
         renderContent()
-        if resetPage { textView.scroll(.zero) }
+        if resetPage {
+            textView.scroll(.zero)
+            // 문서 전환 시 사이드바로 옮겨간 포커스를 리더로 되돌린다.
+            // 안 그러면 페이징 모드에서 키보드 ←/→ 가 리더로 오지 않아 먹지 않는다.
+            if pageMode == .paged { view.window?.makeFirstResponder(self) }
+        }
     }
 
     func setFontScale(_ newScale: CGFloat) {
