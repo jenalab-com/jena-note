@@ -94,6 +94,8 @@ class ReaderViewController: NSViewController {
         textView = NSTextView(frame: scrollView.bounds, textContainer: textContainer)
         textView.isEditable = false
         textView.isSelectable = true
+        textView.usesFindBar = true
+        textView.isIncrementalSearchingEnabled = true
         textView.drawsBackground = false
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false

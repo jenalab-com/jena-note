@@ -119,7 +119,24 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         plainPaste.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(withTitle: L10n.tr("menu.edit.selectAll"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editMenu.addItem(.separator())
-        editMenu.addItem(withTitle: L10n.tr("menu.edit.find"), action: #selector(NSTextView.performFindPanelAction(_:)), keyEquivalent: "f")
+        let find = editMenu.addItem(withTitle: L10n.tr("menu.edit.find"),
+                                    action: #selector(NSResponder.performTextFinderAction(_:)),
+                                    keyEquivalent: "f")
+        find.tag = NSTextFinder.Action.showFindInterface.rawValue
+        let findNext = editMenu.addItem(withTitle: L10n.tr("menu.edit.findNext"),
+                                        action: #selector(NSResponder.performTextFinderAction(_:)),
+                                        keyEquivalent: "g")
+        findNext.tag = NSTextFinder.Action.nextMatch.rawValue
+        let findPrev = editMenu.addItem(withTitle: L10n.tr("menu.edit.findPrevious"),
+                                        action: #selector(NSResponder.performTextFinderAction(_:)),
+                                        keyEquivalent: "g")
+        findPrev.keyEquivalentModifierMask = [.command, .shift]
+        findPrev.tag = NSTextFinder.Action.previousMatch.rawValue
+        let findReplace = editMenu.addItem(withTitle: L10n.tr("menu.edit.findReplace"),
+                                           action: #selector(NSResponder.performTextFinderAction(_:)),
+                                           keyEquivalent: "f")
+        findReplace.keyEquivalentModifierMask = [.command, .option]
+        findReplace.tag = NSTextFinder.Action.showReplaceInterface.rawValue
 
         // 서식 메뉴
         let formatMenuItem = NSMenuItem()
