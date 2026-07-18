@@ -36,6 +36,12 @@ final class SidebarNode {
     }
 }
 
+/// 검색 결과 모드에서 목록 맨 위에 표시하는 안내 행 (결과 없음 / 일부만 표시).
+final class SearchNotice {
+    let text: String
+    init(_ text: String) { self.text = text }
+}
+
 // MARK: - SidebarViewController
 
 final class SidebarViewController: NSViewController {
@@ -71,6 +77,16 @@ final class SidebarViewController: NSViewController {
     private let store = FolderBookmarksStore.shared
     private let watcher = FolderWatcher.shared
 
+    // MARK: 전체 검색 상태
+    private var searchField: NSSearchField!
+    private var searchSpinner: NSProgressIndicator!
+    private let fileSearcher = FileSearcher()
+    private var searchDebounce: DispatchWorkItem?
+    /// nil = 트리 모드, non-nil = 검색 결과 모드
+    private var searchResults: [FileSearchResult]?
+    private var searchNotice: SearchNotice?
+    private var isSearching: Bool { searchResults != nil }
+
     // 사이드바에서 연 파일 (강조 표시용)
     var currentFileURL: URL?
 
@@ -82,6 +98,7 @@ final class SidebarViewController: NSViewController {
 
         setupHeader(in: container)
         setupTab(in: container)
+        setupSearchField(in: container)
         setupOutline(in: container)
         setupImageList(in: container)
         setupEmptyState(in: container)
@@ -143,6 +160,13 @@ final class SidebarViewController: NSViewController {
         sortButton.translatesAutoresizingMaskIntoConstraints = false
         headerView.addSubview(sortButton)
 
+        searchSpinner = NSProgressIndicator()
+        searchSpinner.style = .spinning
+        searchSpinner.controlSize = .small
+        searchSpinner.isDisplayedWhenStopped = false
+        searchSpinner.translatesAutoresizingMaskIntoConstraints = false
+        headerView.addSubview(searchSpinner)
+
         NSLayoutConstraint.activate([
             headerView.topAnchor.constraint(equalTo: container.topAnchor),
             headerView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
@@ -160,7 +184,12 @@ final class SidebarViewController: NSViewController {
             sortButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -2),
             sortButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
             sortButton.widthAnchor.constraint(equalToConstant: 22),
-            sortButton.heightAnchor.constraint(equalToConstant: 22)
+            sortButton.heightAnchor.constraint(equalToConstant: 22),
+
+            searchSpinner.trailingAnchor.constraint(equalTo: sortButton.leadingAnchor, constant: -4),
+            searchSpinner.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+            searchSpinner.widthAnchor.constraint(equalToConstant: 16),
+            searchSpinner.heightAnchor.constraint(equalToConstant: 16)
         ])
     }
 
@@ -177,6 +206,21 @@ final class SidebarViewController: NSViewController {
             tabControl.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
             tabControl.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
             tabControl.heightAnchor.constraint(equalToConstant: 24)
+        ])
+    }
+
+    private func setupSearchField(in container: NSView) {
+        searchField = NSSearchField()
+        searchField.placeholderString = L10n.tr("sidebar.search.placeholder")
+        searchField.font = NSFont.systemFont(ofSize: 12)
+        searchField.delegate = self
+        searchField.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(searchField)
+
+        NSLayoutConstraint.activate([
+            searchField.topAnchor.constraint(equalTo: tabControl.bottomAnchor, constant: 6),
+            searchField.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
+            searchField.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8)
         ])
     }
 
@@ -214,7 +258,7 @@ final class SidebarViewController: NSViewController {
         scrollView.documentView = outlineView
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: tabControl.bottomAnchor, constant: 4),
+            scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 4),
             scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor)
@@ -263,12 +307,12 @@ final class SidebarViewController: NSViewController {
         container.addSubview(imageEmptyLabel)
 
         NSLayoutConstraint.activate([
-            imageScrollView.topAnchor.constraint(equalTo: tabControl.bottomAnchor, constant: 4),
+            imageScrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 4),
             imageScrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             imageScrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             imageScrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
 
-            imageEmptyLabel.topAnchor.constraint(equalTo: tabControl.bottomAnchor, constant: 60),
+            imageEmptyLabel.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 60),
             imageEmptyLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
             imageEmptyLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16)
         ])
@@ -294,7 +338,7 @@ final class SidebarViewController: NSViewController {
         emptyStateView.addSubview(button)
 
         NSLayoutConstraint.activate([
-            emptyStateView.topAnchor.constraint(equalTo: tabControl.bottomAnchor),
+            emptyStateView.topAnchor.constraint(equalTo: searchField.bottomAnchor),
             emptyStateView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
             emptyStateView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
             emptyStateView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
@@ -325,6 +369,9 @@ final class SidebarViewController: NSViewController {
     // MARK: - Tree Construction
 
     private func reloadTree() {
+        // 검색 결과 모드에서는 트리 UI를 건드리지 않는다 — FSEvents 갱신은
+        // 검색 종료(exitSearch) 시 reloadTree가 최신 상태로 재구성한다.
+        if isSearching { return }
         captureExpansionState()
         // reloadData()는 스크롤을 맨 위로 되돌리므로, 보던 위치를 저장했다가 복원한다
         // (외부 파일 변경으로 갱신될 때 스크롤이 튀지 않도록).
@@ -451,7 +498,7 @@ final class SidebarViewController: NSViewController {
             emptyStateView.isHidden = true
             return
         }
-        let isEmpty = roots.isEmpty
+        let isEmpty = roots.isEmpty && !isSearching
         emptyStateView.isHidden = !isEmpty
         scrollView.isHidden = isEmpty
     }
@@ -689,7 +736,30 @@ final class SidebarViewController: NSViewController {
 
     @objc private func outlineRowClicked(_ sender: Any?) {
         let row = outlineView.clickedRow
-        guard row >= 0, let node = outlineView.item(atRow: row) as? SidebarNode else { return }
+        guard row >= 0 else { return }
+        let item = outlineView.item(atRow: row)
+
+        // 검색 결과 모드
+        if item is SearchNotice { return }
+        if let result = item as? FileSearchResult {
+            if outlineView.isItemExpanded(result) {
+                outlineView.collapseItem(result)
+            } else {
+                outlineView.expandItem(result)
+            }
+            return
+        }
+        if let hit = item as? FileSearchHit {
+            guard let parent = outlineView.parent(forItem: hit) as? FileSearchResult,
+                  let opener = view.window?.windowController as? SidebarFileOpener else { return }
+            let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            opener.openFileFromSidebar(at: parent.fileURL,
+                                       jumpingTo: SearchJump(query: query, ordinal: hit.ordinalInFile))
+            return
+        }
+
+        // 트리 모드
+        guard let node = item as? SidebarNode else { return }
 
         if node.isDirectory {
             if outlineView.isItemExpanded(node) {
@@ -722,6 +792,73 @@ final class SidebarViewController: NSViewController {
         return outlineView.item(atRow: row) as? SidebarNode
     }
 
+    // MARK: - 전체 검색 (Full-Text Search)
+
+    /// ⇧⌘F — 폴더 탭으로 전환하고 검색 필드에 포커스.
+    func focusSearchField() {
+        if selectedTab != .folders {
+            tabControl.selectedSegment = Tab.folders.rawValue
+            tabChanged(tabControl)
+        }
+        view.window?.makeFirstResponder(searchField)
+    }
+
+    private func scheduleSearch() {
+        searchDebounce?.cancel()
+        let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            exitSearch()
+            return
+        }
+        let work = DispatchWorkItem { [weak self] in self?.performSearch(query: query) }
+        searchDebounce = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
+    }
+
+    private func performSearch(query: String) {
+        if selectedTab != .folders {
+            tabControl.selectedSegment = Tab.folders.rawValue
+            tabChanged(tabControl)
+        }
+        guard !store.folders.isEmpty else {
+            searchResults = []
+            searchNotice = SearchNotice(L10n.tr("sidebar.empty.message"))
+            outlineView.reloadData()
+            updateEmptyState()
+            return
+        }
+        searchSpinner.startAnimation(nil)
+        fileSearcher.search(query: query, in: store.folders) { [weak self] results, truncated in
+            guard let self = self else { return }
+            self.searchSpinner.stopAnimation(nil)
+            // 결과 도착 시점에 검색어가 이미 지워졌으면 무시
+            let current = self.searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !current.isEmpty else { return }
+            self.searchResults = results
+            if results.isEmpty {
+                self.searchNotice = SearchNotice(L10n.tr("sidebar.search.noResults"))
+            } else if truncated {
+                self.searchNotice = SearchNotice(L10n.tr("sidebar.search.truncated"))
+            } else {
+                self.searchNotice = nil
+            }
+            self.outlineView.reloadData()
+            for result in results { self.outlineView.expandItem(result) }
+            self.updateEmptyState()
+        }
+    }
+
+    /// 검색어 삭제/Esc → 트리 모드 복귀 (펼침 상태는 reloadTree가 복원).
+    private func exitSearch() {
+        searchDebounce?.cancel()
+        fileSearcher.cancel()
+        searchSpinner.stopAnimation(nil)
+        guard isSearching else { return }
+        searchResults = nil
+        searchNotice = nil
+        reloadTree()
+    }
+
     // MARK: - Public API
 
     func setCurrentFileURL(_ url: URL?) {
@@ -740,18 +877,34 @@ extension SidebarViewController: NSOutlineViewDataSource {
     }
 
     func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
+        if outlineView !== imageOutlineView, let results = searchResults {
+            if item == nil { return (searchNotice != nil ? 1 : 0) + results.count }
+            if let result = item as? FileSearchResult { return result.hits.count }
+            return 0
+        }
         if item == nil { return roots(for: outlineView).count }
         guard let node = item as? SidebarNode else { return 0 }
         return node.children?.count ?? 0
     }
 
     func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
+        if outlineView !== imageOutlineView, let results = searchResults {
+            if item == nil {
+                if let notice = searchNotice {
+                    return index == 0 ? notice : results[index - 1]
+                }
+                return results[index]
+            }
+            if let result = item as? FileSearchResult { return result.hits[index] }
+        }
         if item == nil { return roots(for: outlineView)[index] }
         guard let node = item as? SidebarNode, let children = node.children else { return SidebarNode(url: URL(fileURLWithPath: "/"), isDirectory: false, isRoot: false) }
         return children[index]
     }
 
     func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
+        if let result = item as? FileSearchResult { return !result.hits.isEmpty }
+        if item is FileSearchHit || item is SearchNotice { return false }
         guard let node = item as? SidebarNode else { return false }
         return node.isDirectory && !(node.children?.isEmpty ?? true)
     }
@@ -769,6 +922,39 @@ extension SidebarViewController: NSOutlineViewDataSource {
 extension SidebarViewController: NSOutlineViewDelegate {
 
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
+        if let notice = item as? SearchNotice {
+            let identifier = NSUserInterfaceItemIdentifier("SidebarCell")
+            let cell: NSTableCellView = (outlineView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView) ?? makeCell(identifier: identifier)
+            cell.textField?.stringValue = notice.text
+            cell.textField?.font = NSFont.systemFont(ofSize: 11)
+            cell.textField?.textColor = NSColor.secondaryLabelColor
+            cell.imageView?.image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)
+            return cell
+        }
+        if let result = item as? FileSearchResult {
+            let identifier = NSUserInterfaceItemIdentifier("SidebarCell")
+            let cell: NSTableCellView = (outlineView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView) ?? makeCell(identifier: identifier)
+            cell.textField?.stringValue = "\(result.fileURL.lastPathComponent) (\(result.hits.count))"
+            cell.textField?.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+            cell.textField?.textColor = NSColor.labelColor
+            cell.imageView?.image = NSImage(systemSymbolName: "doc.text", accessibilityDescription: nil)
+            return cell
+        }
+        if let hit = item as? FileSearchHit {
+            let identifier = NSUserInterfaceItemIdentifier("SidebarCell")
+            let cell: NSTableCellView = (outlineView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView) ?? makeCell(identifier: identifier)
+            let snippet = FileSearcher.makeSnippet(lineText: hit.lineText, matchRange: hit.matchRangeInLine)
+            let attr = NSMutableAttributedString(
+                string: snippet.text,
+                attributes: [.font: NSFont.systemFont(ofSize: 12),
+                             .foregroundColor: NSColor.secondaryLabelColor])
+            attr.addAttributes([.font: NSFont.boldSystemFont(ofSize: 12),
+                                .foregroundColor: NSColor.labelColor],
+                               range: snippet.highlight)
+            cell.textField?.attributedStringValue = attr
+            cell.imageView?.image = nil
+            return cell
+        }
         guard let node = item as? SidebarNode else { return nil }
 
         // 이미지 탭 트리: 폴더 아이콘 / 작은 썸네일 + 파일명
@@ -788,6 +974,7 @@ extension SidebarViewController: NSOutlineViewDelegate {
 
         let identifier = NSUserInterfaceItemIdentifier("SidebarCell")
         let cell: NSTableCellView = (outlineView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView) ?? makeCell(identifier: identifier)
+        cell.textField?.font = NSFont.systemFont(ofSize: 13)
         cell.textField?.stringValue = displayName(for: node)
         cell.imageView?.image = icon(for: node)
         cell.textField?.textColor = node.isMissing ? NSColor.systemOrange : NSColor.labelColor
@@ -795,7 +982,7 @@ extension SidebarViewController: NSOutlineViewDelegate {
     }
 
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
-        return true
+        return !(item is SearchNotice)
     }
 
     func outlineViewSelectionDidChange(_ notification: Notification) {
@@ -869,5 +1056,14 @@ extension SidebarViewController: NSMenuDelegate {
                 break
             }
         }
+    }
+}
+
+// MARK: - Search Field Delegate
+
+extension SidebarViewController: NSSearchFieldDelegate {
+    func controlTextDidChange(_ obj: Notification) {
+        guard (obj.object as? NSSearchField) === searchField else { return }
+        scheduleSearch()
     }
 }

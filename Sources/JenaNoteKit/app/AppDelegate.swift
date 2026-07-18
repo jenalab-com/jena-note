@@ -138,6 +138,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         findReplace.keyEquivalentModifierMask = [.command, .option]
         findReplace.tag = NSTextFinder.Action.showReplaceInterface.rawValue
 
+        editMenu.addItem(.separator())
+        let findInFiles = editMenu.addItem(withTitle: L10n.tr("menu.edit.findInFiles"),
+                                           action: #selector(EditorWindowController.findInFiles(_:)),
+                                           keyEquivalent: "f")
+        findInFiles.keyEquivalentModifierMask = [.command, .shift]
+
         // 서식 메뉴
         let formatMenuItem = NSMenuItem()
         mainMenu.addItem(formatMenuItem)
