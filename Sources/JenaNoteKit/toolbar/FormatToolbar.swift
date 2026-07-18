@@ -19,6 +19,7 @@ class FormatToolbar: NSToolbar {
     private static let itemHR            = NSToolbarItem.Identifier("horizontalRule")
     private static let itemColor         = NSToolbarItem.Identifier("textColor")
     private static let itemLineSpacing   = NSToolbarItem.Identifier("lineSpacing")
+    private static let itemFind          = NSToolbarItem.Identifier("find")
     private static let itemReadingMode   = NSToolbarItem.Identifier("readingMode")
 
     // 상태 표시용 버튼 참조
@@ -92,6 +93,7 @@ extension FormatToolbar: NSToolbarDelegate {
             FormatToolbar.itemColor,
             FormatToolbar.itemLineSpacing,
             .space,
+            FormatToolbar.itemFind,
             FormatToolbar.itemReadingMode,
             .flexibleSpace
         ]
@@ -160,6 +162,12 @@ extension FormatToolbar: NSToolbarDelegate {
             return makeColorWellItem(itemIdentifier)
         case FormatToolbar.itemLineSpacing:
             return makeLineSpacingItem(itemIdentifier)
+        case FormatToolbar.itemFind:
+            let item = makeItem(itemIdentifier, label: L10n.tr("toolbar.find"), systemImage: "magnifyingglass",
+                                action: #selector(EditorViewController.showFindBar(_:)))
+            // 찾기 버튼은 토글 상태가 없다 — 눌림 상태가 남지 않게 momentary로
+            (item.view as? NSButton)?.setButtonType(.momentaryPushIn)
+            return item
         case FormatToolbar.itemReadingMode:
             return makeItem(itemIdentifier, label: L10n.tr("menu.view.readingMode"), systemImage: "book",
                             action: #selector(EditorWindowController.toggleReadingMode(_:)))

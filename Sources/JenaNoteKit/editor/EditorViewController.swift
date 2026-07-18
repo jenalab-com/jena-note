@@ -136,6 +136,14 @@ class EditorViewController: NSViewController {
         FormatCommands.insertHorizontalRule(textView)
     }
 
+    /// 툴바 🔍 버튼 → 찾기 바 노출.
+    @objc func showFindBar(_ sender: Any?) {
+        view.window?.makeFirstResponder(textView)
+        let proxy = NSMenuItem()
+        proxy.tag = NSTextFinder.Action.showFindInterface.rawValue
+        textView.performTextFinderAction(proxy)
+    }
+
     // MARK: - Image Insertion
 
     /// 툴바 이미지 버튼 → 이미지 선택 → attachments로 복사 → 커서 위치에 삽입.
@@ -276,7 +284,7 @@ class EditorViewController: NSViewController {
             #selector(setBodyText), #selector(toggleUnorderedList), #selector(toggleOrderedList),
             #selector(toggleBlockquote), #selector(insertLink), #selector(insertHorizontalRule),
             #selector(insertImage), #selector(changeLineSpacing),
-            #selector(changeTextColor), #selector(showColorPanel)
+            #selector(changeTextColor), #selector(showColorPanel), #selector(showFindBar)
         ]
         if formatSelectors.contains(aSelector) { return true }
         return super.responds(to: aSelector)
