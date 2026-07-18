@@ -79,6 +79,20 @@ class EditorViewController: NSViewController {
         updateStatusBarCharCount()
     }
 
+    /// 전체 검색 결과 클릭 → 에디터 텍스트에서 검색어의 n번째 occurrence를 선택·표시.
+    /// 원문(.md) 오프셋은 WYSIWYG 변환 후와 달라 직접 매핑이 불가하므로 순번 매칭을 쓴다.
+    /// n번째가 없으면(기호 내부 매치 등) 첫 occurrence로 폴백, 그것도 없으면 점프 생략.
+    func jumpToMatch(_ jump: SearchJump) {
+        guard let storage = textView.textStorage else { return }
+        let text = storage.string
+        guard let range = SearchMatchLocator.range(ofOccurrence: jump.ordinal, query: jump.query, in: text)
+                ?? SearchMatchLocator.range(ofOccurrence: 0, query: jump.query, in: text) else { return }
+        view.window?.makeFirstResponder(textView)
+        textView.setSelectedRange(range)
+        textView.scrollRangeToVisible(range)
+        textView.showFindIndicator(for: range)
+    }
+
     /// 현재 텍스트의 글자수를 윈도우 하단 상태바에 반영한다.
     private func updateStatusBarCharCount() {
         guard let storage = textView.textStorage else { return }
