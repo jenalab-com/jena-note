@@ -19,6 +19,8 @@ class EditorTextView: NSTextView {
         isAutomaticQuoteSubstitutionEnabled = false
         isAutomaticDashSubstitutionEnabled = false
         isContinuousSpellCheckingEnabled = true
+        usesFindBar = true
+        isIncrementalSearchingEnabled = true
 
         textContainerInset = NSSize(width: 60, height: 40)
         typingAttributes = defaultTypingAttributes()
