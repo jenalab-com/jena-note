@@ -86,6 +86,9 @@ final class SidebarViewController: NSViewController {
     private var searchResults: [FileSearchResult]?
     private var searchNotice: SearchNotice?
     private var isSearching: Bool { searchResults != nil }
+    /// 현재 표시 중인 결과가 계산된 검색어 — 클릭 점프의 ordinal이 이 검색어 기준이라,
+    /// 디바운스 중 필드 텍스트가 바뀌어도 클릭은 이 값을 써야 ordinal이 어긋나지 않는다.
+    private var lastSearchQuery = ""
 
     // 사이드바에서 연 파일 (강조 표시용)
     var currentFileURL: URL?
@@ -754,9 +757,8 @@ final class SidebarViewController: NSViewController {
         if let hit = item as? FileSearchHit {
             guard let parent = outlineView.parent(forItem: hit) as? FileSearchResult,
                   let opener = view.window?.windowController as? SidebarFileOpener else { return }
-            let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
             opener.openFileFromSidebar(at: parent.fileURL,
-                                       jumpingTo: SearchJump(query: query, ordinal: hit.ordinalInFile))
+                                       jumpingTo: SearchJump(query: lastSearchQuery, ordinal: hit.ordinalInFile))
             return
         }
 
@@ -840,6 +842,9 @@ final class SidebarViewController: NSViewController {
             // 결과 도착 시점에 검색어가 이미 지워졌으면 무시
             let current = self.searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !current.isEmpty else { return }
+            // 클릭 점프는 이 결과가 계산된 검색어(query)로 ordinal을 맞춰야 한다 — 필드의
+            // 현재 텍스트(current)가 아니라, 실제 검색에 쓴 query를 저장한다.
+            self.lastSearchQuery = query
             self.searchResults = results
             if results.isEmpty {
                 self.searchNotice = SearchNotice(L10n.tr("sidebar.search.noResults"))
@@ -862,6 +867,7 @@ final class SidebarViewController: NSViewController {
         guard isSearching else { return }
         searchResults = nil
         searchNotice = nil
+        lastSearchQuery = ""
         reloadTree(capture: false)
     }
 
