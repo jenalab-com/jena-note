@@ -85,6 +85,7 @@ Sources/
       SidebarDataSource.swift       — 트리 노드 모델 + DataSource/Delegate
       FolderBookmarksStore.swift    — UserDefaults 영속, 변경 통지
       FolderWatcher.swift           — FSEvents 래퍼, debounce 200ms
+      FileSearcher.swift            — 전체 검색 엔진 (Foundation only, 백그라운드 스캔)
 Tests/
   JenaNoteKitTests/
     ReaderMetricsTests.swift        — columnWidth·snappedPageHeight 단위 테스트
@@ -340,3 +341,12 @@ clean:
 - **결정:** 읽기 모드를 별도 창이 아닌 `EditorWindowController` 우측 split item을 `ReaderViewController`로 교체하는 방식으로 구현한다. 가로 페이지 넘김은 단일 컬럼 레이아웃을 뷰 높이(줄 높이 정수배) 단위로 끊어 scroll offset을 점프시켜 근사한다.
 - **근거:** 사이드바·툴바·문서 스왑(ADR-0004) 재사용. NSTextView 물리적 페이지 분할의 무게를 피하면서 전자책 UX 대부분을 얻는다. 회귀 테스트를 위해 SPM 도입(ReaderMetrics 순수 함수 검증).
 - **트레이드오프:** 진짜 조판 페이지네이션(가변 줄 수, 고아/미망인 제어) 미지원. 페이지 바닥 여백 발생 가능. 읽기 모드는 읽기 전용이라 문서 변경 위험 없음.
+
+### ADR-0007: NSTextFinder 찾기 바 + 사이드바 통합 전체 검색 (2026-07-13)
+- **결정:** 문서 내 검색은 커스텀 UI 없이 `NSTextView.usesFindBar`(NSTextFinder)에 위임한다. 파일 전체 검색은 사이드바에 `NSSearchField`를 두고, 같은 NSOutlineView를 트리 모드 ↔ 결과 모드로 전환해 표시한다. 결과 클릭 → 문서 위치 이동은 원문 오프셋 매핑 대신 **순번 매칭**(파일 내 n번째 occurrence를 에디터 텍스트에서 재탐색)을 쓴다.
+- **근거:** NSTextFinder는 검색 필드·이동·매치 카운트·하이라이트·현지화를 무료 제공 (커스텀 구현 대비 코드 1/20). 사이드바는 이미 폴더·파일·인-플레이스 스왑(ADR-0004)을 소유 — 전체 검색의 자연스러운 위치. 원시 `.md` 오프셋은 WYSIWYG 변환(기호 제거) 후 오프셋과 달라 직접 매핑 불가.
+- **결과:**
+  - `FileSearcher`(Infrastructure, Foundation only): 백그라운드 스캔, 취소 토큰, 2MB/500건 상한.
+  - `SidebarFileOpener`가 `SearchJump(query, ordinal)` 파라미터로 확장 — 사이드바→에디터 직접 참조 없음 유지.
+  - 검색어가 마크다운 기호 내부(링크 URL 등)에만 매치되면 순번이 어긋날 수 있음 → 첫 occurrence 폴백. 허용 가능한 엣지.
+- **트레이드오프:** 읽기 모드 페이징에서는 찾기 바 미지원(페이지별 분리 텍스트뷰). 정규식·다중 파일 일괄 바꾸기 미지원 (YAGNI).
