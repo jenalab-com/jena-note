@@ -156,6 +156,14 @@ class EditorWindowController: NSWindowController {
         splitVC.toggleSidebar(sender)
     }
 
+    /// 편집 > 파일에서 찾기 (⇧⌘F) — 사이드바를 펼치고 검색 필드에 포커스.
+    @objc func findInFiles(_ sender: Any?) {
+        if let sidebarItem = splitVC.splitViewItems.first, sidebarItem.isCollapsed {
+            sidebarItem.animator().isCollapsed = false
+        }
+        sidebarVC.focusSearchField()
+    }
+
     // MARK: - Reading Mode (ADR-0006)
 
     @objc func toggleReadingMode(_ sender: Any?) {
