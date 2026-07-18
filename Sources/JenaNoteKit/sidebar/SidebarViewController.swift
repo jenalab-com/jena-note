@@ -368,11 +368,13 @@ final class SidebarViewController: NSViewController {
 
     // MARK: - Tree Construction
 
-    private func reloadTree() {
+    private func reloadTree(capture: Bool = true) {
         // 검색 결과 모드에서는 트리 UI를 건드리지 않는다 — FSEvents 갱신은
         // 검색 종료(exitSearch) 시 reloadTree가 최신 상태로 재구성한다.
         if isSearching { return }
-        captureExpansionState()
+        // exitSearch 경로(capture: false)에서는 현재 행이 방금까지 검색 행이었어
+        // captureExpansionState가 펼침 상태를 지워버린다 — 진입 시 찍어둔 스냅샷을 그대로 쓴다.
+        if capture { captureExpansionState() }
         // reloadData()는 스크롤을 맨 위로 되돌리므로, 보던 위치를 저장했다가 복원한다
         // (외부 파일 변경으로 갱신될 때 스크롤이 튀지 않도록).
         let savedOrigin = scrollView.contentView.bounds.origin
@@ -816,6 +818,10 @@ final class SidebarViewController: NSViewController {
     }
 
     private func performSearch(query: String) {
+        // 트리 → 검색으로 처음 진입하는 순간(아직 트리 행이 표시된 상태)에
+        // 펼침 상태를 스냅샷해 둔다 — 검색 종료 시 reloadTree(capture: false)가 복원한다.
+        // 결과 모드에서의 재검색(키 입력 연타)에서는 이미 검색 행이라 캡처하지 않는다.
+        if !isSearching { captureExpansionState() }
         if selectedTab != .folders {
             tabControl.selectedSegment = Tab.folders.rawValue
             tabChanged(tabControl)
@@ -856,7 +862,7 @@ final class SidebarViewController: NSViewController {
         guard isSearching else { return }
         searchResults = nil
         searchNotice = nil
-        reloadTree()
+        reloadTree(capture: false)
     }
 
     // MARK: - Public API
