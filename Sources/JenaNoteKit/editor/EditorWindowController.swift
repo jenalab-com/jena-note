@@ -10,6 +10,9 @@ class EditorWindowController: NSWindowController {
     private let statusBar = StatusBarView()
     private var lastNotifiedMissingURL: URL?
 
+    /// 검색 결과 클릭으로 문서를 여는 중일 때, 스왑 완료 후 실행할 점프.
+    private var pendingSearchJump: SearchJump?
+
     // MARK: - Reading Mode State (ADR-0006)
 
     private(set) var isReadingMode = false
@@ -317,25 +320,30 @@ class EditorWindowController: NSWindowController {
 
 extension EditorWindowController: SidebarFileOpener {
 
-    func openFileFromSidebar(at url: URL) {
+    func openFileFromSidebar(at url: URL, jumpingTo jump: SearchJump? = nil) {
         guard let currentDoc = document as? MarkdownDocument else {
             // 현재 창에 문서가 없는 비정상 상태 — 그냥 새로 열기
             NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, _ in }
             return
         }
 
-        // 같은 파일 재클릭은 무시
+        // 같은 파일 클릭: 스왑 없이 점프만 (일반 클릭이면 무시 — 기존 동작 유지)
         if let currentURL = currentDoc.fileURL?.standardizedFileURL,
            currentURL == url.standardizedFileURL {
+            if let jump = jump, !isReadingMode {
+                editorVC.jumpToMatch(jump)
+            }
             return
         }
 
-        // 이미 다른 창에 열려 있으면 그 창으로 이동
+        // 이미 다른 창에 열려 있으면 그 창으로 이동 (점프는 생략 — 허용 가능한 엣지)
         if let existingDoc = NSDocumentController.shared.document(for: url),
            existingDoc !== currentDoc {
             existingDoc.showWindows()
             return
         }
+
+        pendingSearchJump = jump
 
         // 미저장 변경 시 저장 확인
         currentDoc.canClose(withDelegate: self,
@@ -361,6 +369,7 @@ extension EditorWindowController: SidebarFileOpener {
 
         if !shouldClose {
             // 사용자 "취소" — 사이드바 선택 복원
+            pendingSearchJump = nil
             updateSidebarSelection()
             return
         }
@@ -387,6 +396,13 @@ extension EditorWindowController: SidebarFileOpener {
             newDoc.addWindowController(self)
 
             self.editorVC.loadDocumentContent()
+            if let jump = self.pendingSearchJump {
+                self.pendingSearchJump = nil
+                // 읽기 모드에서는 에디터가 분리돼 있어 점프 생략 (읽기 화면은 문서 교체만)
+                if !self.isReadingMode {
+                    self.editorVC.jumpToMatch(jump)
+                }
+            }
             // 읽기 모드 중 사이드바로 문서를 바꿨다면 읽기 화면 내용도 새 문서로 갱신.
             // (에디터 뷰는 윈도우에서 분리돼 있어 loadDocumentContent 가 조용히
             //  건너뛰므로, 글자수도 여기서 직접 새 문서 기준으로 맞춘다.)

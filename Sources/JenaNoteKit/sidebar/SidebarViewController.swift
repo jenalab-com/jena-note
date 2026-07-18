@@ -3,9 +3,15 @@ import ImageIO
 
 // MARK: - File-Open Protocol (loose coupling)
 
+/// 검색 결과 클릭 시 문서 안에서 이동할 위치 — 검색어의 파일 내 n번째 occurrence.
+struct SearchJump {
+    let query: String
+    let ordinal: Int
+}
+
 /// 사이드바가 윈도우 컨트롤러에 "이 파일을 열어라"고 요청할 때 사용한다.
-@objc protocol SidebarFileOpener: AnyObject {
-    func openFileFromSidebar(at url: URL)
+protocol SidebarFileOpener: AnyObject {
+    func openFileFromSidebar(at url: URL, jumpingTo jump: SearchJump?)
 }
 
 /// 사이드바에서 인식하는 이미지 파일 확장자.
@@ -696,7 +702,7 @@ final class SidebarViewController: NSViewController {
 
         // 파일 클릭 → 윈도우 컨트롤러에 위임
         if let opener = view.window?.windowController as? SidebarFileOpener {
-            opener.openFileFromSidebar(at: node.url)
+            opener.openFileFromSidebar(at: node.url, jumpingTo: nil)
         }
     }
 
