@@ -77,6 +77,10 @@ Sources/
       FormatCommands.swift          — 서식 액션 (bold, italic, heading, list 등)
       ReaderViewController.swift    — 읽기 전용 조판·스크롤/페이징·폰트 배율 (ADR-0006)
       ReaderMetrics.swift           — 컬럼폭·페이지 높이 순수 함수 (단위 테스트 가능)
+      ReadingAnchor.swift           — 표시-독립 읽기 위치 + 문맥 재동기화 (ADR-0008)
+      ReadingProgressStore.swift    — 문서별 이어읽기 위치 영속 (ADR-0008)
+      BookmarkStore.swift           — 문서별 책갈피 N개 영속 (ADR-0008)
+      BookmarkListViewController.swift — 책갈피 팝오버 목록 (ADR-0008)
     toolbar/
       FormatToolbar.swift           — NSToolbar + NSToolbarDelegate
       ReaderToolbar.swift           — 읽기 모드 전용 NSToolbar (ADR-0006)
@@ -90,6 +94,10 @@ Tests/
   JenaNoteKitTests/
     ReaderMetricsTests.swift        — columnWidth·snappedPageHeight 단위 테스트
     ReadingSettingsTests.swift      — SettingsManager 읽기 설정 영속 테스트
+    ReadingAnchorTests.swift        — 앵커 생성·문맥 재동기화 폴백·미리보기 테스트
+    ReadingProgressStoreTests.swift — 문서별 위치 영속·정리 테스트
+    BookmarkStoreTests.swift        — 책갈피 추가·범위 삭제·정렬·상한 테스트
+    BookmarkLocalizationTests.swift — 책갈피 문자열 7개 언어 누락 검사
     SmokeTests.swift                — 모듈 링크 스모크 테스트
 Resources/
   Info.plist
@@ -350,3 +358,26 @@ clean:
   - `SidebarFileOpener`가 `SearchJump(query, ordinal)` 파라미터로 확장 — 사이드바→에디터 직접 참조 없음 유지.
   - 검색어가 마크다운 기호 내부(링크 URL 등)에만 매치되면 순번이 어긋날 수 있음 → 첫 occurrence 폴백. 허용 가능한 엣지.
 - **트레이드오프:** 읽기 모드 페이징에서는 찾기 바 미지원(페이지별 분리 텍스트뷰). 정규식·다중 파일 일괄 바꾸기 미지원 (YAGNI).
+
+### ADR-0008: 이어읽기 앵커 = 문자 오프셋 + 문맥 스니펫 (2026-07-22)
+- **결정:** 읽던 위치를 페이지 번호나 스크롤 y 가 아니라 **문자 오프셋**으로 저장한다. 문서 편집에 대비해 그 지점의 원문 32자(`contextSnippet`)를 함께 남기고, 복원 시 3단계 폴백(제자리 확인 → ±2048자 재탐색 → 전체 재탐색 → 클램프)으로 위치를 되찾는다.
+- **근거:** 표시 위치는 폰트 배율·패밀리·행간·컬럼 폭·페이지 모드·창 크기 6개 변수에 전부 종속이라 설정이 하나만 바뀌어도 무의미해진다. 반면 `ReaderMetrics.styled` 는 속성만 바꾸고 문자를 넣거나 빼지 않으므로 원본과 표시본의 문자 인덱스가 1:1 로 보존된다(이미지 첨부도 U+FFFC 한 글자). 즉 문자 오프셋이 이 6개 변수와 무관한 유일한 좌표다.
+- **결과:**
+  - `ReaderViewController` 가 `anchorOffset` 하나를 진리의 원천으로 두고, 페이지 번호·스크롤 y 는 여기서 파생시킨다. 조판이 바뀔 때마다(`renderContent`/`rebuildPages`) 앵커에서 위치를 다시 찾으므로 **폰트를 키워도 읽던 문장이 화면에 남는다** — 이어읽기의 부산물로 얻은 개선.
+  - 저장 책임은 `EditorWindowController` 에 둔다. 리더는 `onPositionChanged` 콜백(0.5초 코얼레싱)만 쏘고 저장소를 모른다.
+  - 위치가 바뀔 때마다 저장하므로 읽기 모드인 채 앱을 종료해도 위치가 남는다(종료 경로를 일일이 훅킹하지 않아도 됨).
+  - `ReadingProgressStore` 는 파일 경로를 키로 UserDefaults 에 JSON 보관, 상한 300건(초과 시 오래된 것부터 정리). 비-샌드박스 전제는 ADR-0005 와 동일.
+- **트레이드오프:** 완전히 주기적으로 반복되는 텍스트에서 삽입량이 반복 주기와 정확히 일치하면 밀렸다는 사실 자체를 알 수 없다 — 이때는 제자리를 택한다(독자에게는 같은 내용이 보이므로 무해). 파일 경로가 바뀌면(이동·이름 변경) 위치를 잃는다.
+
+#### ADR-0008a: 책갈피 — 같은 앵커 타입 재사용 + 리더 툴바 팝오버 (2026-07-22)
+- **결정:** 명시적 책갈피(⌘D)는 이어읽기와 **같은 `ReadingAnchor`** 를 문서당 N개 보관하는 것으로 구현한다(`BookmarkStore`). 목록 UI는 사이드바가 아니라 **리더 툴바의 NSPopover** 에 둔다. 목록에 보이는 미리보기 텍스트는 저장하지 않고 그릴 때마다 현재 본문에서 뜬다.
+- **근거:**
+  - 앵커 인프라(오프셋↔페이지/스크롤 변환, 문맥 재동기화)를 이어읽기에서 이미 검증했으므로 책갈피는 저장 구조와 UI만 얹으면 된다.
+  - 사이드바는 `searchResults != nil` 불리언 하나로 트리↔검색 2모드를 굴리고 있어, 세 번째 모드를 넣으면 흩어진 `isSearching` 분기가 전부 3-way가 된다. 책갈피는 읽기 모드 전용이라 리더 툴바가 맥락상으로도 맞다.
+  - 미리보기를 저장하면 문서가 편집된 뒤 목록의 문구와 실제로 점프해서 보이는 문장이 어긋난다. 매번 뜨면 항상 일치하고 저장 데이터도 줄어든다.
+- **결과:**
+  - ⌘D 는 **토글**이다 — 지금 보이는 화면(`ReaderViewController.visibleCharacterRange`) 안에 책갈피가 있으면 해제, 없으면 현재 위치에 추가. 스크롤/페이징 어느 쪽이든 "보이는 것"을 기준으로 판정한다.
+  - 툴바 아이콘이 `bookmark` ↔ `bookmark.fill` 로 바뀌어 현재 화면의 책갈피 유무를 알린다(피드백 채널).
+  - 메모 입력은 넣지 않았다 — "읽다가 훅 찍기"의 결이 깨지고, 자동 스니펫으로 충분하다고 판단.
+  - 저장 안 된 새 문서(`fileURL == nil`)에서는 메뉴가 비활성(`validateMenuItem`).
+- **트레이드오프:** 여러 문서의 책갈피를 한눈에 보는 화면은 없다(현재 문서만). 필요해지면 사이드바 모드 정리와 함께 별도로 다룬다. 책갈피에 사용자 메모·이름을 붙이는 것도 보류.

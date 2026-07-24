@@ -11,6 +11,11 @@ class ReaderToolbar: NSToolbar {
     private static let itemFontDown = NSToolbarItem.Identifier("readerFontDown")
     private static let itemFontUp   = NSToolbarItem.Identifier("readerFontUp")
     private static let itemWidth = NSToolbarItem.Identifier("readerWidth")
+    private static let itemBookmark = NSToolbarItem.Identifier("readerBookmark")
+    private static let itemBookmarkList = NSToolbarItem.Identifier("readerBookmarkList")
+
+    /// 책갈피 토글 버튼 — 현재 화면에 책갈피가 있는지에 따라 아이콘이 채워진다.
+    private weak var bookmarkButton: NSButton?
 
     override init(identifier: NSToolbar.Identifier) {
         super.init(identifier: identifier)
@@ -19,6 +24,18 @@ class ReaderToolbar: NSToolbar {
         allowsUserCustomization = false
         autosavesConfiguration = false
     }
+
+    /// 지금 보이는 화면에 책갈피가 있는지를 아이콘에 반영한다.
+    func updateBookmarkState(active: Bool) {
+        let symbol = active ? "bookmark.fill" : "bookmark"
+        let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
+        bookmarkButton?.image = NSImage(systemSymbolName: symbol,
+                                        accessibilityDescription: L10n.tr("reader.bookmark.toggle"))?
+            .withSymbolConfiguration(config)
+    }
+
+    /// 책갈피 목록 팝오버를 붙일 기준 뷰.
+    var bookmarkAnchorView: NSView? { bookmarkButton }
 }
 
 extension ReaderToolbar: NSToolbarDelegate {
@@ -29,7 +46,8 @@ extension ReaderToolbar: NSToolbarDelegate {
          ReaderToolbar.itemWidth, .space,
          ReaderToolbar.itemFontFamily, .space,
          ReaderToolbar.itemLineSpacing, .space,
-         ReaderToolbar.itemFontDown, ReaderToolbar.itemFontUp, .flexibleSpace]
+         ReaderToolbar.itemFontDown, ReaderToolbar.itemFontUp, .space,
+         ReaderToolbar.itemBookmark, ReaderToolbar.itemBookmarkList, .flexibleSpace]
     }
 
     func toolbarAllowedItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -43,6 +61,14 @@ extension ReaderToolbar: NSToolbarDelegate {
         case ReaderToolbar.itemExit:
             return iconItem(id, label: L10n.tr("reader.exit"), symbol: "pencil",
                             action: #selector(EditorWindowController.exitReadingMode(_:)))
+        case ReaderToolbar.itemBookmark:
+            let item = iconItem(id, label: L10n.tr("reader.bookmark.toggle"), symbol: "bookmark",
+                                action: #selector(EditorWindowController.toggleBookmark(_:)))
+            bookmarkButton = item.view as? NSButton
+            return item
+        case ReaderToolbar.itemBookmarkList:
+            return iconItem(id, label: L10n.tr("reader.bookmark.list"), symbol: "list.bullet",
+                            action: #selector(EditorWindowController.showBookmarkList(_:)))
         case ReaderToolbar.itemMode:
             let item = NSToolbarItem(itemIdentifier: id)
             item.label = L10n.tr("reader.pageMode")

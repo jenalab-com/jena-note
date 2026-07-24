@@ -19,6 +19,7 @@ class EditorWindowController: NSWindowController {
     private var readerVC: ReaderViewController?
     private var formatToolbar: FormatToolbar?
     private var readerToolbar: ReaderToolbar?
+    private var bookmarkPopover: NSPopover?
 
     // MARK: - Init
 
@@ -177,6 +178,10 @@ class EditorWindowController: NSWindowController {
         let liveContent = editorVC.textView.textStorage.map { NSAttributedString(attributedString: $0) } ?? doc.content
         let reader = ReaderViewController(content: liveContent)
         readerVC = reader
+        reader.onPositionChanged = { [weak self] offset in
+            self?.saveReadingProgress(offset: offset)
+            self?.updateBookmarkButtonState()
+        }
         swapRightPane(to: reader)
 
         let rToolbar = ReaderToolbar(identifier: NSToolbar.Identifier("ReaderToolbar"))
@@ -186,6 +191,13 @@ class EditorWindowController: NSWindowController {
 
         isReadingMode = true
 
+        // 툴바가 붙은 뒤에 복원한다 — 책갈피 아이콘 상태를 같이 맞춰야 하기 때문.
+        restoreReadingProgress()
+        updateBookmarkButtonState()
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(handleReaderPageChanged(_:)),
+            name: .readerPageChanged, object: reader)
+
         // 영속화된 page mode 적용은 ReaderViewController.viewDidAppear 로 위임한다.
         // 레이아웃이 끝난(non-zero bounds) AppKit 순서 지점에서 호출돼야
         // pageHeight 가 0-bounds 로 계산되지 않고, scroll→paged 깜빡임도 없다.
@@ -193,6 +205,12 @@ class EditorWindowController: NSWindowController {
 
     @objc func exitReadingMode(_ sender: Any?) {
         guard isReadingMode else { return }
+        readerVC?.flushPositionChange()
+        bookmarkPopover?.performClose(nil)
+        bookmarkPopover = nil
+        if let reader = readerVC {
+            NotificationCenter.default.removeObserver(self, name: .readerPageChanged, object: reader)
+        }
         swapRightPane(to: editorVC)
         if let f = formatToolbar {
             window?.toolbar = f
@@ -203,6 +221,81 @@ class EditorWindowController: NSWindowController {
         readerVC = nil
         readerToolbar = nil
         isReadingMode = false
+    }
+
+    // MARK: - 책갈피 (ADR-0008)
+
+    /// 지금 보이는 화면에 책갈피가 있으면 해제, 없으면 현재 위치에 추가한다 (⌘D).
+    @objc func toggleBookmark(_ sender: Any?) {
+        guard isReadingMode, let reader = readerVC,
+              let url = (document as? MarkdownDocument)?.fileURL else { return }
+        if !BookmarkStore.shared.removeBookmarks(in: reader.visibleCharacterRange, for: url) {
+            let anchor = ReadingAnchor.make(offset: reader.currentCharacterOffset, in: reader.contentString)
+            BookmarkStore.shared.add(anchor, for: url)
+        }
+        updateBookmarkButtonState()
+    }
+
+    @objc func showBookmarkList(_ sender: Any?) {
+        guard isReadingMode, let reader = readerVC,
+              let url = (document as? MarkdownDocument)?.fileURL else { return }
+        guard let anchorView = (sender as? NSView) ?? readerToolbar?.bookmarkAnchorView else { return }
+
+        let text = reader.contentString
+        let listVC = BookmarkListViewController(anchors: BookmarkStore.shared.bookmarks(for: url),
+                                                contentString: text)
+        listVC.onSelect = { [weak self] anchor in
+            self?.bookmarkPopover?.performClose(nil)
+            self?.readerVC?.restore(to: anchor.resolve(in: text))
+            self?.updateBookmarkButtonState()
+        }
+        listVC.onDelete = { [weak self] anchor in
+            BookmarkStore.shared.removeBookmark(atOffset: anchor.characterOffset, for: url)
+            self?.updateBookmarkButtonState()
+        }
+
+        let popover = NSPopover()
+        popover.contentViewController = listVC
+        popover.contentSize = listVC.preferredSize
+        popover.behavior = .transient
+        popover.show(relativeTo: anchorView.bounds, of: anchorView, preferredEdge: .maxY)
+        bookmarkPopover = popover
+    }
+
+    /// 현재 화면에 책갈피가 있는지를 툴바 아이콘에 반영한다.
+    private func updateBookmarkButtonState() {
+        guard isReadingMode, let reader = readerVC, let toolbar = readerToolbar else { return }
+        guard let url = (document as? MarkdownDocument)?.fileURL else {
+            toolbar.updateBookmarkState(active: false)
+            return
+        }
+        let visible = reader.visibleCharacterRange
+        let active = BookmarkStore.shared.bookmarks(for: url)
+            .contains { NSLocationInRange($0.characterOffset, visible) }
+        toolbar.updateBookmarkState(active: active)
+    }
+
+    @objc private func handleReaderPageChanged(_ note: Notification) {
+        updateBookmarkButtonState()
+    }
+
+    // MARK: - 이어읽기 (ADR-0008)
+
+    /// 읽던 위치를 문서별로 저장한다. 표시 설정과 무관하도록 문자 오프셋 + 문맥 스니펫만 남긴다.
+    private func saveReadingProgress(offset: Int) {
+        guard let reader = readerVC,
+              let url = (document as? MarkdownDocument)?.fileURL else { return }
+        let anchor = ReadingAnchor.make(offset: offset, in: reader.contentString)
+        ReadingProgressStore.shared.setAnchorOrClear(anchor, for: url)
+    }
+
+    /// 저장돼 있던 위치를 현재 문서에서 되찾아 리더에 적용한다.
+    /// 문서가 그새 편집됐으면 문맥 스니펫으로 재동기화된다.
+    private func restoreReadingProgress() {
+        guard let reader = readerVC,
+              let url = (document as? MarkdownDocument)?.fileURL,
+              let anchor = ReadingProgressStore.shared.anchor(for: url) else { return }
+        reader.restore(to: anchor.resolve(in: reader.contentString))
     }
 
     private func swapRightPane(to vc: NSViewController) {
@@ -386,6 +479,9 @@ extension EditorWindowController: SidebarFileOpener {
     }
 
     private func swapDocument(to url: URL, replacing oldDoc: MarkdownDocument?) {
+        // 문서가 바뀌기 전에 저장 — 콜백 안에서는 self.document 가 이미 새 문서라
+        // 이전 문서의 위치가 새 문서 키에 얹히게 된다.
+        readerVC?.flushPositionChange()
         NSDocumentController.shared.openDocument(withContentsOf: url, display: false) { [weak self] newDoc, alreadyOpen, error in
             guard let self = self else { return }
             guard error == nil, let newDoc = newDoc else { return }
@@ -416,11 +512,27 @@ extension EditorWindowController: SidebarFileOpener {
             //  건너뛰므로, 글자수도 여기서 직접 새 문서 기준으로 맞춘다.)
             if self.isReadingMode, let newDoc = self.document as? MarkdownDocument {
                 self.readerVC?.updateContent(newDoc.content)
+                self.restoreReadingProgress()
                 self.updateCharCount(for: newDoc.content.string)
             }
             self.window?.makeKeyAndOrderFront(nil)
             self.synchronizeWindowTitleWithDocumentName()
             self.updateSidebarSelection()
+        }
+    }
+}
+
+// MARK: - Menu Validation
+
+extension EditorWindowController: NSMenuItemValidation {
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        switch menuItem.action {
+        case #selector(toggleBookmark(_:)), #selector(showBookmarkList(_:)):
+            // 읽기 모드 전용이며, 위치를 매어 둘 파일이 있어야 한다(저장 안 된 새 문서 제외).
+            return isReadingMode && (document as? MarkdownDocument)?.fileURL != nil
+        default:
+            return true
         }
     }
 }
