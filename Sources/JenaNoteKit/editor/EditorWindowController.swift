@@ -13,13 +13,22 @@ class EditorWindowController: NSWindowController {
     /// 검색 결과 클릭으로 문서를 여는 중일 때, 스왑 완료 후 실행할 점프.
     private var pendingSearchJump: SearchJump?
 
-    // MARK: - Reading Mode State (ADR-0006)
+    // MARK: - Reading Mode State (ADR-0006, ADR-0009)
 
+    /// 읽기 조판이 켜져 있는지. 조판일 뿐이라 스크롤 조판에서는 편집이 그대로 된다.
     private(set) var isReadingMode = false
+    /// 페이징 조판일 때만 존재하는 읽기 전용 오버레이. 스크롤 조판에서는 nil 이고
+    /// 에디터가 직접 조판을 입는다.
     private var readerVC: ReaderViewController?
     private var formatToolbar: FormatToolbar?
     private var readerToolbar: ReaderToolbar?
     private var bookmarkPopover: NSPopover?
+
+    /// 지금 읽던 자리를 쥐고 있는 화면 — 페이징이면 리더 오버레이, 스크롤이면 에디터.
+    private var positionProvider: ReadingPositionProviding? {
+        guard isReadingMode else { return nil }
+        return readerVC ?? editorVC
+    }
 
     // MARK: - Init
 
@@ -171,63 +180,119 @@ class EditorWindowController: NSWindowController {
         isReadingMode ? exitReadingMode(sender) : enterReadingMode(sender)
     }
 
+    /// 읽기 조판을 켠다. 우측 페인을 갈아끼우지 않고 **에디터가 조판을 입는다** —
+    /// 그래서 스크롤 조판에서는 편집·서식·저장이 그대로 살아있다 (ADR-0009).
     @objc func enterReadingMode(_ sender: Any?) {
-        guard !isReadingMode, let doc = document as? MarkdownDocument else { return }
-        // 라이브 텍스트 스토리지의 스냅샷을 직접 전달 — 읽기 화면이 최신 미저장
-        // 편집본을 조판하되, 문서의 change count 는 건드리지 않는다 (원본 불변).
-        let liveContent = editorVC.textView.textStorage.map { NSAttributedString(attributedString: $0) } ?? doc.content
-        let reader = ReaderViewController(content: liveContent)
-        readerVC = reader
-        reader.onPositionChanged = { [weak self] offset in
+        guard !isReadingMode else { return }
+        isReadingMode = true
+        editorVC.setReadingLayout(true)
+        editorVC.onPositionChanged = { [weak self] offset in
             self?.saveReadingProgress(offset: offset)
             self?.updateBookmarkButtonState()
         }
-        swapRightPane(to: reader)
 
         let rToolbar = ReaderToolbar(identifier: NSToolbar.Identifier("ReaderToolbar"))
         rToolbar.target = self
         window?.toolbar = rToolbar
         readerToolbar = rToolbar
 
-        isReadingMode = true
+        applyReadingPageMode(SettingsManager.shared.readingPageMode)
 
         // 툴바가 붙은 뒤에 복원한다 — 책갈피 아이콘 상태를 같이 맞춰야 하기 때문.
         restoreReadingProgress()
         updateBookmarkButtonState()
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(handleReaderPageChanged(_:)),
-            name: .readerPageChanged, object: reader)
-
-        // 영속화된 page mode 적용은 ReaderViewController.viewDidAppear 로 위임한다.
-        // 레이아웃이 끝난(non-zero bounds) AppKit 순서 지점에서 호출돼야
-        // pageHeight 가 0-bounds 로 계산되지 않고, scroll→paged 깜빡임도 없다.
     }
 
     @objc func exitReadingMode(_ sender: Any?) {
         guard isReadingMode else { return }
-        readerVC?.flushPositionChange()
+        positionProvider?.flushPositionChange()
         bookmarkPopover?.performClose(nil)
         bookmarkPopover = nil
-        if let reader = readerVC {
-            NotificationCenter.default.removeObserver(self, name: .readerPageChanged, object: reader)
-        }
-        swapRightPane(to: editorVC)
+
+        removePagedReader()
+        editorVC.setReadingLayout(false)
+        editorVC.onPositionChanged = nil
+        isReadingMode = false
+
         if let f = formatToolbar {
             window?.toolbar = f
         } else if let window = window {
             setupToolbar(for: window)
         }
-        editorVC.loadDocumentContent()
-        readerVC = nil
         readerToolbar = nil
-        isReadingMode = false
+    }
+
+    // MARK: - 조판 전환 (스크롤 ↔ 페이징)
+
+    /// 페이징이면 읽기 전용 오버레이를 띄우고, 스크롤이면 에디터로 되돌린다.
+    /// 읽던 자리는 넘겨받는 쪽이 이어받는다.
+    private func applyReadingPageMode(_ mode: SettingsManager.ReadingPageMode) {
+        SettingsManager.shared.readingPageMode = mode
+        if mode == .paged { installPagedReader() } else { removePagedReader() }
+    }
+
+    private func installPagedReader() {
+        guard isReadingMode, readerVC == nil else { return }
+        let offset = editorVC.currentCharacterOffset
+        editorVC.flushPositionChange()
+
+        // 리더는 자기 조판을 입히므로 조판을 벗긴 원본을 넘긴다 (이중 조판 방지).
+        let live = editorVC.textView.textStorage.map { ReaderMetrics.unstyled($0) }
+            ?? (document as? MarkdownDocument)?.content
+            ?? NSAttributedString()
+        let reader = ReaderViewController(content: live)
+        reader.onPositionChanged = { [weak self] offset in
+            self?.saveReadingProgress(offset: offset)
+            self?.updateBookmarkButtonState()
+        }
+        // 페이징 화면에서 글자를 치면 스크롤 조판으로 갈아타 그 자리에서 이어 쓰게 한다.
+        reader.onEditRequested = { [weak self] offset, event in
+            self?.switchToScrollForEditing(at: offset, replaying: event)
+        }
+        readerVC = reader
+        swapRightPane(to: reader)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(handleReaderPageChanged(_:)),
+            name: .readerPageChanged, object: reader)
+        reader.restore(to: offset)
+    }
+
+    private func removePagedReader() {
+        guard let reader = readerVC else { return }
+        let offset = reader.currentCharacterOffset
+        reader.flushPositionChange()
+        NotificationCenter.default.removeObserver(self, name: .readerPageChanged, object: reader)
+        readerVC = nil
+        swapRightPane(to: editorVC)
+        // 페이징 동안 에디터 뷰는 윈도우에서 분리돼 있었다. 그 사이 사이드바로 문서가
+        // 바뀌었다면 에디터에는 옛 문서가 남아 있으므로 다시 싣는다. 이때 문서를 직접
+        // 넘기는 이유는 `editorVC.document` 가 window 를 타고 오기 때문 — 방금 붙인
+        // 참에 그 타이밍에 기대면 같은 버그가 되돌아온다.
+        if let doc = document as? MarkdownDocument {
+            editorVC.loadContent(of: doc)
+        }
+        editorVC.restore(to: offset)
+    }
+
+    /// 페이징 조판에서 타이핑이 시작됐을 때 — 스크롤 조판으로 바꾸고 그 자리에 커서를 둔다.
+    /// 방아쇠가 된 키 입력은 전환이 끝난 뒤 에디터에 다시 흘려보내 첫 글자를 잃지 않는다.
+    private func switchToScrollForEditing(at offset: Int, replaying event: NSEvent?) {
+        applyReadingPageMode(.scroll)
+        readerToolbar?.updatePageModeSelection(.scroll)
+        editorVC.placeCursor(at: offset)
+        guard let event = event else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.window?.makeFirstResponder(self.editorVC.textView)
+            self.editorVC.textView.interpretKeyEvents([event])
+        }
     }
 
     // MARK: - 책갈피 (ADR-0008)
 
     /// 지금 보이는 화면에 책갈피가 있으면 해제, 없으면 현재 위치에 추가한다 (⌘D).
     @objc func toggleBookmark(_ sender: Any?) {
-        guard isReadingMode, let reader = readerVC,
+        guard let reader = positionProvider,
               let url = (document as? MarkdownDocument)?.fileURL else { return }
         if !BookmarkStore.shared.removeBookmarks(in: reader.visibleCharacterRange, for: url) {
             let anchor = ReadingAnchor.make(offset: reader.currentCharacterOffset, in: reader.contentString)
@@ -237,7 +302,7 @@ class EditorWindowController: NSWindowController {
     }
 
     @objc func showBookmarkList(_ sender: Any?) {
-        guard isReadingMode, let reader = readerVC,
+        guard let reader = positionProvider,
               let url = (document as? MarkdownDocument)?.fileURL else { return }
         guard let anchorView = (sender as? NSView) ?? readerToolbar?.bookmarkAnchorView else { return }
 
@@ -246,7 +311,7 @@ class EditorWindowController: NSWindowController {
                                                 contentString: text)
         listVC.onSelect = { [weak self] anchor in
             self?.bookmarkPopover?.performClose(nil)
-            self?.readerVC?.restore(to: anchor.resolve(in: text))
+            self?.positionProvider?.restore(to: anchor.resolve(in: text))
             self?.updateBookmarkButtonState()
         }
         listVC.onDelete = { [weak self] anchor in
@@ -264,7 +329,7 @@ class EditorWindowController: NSWindowController {
 
     /// 현재 화면에 책갈피가 있는지를 툴바 아이콘에 반영한다.
     private func updateBookmarkButtonState() {
-        guard isReadingMode, let reader = readerVC, let toolbar = readerToolbar else { return }
+        guard let reader = positionProvider, let toolbar = readerToolbar else { return }
         guard let url = (document as? MarkdownDocument)?.fileURL else {
             toolbar.updateBookmarkState(active: false)
             return
@@ -283,16 +348,16 @@ class EditorWindowController: NSWindowController {
 
     /// 읽던 위치를 문서별로 저장한다. 표시 설정과 무관하도록 문자 오프셋 + 문맥 스니펫만 남긴다.
     private func saveReadingProgress(offset: Int) {
-        guard let reader = readerVC,
+        guard let reader = positionProvider,
               let url = (document as? MarkdownDocument)?.fileURL else { return }
         let anchor = ReadingAnchor.make(offset: offset, in: reader.contentString)
         ReadingProgressStore.shared.setAnchorOrClear(anchor, for: url)
     }
 
-    /// 저장돼 있던 위치를 현재 문서에서 되찾아 리더에 적용한다.
+    /// 저장돼 있던 위치를 현재 문서에서 되찾아 지금 화면에 적용한다.
     /// 문서가 그새 편집됐으면 문맥 스니펫으로 재동기화된다.
     private func restoreReadingProgress() {
-        guard let reader = readerVC,
+        guard let reader = positionProvider,
               let url = (document as? MarkdownDocument)?.fileURL,
               let anchor = ReadingProgressStore.shared.anchor(for: url) else { return }
         reader.restore(to: anchor.resolve(in: reader.contentString))
@@ -312,39 +377,51 @@ class EditorWindowController: NSWindowController {
 
     // MARK: - Reader Toolbar Actions
 
+    // 조판 설정은 SettingsManager 가 단일 원본이고, 지금 화면을 쥔 쪽만 다시 그린다.
+    // 페이징이면 리더가, 스크롤이면 에디터가 조판을 다시 입는다.
+
     @objc func changeReaderPageMode(_ sender: Any?) {
         guard let seg = sender as? NSSegmentedControl else { return }
-        let mode: SettingsManager.ReadingPageMode = (seg.selectedSegment == 1) ? .paged : .scroll
-        readerVC?.setPageMode(mode)
+        applyReadingPageMode((seg.selectedSegment == 1) ? .paged : .scroll)
     }
 
     @objc func changeReaderWidth(_ sender: Any?) {
         guard let seg = sender as? NSSegmentedControl else { return }
-        let mode: ReaderViewController.WidthMode = (seg.selectedSegment == 0) ? .mobile : .book
+        let mode: ReaderMetrics.WidthMode = (seg.selectedSegment == 0) ? .mobile : .book
         readerVC?.setWidthMode(mode)
+        editorVC.readingWidthMode = mode
     }
 
     @objc func decreaseReaderFont(_ sender: Any?) {
-        let cur = SettingsManager.shared.readingFontScale
-        readerVC?.setFontScale(cur - 0.1)
+        setReadingFontScale(SettingsManager.shared.readingFontScale - 0.1)
     }
 
     @objc func increaseReaderFont(_ sender: Any?) {
-        let cur = SettingsManager.shared.readingFontScale
-        readerVC?.setFontScale(cur + 0.1)
+        setReadingFontScale(SettingsManager.shared.readingFontScale + 0.1)
+    }
+
+    private func setReadingFontScale(_ value: CGFloat) {
+        let clamped = min(max(value, 0.8), 2.0)
+        SettingsManager.shared.readingFontScale = clamped
+        readerVC?.setFontScale(clamped)
+        editorVC.refreshReadingLayout()
     }
 
     @objc func changeReaderFont(_ sender: Any?) {
         guard let seg = sender as? NSSegmentedControl else { return }
         let font: SettingsManager.ReadingFont = (seg.selectedSegment == 1) ? .sans : .serif
+        SettingsManager.shared.readingFont = font
         readerVC?.setFont(font)
+        editorVC.refreshReadingLayout()
     }
 
     @objc func changeReaderLineSpacing(_ sender: Any?) {
         guard let seg = sender as? NSSegmentedControl else { return }
         let values: [CGFloat] = [1.2, 1.5, 2.0]
         let v = values[min(max(seg.selectedSegment, 0), values.count - 1)]
+        SettingsManager.shared.readingLineSpacing = v
         readerVC?.setLineSpacing(v)
+        editorVC.refreshReadingLayout()
     }
 
     override func responds(to aSelector: Selector!) -> Bool {

@@ -9,6 +9,10 @@ class EditorTextView: NSTextView {
         configure()
     }
 
+    /// 편집 조판의 기본 좌우·상하 여백. 읽기 조판은 이 값을 최소 여백으로 삼아
+    /// 본문 단을 가운데로 좁힌다(EditorViewController.updateColumnInset).
+    static let defaultContainerInset = NSSize(width: 60, height: 40)
+
     func configure() {
         isRichText = true
         isEditable = true
@@ -22,7 +26,7 @@ class EditorTextView: NSTextView {
         usesFindBar = true
         isIncrementalSearchingEnabled = true
 
-        textContainerInset = NSSize(width: 60, height: 40)
+        textContainerInset = EditorTextView.defaultContainerInset
         typingAttributes = defaultTypingAttributes()
 
         // 사이드바 이미지 리스트(또는 Finder)에서 이미지 파일을 드롭받기 위해 파일 URL 타입 등록.

@@ -58,4 +58,57 @@ final class ReaderMetricsTests: XCTestCase {
         let bookWidth = ReaderMetrics.columnWidth(charCount: 35, glyphAdvance: 15)
         XCTAssertLessThan(ReaderMetrics.mobileColumnWidth, bookWidth)
     }
+
+    // MARK: - 펼침면(2페이지)
+
+    func testSpreadMinWidthIsTwoColumnsPlusGutterAndMargins() {
+        // 500×2 + 홈 56 + 좌우 여백 24×2 = 1104
+        XCTAssertEqual(ReaderMetrics.spreadMinWidth(columnWidth: 500), 1104, accuracy: 0.01)
+    }
+
+    func testFitsSpreadAtExactThreshold() {
+        let min = ReaderMetrics.spreadMinWidth(columnWidth: 500)
+        XCTAssertTrue(ReaderMetrics.fitsSpread(hostWidth: min, columnWidth: 500, currentlySpread: false))
+    }
+
+    func testDoesNotEnterSpreadJustBelowThreshold() {
+        let min = ReaderMetrics.spreadMinWidth(columnWidth: 500)
+        XCTAssertFalse(ReaderMetrics.fitsSpread(hostWidth: min - 1, columnWidth: 500, currentlySpread: false))
+    }
+
+    func testSpreadHoldsWithinHysteresisBand() {
+        // 이미 펼침면이면 진입 임계보다 조금 좁아져도 유지된다 — 경계 요동 방지.
+        let min = ReaderMetrics.spreadMinWidth(columnWidth: 500)
+        let inBand = min - ReaderMetrics.spreadHysteresis + 1
+        XCTAssertTrue(ReaderMetrics.fitsSpread(hostWidth: inBand, columnWidth: 500, currentlySpread: true))
+        XCTAssertFalse(ReaderMetrics.fitsSpread(hostWidth: inBand, columnWidth: 500, currentlySpread: false))
+    }
+
+    func testSpreadDropsBelowHysteresisBand() {
+        let min = ReaderMetrics.spreadMinWidth(columnWidth: 500)
+        let outOfBand = min - ReaderMetrics.spreadHysteresis - 1
+        XCTAssertFalse(ReaderMetrics.fitsSpread(hostWidth: outOfBand, columnWidth: 500, currentlySpread: true))
+    }
+
+    func testFitsSpreadFalseForNonPositiveColumn() {
+        XCTAssertFalse(ReaderMetrics.fitsSpread(hostWidth: 5000, columnWidth: 0, currentlySpread: false))
+    }
+
+    func testMobileColumnEntersSpreadEarlierThanBookColumn() {
+        // 모바일(360)은 좁아서 책 폭보다 훨씬 이른 창 폭에서 2단이 된다.
+        let book = ReaderMetrics.columnWidth(charCount: 35, glyphAdvance: 15)
+        XCTAssertLessThan(ReaderMetrics.spreadMinWidth(columnWidth: ReaderMetrics.mobileColumnWidth),
+                          ReaderMetrics.spreadMinWidth(columnWidth: book))
+    }
+
+    func testSpreadStartSnapsToEvenPage() {
+        XCTAssertEqual(ReaderMetrics.spreadStart(page: 0), 0)
+        XCTAssertEqual(ReaderMetrics.spreadStart(page: 1), 0)
+        XCTAssertEqual(ReaderMetrics.spreadStart(page: 2), 2)
+        XCTAssertEqual(ReaderMetrics.spreadStart(page: 7), 6)
+    }
+
+    func testSpreadStartClampsNegative() {
+        XCTAssertEqual(ReaderMetrics.spreadStart(page: -3), 0)
+    }
 }

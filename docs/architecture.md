@@ -170,18 +170,37 @@ func applyList(ordered: Bool, to textView: NSTextView) { ... }
 
 ### ReaderViewController
 ```
-역할: 읽기 전용 조판·스크롤/페이징·폰트 배율. 원본 document.content는 절대 수정하지 않는다.
+역할: 페이징 조판 전용 읽기 오버레이 (ADR-0009 이후 스크롤 조판은 에디터가 직접 입는다).
+      원본 document.content는 절대 수정하지 않는다.
 - init(content:): 이미 파싱된 NSAttributedString을 받아 저장
 - loadView(): 고정폭 컬럼(ReaderMetrics.columnWidth) 중앙 정렬 레이아웃, 하단 페이지 인디케이터
 - setFontScale(_:): 배율 적용·영속. ReaderMetrics.scaled로 원본을 건드리지 않고 표시본만 생성
-- setPageMode(_:): 스크롤 ↔ 페이징 전환. 페이징 시 세로 스크롤러 숨김·elasticity 제거
-- scrollToCurrentPage(): 뷰 높이를 줄 높이 정수배(snappedPageHeight)로 끊어 offset 점프
-- updatePageIndicator(): 페이징 모드에서만 "‹ N / M ›" 표시, 스크롤 모드에선 숨김
+- setPageMode(_:): 스크롤 ↔ 페이징 전환. 페이징은 불투명 PagedHostView 오버레이로 덮는다
+- rebuildPages(): 페이지마다 NSTextContainer 를 붙여 물리 분할. 경계는 컨테이너 크기
+  (컬럼 폭 × 페이지 높이)에만 의존하므로 창 폭만 바뀐 리사이즈는 재분할하지 않는다
+- showCurrentSpread(): 현재 낱쪽 또는 좌·우 펼침면을 호스트 가운데 배치.
+  펼침면 여부는 ReaderMetrics.fitsSpread 로 창 폭에서 매번 파생(저장하지 않음)
+- updatePageIndicator(): 페이징 모드에서만 "‹ N / M ›"(펼침면은 "‹ N–N+1 / M ›") 표시
 - updateContent(_:): 문서 교체 시(파일 스왑) 원본 갱신 후 재렌더
-- goToNextPage() / goToPreviousPage(): 좌우 방향키 또는 외부 툴바 호출
+- goToNextPage() / goToPreviousPage(): 좌우 방향키·휠·트랙패드. 펼침면이면 두 쪽씩
+- onEditRequested: 페이징 화면에서 글자를 치면 알린다 → 호출자가 스크롤 조판으로 전환
 ```
 
 **금지:** document 또는 NSTextStorage에 쓰기, 파일 I/O 직접 호출
+
+### EditorViewController — 읽기 조판 (ADR-0009)
+```
+- setReadingLayout(_:): 읽기 조판을 켜고 끈다. 편집·서식·저장은 그대로 살아있다
+- refreshReadingLayout(): 배율·서체·행간이 바뀌었을 때 다시 칠한다
+- textDidChange: 조판을 벗겨(unstyled) 문서에 넘긴다 — 문서에는 언제나 원본 스타일
+- updateColumnInset(): 조판 ON 이면 본문 단을 가운데로 좁히고, OFF 면 기본 여백으로
+- placeCursor(at:): 페이징에서 타이핑 시작 시 그 자리로 커서를 옮긴다
+- loadContent(of:): 문서를 직접 받아 싣는다. `document` 는 view.window 를 타고 오므로
+  뷰가 분리된 동안(페이징 조판)에는 nil — 그 타이밍에 기대지 않으려면 이쪽을 쓴다
+- ReadingPositionProviding 준수: 스크롤 조판의 읽던 자리 제공
+```
+
+**주의:** 조판된 스토리지를 document 로 그대로 넘기지 말 것 — 반드시 `unstyled()` 를 거친다.
 
 ---
 
@@ -349,6 +368,25 @@ clean:
 - **결정:** 읽기 모드를 별도 창이 아닌 `EditorWindowController` 우측 split item을 `ReaderViewController`로 교체하는 방식으로 구현한다. 가로 페이지 넘김은 단일 컬럼 레이아웃을 뷰 높이(줄 높이 정수배) 단위로 끊어 scroll offset을 점프시켜 근사한다.
 - **근거:** 사이드바·툴바·문서 스왑(ADR-0004) 재사용. NSTextView 물리적 페이지 분할의 무게를 피하면서 전자책 UX 대부분을 얻는다. 회귀 테스트를 위해 SPM 도입(ReaderMetrics 순수 함수 검증).
 - **트레이드오프:** 진짜 조판 페이지네이션(가변 줄 수, 고아/미망인 제어) 미지원. 페이지 바닥 여백 발생 가능. 읽기 모드는 읽기 전용이라 문서 변경 위험 없음.
+- **개정 (2026-06-21, v1.1.0):** scroll-offset 점프는 줄 잘림이 근본적으로 해소되지 않아 **페이지마다 독립 NSTextContainer**를 두는 물리 분할로 재작성했다. 안 들어가는 줄은 통째로 다음 페이지로 흐른다. 대가로 페이징 모드에서 텍스트 선택을 끈다(←/→ 키 충돌 회피).
+- **개정 (2026-08-01):** 창 폭이 두 단을 담을 만하면 좌·우 2페이지 펼침면으로 보여준다. 페이지 경계는 컨테이너 크기(컬럼 폭 × 페이지 높이)에만 의존하므로 **펼침면은 순수한 표시 계층 변경**이다 — 이미 나뉜 컨테이너 두 개를 나란히 얹을 뿐 재분할하지 않는다. 전환 임계는 `ReaderMetrics.fitsSpread`(히스테리시스 40pt로 경계 요동 방지), 넘김은 두 쪽씩, 왼쪽은 항상 짝수 쪽. 상태를 저장하지 않으므로 툴바·설정이 늘지 않는다. 설계: `docs/superpowers/specs/2026-08-01-reader-two-page-spread-design.md`
+
+### ADR-0009: 읽기 모드 = 별도 화면이 아닌 '읽기 조판' — 에디터가 조판을 입는다 (2026-08-01)
+- **결정:** ⌘⇧R 은 우측 페인을 `ReaderViewController` 로 갈아끼우지 않고, `EditorViewController` 가 읽기 조판(명조·배율·행간·좁은 단)을 입도록 토글한다. 스크롤 조판에서는 편집·서식·저장이 그대로 동작한다. 페이징 조판만 읽기 전용 오버레이(`ReaderViewController`)로 남고, 거기서 글자를 치면 스크롤 조판으로 갈아타 그 자리에서 이어 쓴다.
+- **근거:** 편집 기능(서식 툴바·단축키·이미지·저장·찾기)이 전부 에디터와 `FormatCommands` 에 묶여 있다. 리더에 편집을 달면 이 배선을 한 벌 더 깔고 영원히 두 벌을 같이 고쳐야 한다. 반대 방향은 조판 계산(`ReaderMetrics`)만 재사용하면 되고 편집 기능은 이미 다 있다.
+- **원본 불변 계약의 이행:** ADR-0006 의 "리더는 원본에 쓰지 않는다"를 편집 가능해진 뒤에도 지킨다 — 조판은 **화면에만** 입히고, `textDidChange` 가 조판을 벗겨(`ReaderMetrics.unstyled`) 문서에 넘긴다. 그래서 조판을 켜고 끄는 것만으로는 문서가 더러워지지도 저장 결과가 달라지지도 않는다.
+  - 조판이 폰트를 갈아끼울 때 원본을 `.mdBaseFont`/`.mdBaseParagraph` 에 백업해 추측 없이 되돌리고, 재조판 시 배율 누적도 막는다. 백업이 없는(조판 중 새로 입력된) 구간은 `.mdBlockType` 에서 기준 폰트를 다시 세운다.
+- **급소 — 폰트 trait 소실:** 직렬화는 볼드·이탤릭을 폰트 trait 으로 판정하는데 `AppleMyungjo` 에는 볼드·이탤릭 변형이 없다(실측 확인). 읽기 전용일 때는 표시 버그였지만 편집이 열리면 저장 시 `**볼드**` 가 실제로 사라진다. → `readerFont()` 가 변형 있는 명조를 먼저 찾고, 그래도 trait 이 붙지 않으면 서체 일관성보다 서식 보존을 우선해 시스템 폰트로 내려간다. `ReaderLayoutRoundTripTests` 13건이 이 불변식을 지킨다.
+- **읽던 자리의 주인이 둘:** 스크롤은 에디터, 페이징은 리더가 그리므로 `ReadingPositionProviding` 프로토콜로 통일하고 윈도우 컨트롤러는 `positionProvider` 하나만 본다. 스크롤 위치 계산은 `ScrollReadingPosition` 으로 뽑아 공유한다.
+- **트레이드오프:** 페이징 조판에서의 직접 편집은 지원하지 않는다(타자마다 재분할·커서 추적·앵커 보정이 겹치는 가장 깊은 버그 지대). 툴바는 아직 읽기 툴바만 붙어 서식은 메뉴·단축키로 쓴다 — 후속 단계.
+- **함정 (2026-08-01 실측):** `EditorViewController.document` 는 `view.window?.windowController?.document` 를 타고 온다. 페이징 조판 동안 에디터는 split 에서 빠져 있어 window 가 nil 이므로 `loadDocumentContent()` 가 **조용히 건너뛴다**. 그 사이 사이드바로 문서를 바꾸면 에디터에 옛 문서가 남아 스크롤 조판으로 돌아올 때 되살아난다. → 호출자가 문서를 알 때는 `loadContent(of:)` 로 직접 넘긴다(`EditorDocumentLoadTests`).
+
+### 알려진 결함: 한글 이탤릭이 NSTextStorage 를 거치며 소실 (2026-08-01 확인, 읽기 조판 이전부터 존재)
+- **증상:** `*기울임*` 처럼 한글에 이탤릭을 준 문서는 열었다 저장하기만 해도 이탤릭이 사라진다. 볼드와 영문 이탤릭은 안전하다.
+- **원인:** 시스템 이탤릭 폰트(`.SFNS-RegularItalic`)에 한글 글리프가 없어 NSTextStorage 의 attribute fixing 이 한글을 그릴 수 있는 폰트(`.AppleSDGothicNeoI-Regular`)로 갈아끼우는데, 그 대체 폰트는 italic trait 을 보고하지 않는다. 확인한 한글 서체 4종이 모두 같다 — **폰트 trait 으로는 한글 이탤릭을 표현할 수 없다.**
+- **제대로 된 해결:** 볼드·이탤릭을 폰트 trait 이 아니라 커스텀 속성으로 판정한다 (`parse`·`serialize`·`FormatCommands` 세 곳). 읽기 조판과 독립된 문제라 분리해 둔다.
+- 현재 동작은 `EditorDocumentLoadTests.testKnownIssue_HangulItalicLostThroughTextStorage` 가 못박아 둔다.
+- 설계: `docs/superpowers/specs/2026-08-01-editable-reading-layout-design.md`
 
 ### ADR-0007: NSTextFinder 찾기 바 + 사이드바 통합 전체 검색 (2026-07-13)
 - **결정:** 문서 내 검색은 커스텀 UI 없이 `NSTextView.usesFindBar`(NSTextFinder)에 위임한다. 파일 전체 검색은 사이드바에 `NSSearchField`를 두고, 같은 NSOutlineView를 트리 모드 ↔ 결과 모드로 전환해 표시한다. 결과 클릭 → 문서 위치 이동은 원문 오프셋 매핑 대신 **순번 매칭**(파일 내 n번째 occurrence를 에디터 텍스트에서 재탐색)을 쓴다.
