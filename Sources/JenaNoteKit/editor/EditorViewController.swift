@@ -1,7 +1,7 @@
 import AppKit
 import UniformTypeIdentifiers
 
-class EditorViewController: NSViewController {
+class EditorViewController: NSViewController, ReadingPositionProviding {
 
     // MARK: - Properties
 
@@ -50,6 +50,17 @@ class EditorViewController: NSViewController {
 
         scrollView.documentView = textView
         view = scrollView
+
+        // 읽기 조판에서 읽던 자리를 따라가기 위한 관측 (ADR-0008)
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(editorDidScroll(_:)),
+            name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        positionSaveTimer?.invalidate()
     }
 
     override func viewDidLoad() {
@@ -65,11 +76,24 @@ class EditorViewController: NSViewController {
     // MARK: - Document Content
 
     func loadDocumentContent() {
-        guard let doc = document, let storage = textView.textStorage else { return }
+        guard let doc = document else { return }
+        loadContent(of: doc)
+    }
+
+    /// 지정한 문서의 내용을 싣는다.
+    ///
+    /// `document` 는 `view.window?.windowController` 를 타고 오므로, 뷰가 윈도우에서
+    /// 분리돼 있는 동안(페이징 조판 등)에는 nil 이라 `loadDocumentContent()` 가 조용히
+    /// 건너뛴다. 그 사이 문서가 바뀌면 옛 문서가 에디터에 남으므로, 호출자가 문서를
+    /// 알고 있을 때는 이쪽으로 직접 실어 윈도우 부착 타이밍에 기대지 않는다.
+    func loadContent(of doc: MarkdownDocument) {
+        guard let storage = textView.textStorage else { return }
         storage.setAttributedString(doc.content)
         if storage.length == 0 {
             textView.typingAttributes = textView.defaultTypingAttributes()
         }
+        // 문서는 언제나 원본 스타일로 들어온다 — 조판이 켜져 있으면 새 문서에도 다시 입힌다.
+        if isReadingLayout { restyleStorage(keepSelection: false) }
         textView.relayoutImageAttachments()
         if lastLoadedDocument !== doc {
             lastLoadedDocument = doc
@@ -77,6 +101,159 @@ class EditorViewController: NSViewController {
             textView.scroll(.zero)
         }
         updateStatusBarCharCount()
+    }
+
+    // MARK: - Reading Layout (ADR-0009)
+
+    /// 읽기 조판이 켜져 있는지. 켜져 있어도 편집·서식·저장은 그대로 동작한다.
+    private(set) var isReadingLayout = false
+
+    /// 읽기 단 폭 프리셋. 조판이 켜져 있을 때만 의미가 있고 저장하지 않는다.
+    var readingWidthMode: ReaderMetrics.WidthMode = .book {
+        // 단 폭은 조판(폰트·행간)이 아니라 여백만 바꾸므로 다시 칠할 필요가 없다.
+        didSet { if isReadingLayout && readingWidthMode != oldValue { updateColumnInset() } }
+    }
+
+    /// 읽기 조판을 켜거나 끈다.
+    ///
+    /// 조판은 **화면에만** 입힌다. 문서로 나가는 내용은 `textDidChange` 에서 조판을 벗겨
+    /// 넘기므로, 켜고 끄는 것만으로는 문서가 더러워지지도(dirty) 저장 결과가 달라지지도
+    /// 않는다. 읽기 전용이던 시절의 계약(원본 불변)을 편집 가능해진 뒤에도 지키는 방식이다.
+    func setReadingLayout(_ on: Bool) {
+        guard on != isReadingLayout else { return }
+        isReadingLayout = on
+        restyleStorage()
+    }
+
+    /// 읽기 설정(배율·서체·행간)이 바뀌었을 때 조판을 다시 입힌다.
+    func refreshReadingLayout() {
+        guard isReadingLayout else { return }
+        restyleStorage()
+    }
+
+    /// 현재 조판 상태에 맞춰 화면 스토리지를 다시 칠한다. 문자열은 건드리지 않으므로
+    /// 선택 위치가 그대로 유효하다.
+    private func restyleStorage(keepSelection: Bool = true) {
+        guard let storage = textView.textStorage else { return }
+        let selection = textView.selectedRange()
+        let source = NSAttributedString(attributedString: storage)
+        let s = SettingsManager.shared
+        let next = isReadingLayout
+            ? ReaderMetrics.styled(source, scale: s.readingFontScale, font: s.readingFont,
+                                   lineHeightMultiple: s.readingLineSpacing)
+            : ReaderMetrics.unstyled(source)
+
+        storage.beginEditing()
+        storage.setAttributedString(next)
+        storage.endEditing()
+
+        if keepSelection, NSMaxRange(selection) <= storage.length {
+            textView.setSelectedRange(selection)
+        }
+        syncTypingAttributes(at: selection.location)
+        updateColumnInset()
+        textView.relayoutImageAttachments()
+    }
+
+    /// 커서 자리의 실제 속성을 타이핑 속성으로 물려준다 — 조판 상태에서 이어 쳐도
+    /// 글자가 튀지 않는다. 단, 조판 백업 키는 빼고 넘긴다. 새로 친 글자에 남의 원본
+    /// 폰트가 백업으로 붙으면 조판을 벗길 때 엉뚱한 폰트로 되돌아간다.
+    private func syncTypingAttributes(at location: Int) {
+        guard let storage = textView.textStorage, storage.length > 0 else { return }
+        let pos = min(max(0, location), storage.length - 1)
+        var attrs = storage.attributes(at: pos, effectiveRange: nil)
+        attrs.removeValue(forKey: .mdBaseFont)
+        attrs.removeValue(forKey: .mdBaseParagraph)
+        textView.typingAttributes = attrs
+    }
+
+    /// 조판이 켜져 있으면 본문 단을 가운데로 좁히고, 꺼져 있으면 기본 여백으로 되돌린다.
+    private func updateColumnInset() {
+        let base = EditorTextView.defaultContainerInset
+        guard isReadingLayout else {
+            if abs(textView.textContainerInset.width - base.width) > 0.5 {
+                textView.textContainerInset = base
+            }
+            return
+        }
+        let available = scrollView.contentView.bounds.width
+        guard available > 0 else { return }
+        let column = ReaderMetrics.columnWidth(mode: readingWidthMode)
+        let side = max(base.width, (available - column) / 2)
+        if abs(textView.textContainerInset.width - side) > 0.5 {
+            textView.textContainerInset = NSSize(width: side, height: base.height)
+        }
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        updateColumnInset()
+        // 레이아웃이 잡히길 기다리던 복원이 있으면 지금 적용한다.
+        if needsAnchorApply { applyAnchor() }
+    }
+
+    // MARK: - Reading Position (ADR-0008)
+
+    /// 읽던 자리의 문자 오프셋 — 표시 설정과 무관한 유일한 좌표.
+    private var anchorOffset = 0
+    /// 복원이 아직 화면에 반영되지 않았음. 이 동안은 화면에서 위치를 되읽지 않는다.
+    private var needsAnchorApply = false
+    private var positionSaveTimer: Timer?
+
+    var currentCharacterOffset: Int { anchorOffset }
+    var contentString: String { textView.string }
+    var visibleCharacterRange: NSRange {
+        ScrollReadingPosition.visibleRange(textView: textView, scrollView: scrollView)
+    }
+    var onPositionChanged: ((Int) -> Void)?
+
+    func restore(to offset: Int) {
+        anchorOffset = max(0, offset)
+        needsAnchorApply = true
+        applyAnchor()
+    }
+
+    func flushPositionChange() {
+        guard positionSaveTimer != nil else { return }
+        positionSaveTimer?.invalidate()
+        positionSaveTimer = nil
+        onPositionChanged?(anchorOffset)
+    }
+
+    private func applyAnchor() {
+        guard view.bounds.height > 0 else { return }
+        ScrollReadingPosition.scroll(textView: textView, to: anchorOffset)
+        needsAnchorApply = false
+    }
+
+    /// 화면에 보이는 위치를 읽어 앵커에 반영한다. 복원 대기 중이면 건너뛴다
+    /// (아직 옛 위치를 보여주는 화면에서 되읽으면 복원값을 덮어쓰게 된다).
+    private func captureAnchor() {
+        guard isReadingLayout, !needsAnchorApply else { return }
+        let newOffset = ScrollReadingPosition.offset(textView: textView, scrollView: scrollView)
+        guard newOffset != anchorOffset else { return }
+        anchorOffset = newOffset
+        positionSaveTimer?.invalidate()
+        positionSaveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            self.positionSaveTimer = nil
+            self.onPositionChanged?(self.anchorOffset)
+        }
+    }
+
+    @objc private func editorDidScroll(_ note: Notification) {
+        captureAnchor()
+    }
+
+    /// 주어진 오프셋에 커서를 두고 그 자리를 화면에 띄운다.
+    /// 페이징 조판에서 타이핑이 시작돼 스크롤 조판으로 갈아탈 때 쓴다.
+    func placeCursor(at offset: Int) {
+        guard let storage = textView.textStorage else { return }
+        let loc = min(max(0, offset), storage.length)
+        view.window?.makeFirstResponder(textView)
+        textView.setSelectedRange(NSRange(location: loc, length: 0))
+        restore(to: loc)
+        syncTypingAttributes(at: loc)
     }
 
     /// 전체 검색 결과 클릭 → 에디터 텍스트에서 검색어의 n번째 occurrence를 선택·표시.
@@ -310,7 +487,10 @@ class EditorViewController: NSViewController {
 extension EditorViewController: NSTextViewDelegate {
     func textDidChange(_ notification: Notification) {
         guard let storage = textView.textStorage else { return }
-        document?.textDidChange(storage)
+        // 조판은 화면에만 입힌다 — 문서에는 언제나 원본 스타일로 넘긴다.
+        // 덕분에 조판을 켠 채 저장해도 파일에 읽기용 서체·배율이 눌러앉지 않는다.
+        let content: NSAttributedString = isReadingLayout ? ReaderMetrics.unstyled(storage) : storage
+        document?.textDidChange(content)
         updateStatusBarCharCount()
     }
 

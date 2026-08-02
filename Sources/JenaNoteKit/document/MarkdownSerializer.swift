@@ -19,6 +19,11 @@ extension NSAttributedString.Key {
     static let mdImageAlt = NSAttributedString.Key("MDImageAlt")
     /// 이미지 표시 폭(px) — 지정 시 `<img width>`로 직렬화, 없으면 창 너비 자동 맞춤
     static let mdImageWidth = NSAttributedString.Key("MDImageWidth")
+    /// 읽기 조판을 입히기 전의 원본 폰트 — 조판을 벗길 때 추측 없이 되돌리기 위한 백업.
+    /// 직렬화에는 쓰이지 않는다 (ReaderMetrics.styled/unstyled 전용).
+    static let mdBaseFont = NSAttributedString.Key("MDBaseFont")
+    /// 읽기 조판을 입히기 전의 원본 문단 스타일 — 행간 배수를 되돌리기 위한 백업.
+    static let mdBaseParagraph = NSAttributedString.Key("MDBaseParagraph")
 }
 
 // MARK: - Color ↔ Hex Helpers

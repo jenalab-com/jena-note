@@ -28,19 +28,21 @@ final class PagedHostView: NSView {
     }
 }
 
-/// 읽기 전용 "책 보기" 뷰. document.content(이미 파싱된 NSAttributedString)를
-/// 받아 한글 35자 컬럼으로 조판한다. 원본은 절대 수정하지 않는다.
+/// 페이징 조판 전용 읽기 오버레이. 원본 사본을 받아 한글 35자 컬럼으로 조판하며
+/// 원본은 절대 수정하지 않는다.
 ///
-/// - 스크롤 모드: 단일 NSScrollView + NSTextView 로 세로 스크롤(에디터 정석).
-/// - 페이징 모드: NSLayoutManager 에 페이지마다 NSTextContainer 를 두는 "진짜 페이지네이션".
+/// ADR-0009 이후 스크롤 조판은 에디터가 직접 입는다(편집 가능). 이 클래스는 **페이징일
+/// 때만** 우측 페인에 올라오는 읽기 전용 화면이고, 여기서 글자를 치면 `onEditRequested`
+/// 로 알려 스크롤 조판으로 갈아타게 한다. 스크롤 경로는 모드 전환 과도기를 위해 남아 있다.
+///
+/// - 페이징: NSLayoutManager 에 페이지마다 NSTextContainer 를 두는 "진짜 페이지네이션".
 ///   컨테이너에 안 들어가는 줄은 통째로 다음 페이지로 흐르므로 줄이 잘리지 않는다.
-class ReaderViewController: NSViewController {
+///   창이 넓으면 좌·우 두 쪽을 나란히 펼친다.
+class ReaderViewController: NSViewController, ReadingPositionProviding {
 
-    /// 읽기 단(컬럼) 폭 프리셋. 저장하지 않으며 매 진입 시 .book 으로 시작한다.
-    enum WidthMode {
-        case book      // 글자수(readingLineLength) 기반 — 기존 폭
-        case mobile    // 모바일 화면 폭(고정 px)
-    }
+    /// 읽기 단(컬럼) 폭 프리셋. 조판 계산과 함께 ReaderMetrics 로 옮겼다
+    /// (에디터도 같은 폭으로 조판해야 하므로). 기존 호출부를 위해 이름은 남긴다.
+    typealias WidthMode = ReaderMetrics.WidthMode
 
     // MARK: - State
     private var sourceContent: NSAttributedString
@@ -56,14 +58,19 @@ class ReaderViewController: NSViewController {
 
     // MARK: - Paged-mode views (멀티 컨테이너 페이지네이션)
     private var pagedHost: PagedHostView?
-    private var pageView: NSTextView?
+    /// 지금 화면에 얹힌 페이지 뷰들 — 낱쪽이면 1개, 펼침면이면 좌·우 2개.
+    private var pageViews: [NSTextView] = []
     private var pagedStorage: NSTextStorage?
     private var pagedLM: NSLayoutManager?
     private var pageContainers: [NSTextContainer] = []
     private var pageCharRanges: [NSRange] = []
     private var currentPage = 0
     private weak var pageIndicator: NSTextField?
-    private var lastPagedSize: NSSize = .zero
+    /// 마지막으로 페이지를 나눈 컨테이너 크기(컬럼 폭 × 페이지 높이).
+    /// 페이지 경계는 이 둘에만 의존하므로, 창 폭만 바뀐 리사이즈에서는 재분할하지 않는다.
+    private var lastPageBoxSize: NSSize = .zero
+    /// 지금 좌·우 두 페이지를 나란히 보여주는 중인지. 창 폭에서 파생될 뿐 저장하지 않는다.
+    private var isSpread = false
 
     // MARK: - Reading position (ADR-0008)
     /// 읽던 자리의 문자 오프셋 — 표시 설정과 무관한 유일한 좌표.
@@ -133,16 +140,8 @@ class ReaderViewController: NSViewController {
 
     // MARK: - Rendering
     private func columnWidthForCurrentSettings() -> CGFloat {
-        switch widthMode {
-        case .mobile:
-            return ReaderMetrics.mobileColumnWidth
-        case .book:
-            let chars = SettingsManager.shared.readingLineLength
-            let size = MemoFont.body.pointSize * scale
-            let probeFont = ReaderMetrics.readerFont(family: fontFamily, size: size, traits: [])
-            let advance = ("한" as NSString).size(withAttributes: [.font: probeFont]).width
-            return ReaderMetrics.columnWidth(charCount: chars, glyphAdvance: advance)
-        }
+        ReaderMetrics.columnWidth(mode: widthMode, scale: scale, family: fontFamily,
+                                  charCount: SettingsManager.shared.readingLineLength)
     }
 
     private func styledContent() -> NSAttributedString {
@@ -184,17 +183,19 @@ class ReaderViewController: NSViewController {
     var contentString: String { sourceContent.string }
 
     /// 지금 화면에 보이는 문자 범위. "이 화면에 이미 책갈피가 있나"를 판정하는 데 쓴다.
+    /// 펼침면이면 좌·우 두 페이지의 합집합이다 — 오른쪽 면의 책갈피를 놓치면 ⌘D 가
+    /// 같은 화면에 책갈피를 하나 더 찍는다.
     var visibleCharacterRange: NSRange {
         if pageMode == .paged {
-            guard currentPage >= 0, currentPage < pageCharRanges.count else { return NSRange(location: 0, length: 0) }
-            return pageCharRanges[currentPage]
+            let indices = visiblePageIndices().filter { $0 < pageCharRanges.count }
+            guard let first = indices.first, let last = indices.last else {
+                return NSRange(location: 0, length: 0)
+            }
+            let start = pageCharRanges[first].location
+            let end = NSMaxRange(pageCharRanges[last])
+            return NSRange(location: start, length: max(0, end - start))
         }
-        guard let lm = textView.layoutManager, let tc = textView.textContainer,
-              lm.numberOfGlyphs > 0 else { return NSRange(location: 0, length: 0) }
-        var rect = scrollView.contentView.bounds
-        rect.origin.y -= textView.textContainerOrigin.y
-        let glyphs = lm.glyphRange(forBoundingRect: rect, in: tc)
-        return lm.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+        return ScrollReadingPosition.visibleRange(textView: textView, scrollView: scrollView)
     }
 
     /// 읽던 자리가 바뀌었을 때 알린다(0.5초 코얼레싱). 저장 책임은 호출자에게 있다.
@@ -242,7 +243,7 @@ class ReaderViewController: NSViewController {
             guard !pageContainers.isEmpty else { return }
             currentPage = pageIndex(containing: anchorOffset)
             needsAnchorApply = false
-            showCurrentPage()
+            showCurrentSpread()
         } else {
             scrollToOffset(anchorOffset)
             needsAnchorApply = false
@@ -255,26 +256,11 @@ class ReaderViewController: NSViewController {
     }
 
     private func scrollOffset() -> Int {
-        guard let lm = textView.layoutManager, let tc = textView.textContainer,
-              lm.numberOfGlyphs > 0 else { return 0 }
-        // 뷰 좌표 → 텍스트 컨테이너 좌표 (상단 inset 48 만큼 어긋나 있다)
-        let topY = scrollView.contentView.bounds.minY - textView.textContainerOrigin.y
-        let glyph = lm.glyphIndex(for: NSPoint(x: 0, y: max(0, topY)), in: tc)
-        return lm.characterIndexForGlyph(at: glyph)
+        ScrollReadingPosition.offset(textView: textView, scrollView: scrollView)
     }
 
     private func scrollToOffset(_ offset: Int) {
-        guard let lm = textView.layoutManager, let tc = textView.textContainer,
-              let length = textView.textStorage?.length, length > 0 else { return }
-        if offset <= 0 { textView.scroll(.zero); return }
-        // 길이 0 범위는 빈 사각형을 주는 경우가 있어 한 글자를 잡아 재본다.
-        let loc = min(offset, length - 1)
-        lm.ensureLayout(for: tc)
-        let glyphs = lm.glyphRange(forCharacterRange: NSRange(location: loc, length: 1),
-                                   actualCharacterRange: nil)
-        let rect = lm.boundingRect(forGlyphRange: glyphs, in: tc)
-        let y = rect.minY + textView.textContainerOrigin.y
-        textView.scroll(NSPoint(x: 0, y: max(0, y)))
+        ScrollReadingPosition.scroll(textView: textView, to: offset)
     }
 
     // MARK: - Public API
@@ -366,26 +352,32 @@ class ReaderViewController: NSViewController {
         }
         host.frame = scrollView.bounds
         scrollView.addSubview(host)
-        lastPagedSize = .zero       // 강제 rebuild
+        lastPageBoxSize = .zero     // 강제 rebuild
         rebuildPages()
         view.window?.makeFirstResponder(self)
     }
 
     private func removePagedOverlay() {
         pagedHost?.removeFromSuperview()
-        pageView?.removeFromSuperview()
-        pageView = nil
+        pageViews.forEach { $0.removeFromSuperview() }
+        pageViews = []
         pageContainers = []
         pagedLM = nil
         pagedStorage = nil
     }
 
+    /// 페이지 컨테이너 한 장의 크기. 페이지 경계는 오직 이 크기에서 나온다
+    /// (창 폭은 배치에만 쓰인다 — 그래서 가로 리사이즈는 재분할을 부르지 않는다).
+    private func pageBoxSize() -> NSSize {
+        guard let host = pagedHost else { return .zero }
+        return NSSize(width: columnWidthForCurrentSettings(),
+                      height: max(1, host.bounds.height - 2 * pageVMargin))
+    }
+
     /// 페이지마다 NSTextContainer 를 추가해 전체 텍스트를 페이지로 나눈다.
     private func rebuildPages() {
-        guard let host = pagedHost else { return }
-        let pageH = max(1, host.bounds.height - 2 * pageVMargin)
-        let pageW = columnWidthForCurrentSettings()
-        let size = NSSize(width: pageW, height: pageH)
+        guard pagedHost != nil else { return }
+        let size = pageBoxSize()
 
         let storage = NSTextStorage(attributedString: styledContent())
         let lm = NSLayoutManager()
@@ -409,12 +401,12 @@ class ReaderViewController: NSViewController {
         pagedLM = lm
         pageContainers = containers
         pageCharRanges = charRanges
-        lastPagedSize = host.bounds.size
+        lastPageBoxSize = size
         // 페이지 경계가 새로 잡혔으므로 페이지 번호가 아니라 앵커에서 다시 찾는다.
         // 폰트·행간·폭을 바꿔도 읽던 문장이 화면에 남는 이유다.
         currentPage = min(max(0, pageIndex(containing: anchorOffset)), max(0, containers.count - 1))
         needsAnchorApply = false
-        showCurrentPage()
+        showCurrentSpread()
     }
 
     /// 주어진 문자 오프셋이 속한 페이지 인덱스.
@@ -424,19 +416,51 @@ class ReaderViewController: NSViewController {
         return pageCharRanges.count - 1
     }
 
-    private func showCurrentPage() {
-        pageView?.removeFromSuperview()
+    /// 지금 창 폭에서 펼침면이 가능한지 다시 판정한다. 창 폭에서 파생될 뿐이라
+    /// 저장하지 않으며, 배치 직전에 매번 되묻는다.
+    private func updateSpreadState() {
+        guard let host = pagedHost else { isSpread = false; return }
+        isSpread = ReaderMetrics.fitsSpread(hostWidth: host.bounds.width,
+                                            columnWidth: columnWidthForCurrentSettings(),
+                                            currentlySpread: isSpread)
+    }
+
+    /// 지금 화면에 얹을 페이지 인덱스 — 낱쪽이면 1개, 펼침면이면 좌·우 2개.
+    /// 마지막이 홀수 장이면 오른쪽 면은 비운다.
+    private func visiblePageIndices() -> [Int] {
+        guard currentPage >= 0, currentPage < pageContainers.count else { return [] }
+        guard isSpread, currentPage + 1 < pageContainers.count else { return [currentPage] }
+        return [currentPage, currentPage + 1]
+    }
+
+    /// 현재 펼침면(또는 낱쪽)을 호스트 가운데에 배치한다.
+    private func showCurrentSpread() {
+        pageViews.forEach { $0.removeFromSuperview() }
+        pageViews = []
         guard let host = pagedHost, currentPage < pageContainers.count else { return }
-        let pageH = max(1, host.bounds.height - 2 * pageVMargin)
-        let pageW = columnWidthForCurrentSettings()
-        let x = max(0, (host.bounds.width - pageW) / 2)
-        let tv = NSTextView(frame: NSRect(x: x, y: pageVMargin, width: pageW, height: pageH),
-                            textContainer: pageContainers[currentPage])
-        tv.isEditable = false
-        tv.isSelectable = false       // 키(←/→)가 VC 로 가도록 선택 비활성
-        tv.drawsBackground = false
-        host.addSubview(tv, positioned: .below, relativeTo: pageIndicator)
-        pageView = tv
+
+        updateSpreadState()
+        // 펼침면의 왼쪽은 항상 짝수 쪽 — 책처럼 짝을 고정해 넘길 때 짝이 밀리지 않는다.
+        if isSpread { currentPage = ReaderMetrics.spreadStart(page: currentPage) }
+
+        let indices = visiblePageIndices()
+        guard !indices.isEmpty else { return }
+        let box = pageBoxSize()
+        let gutter = ReaderMetrics.spreadGutter
+        let totalW = CGFloat(indices.count) * box.width + CGFloat(indices.count - 1) * gutter
+        var x = max(0, (host.bounds.width - totalW) / 2)
+
+        for index in indices {
+            let tv = NSTextView(frame: NSRect(x: x, y: pageVMargin, width: box.width, height: box.height),
+                                textContainer: pageContainers[index])
+            tv.isEditable = false
+            tv.isSelectable = false       // 키(←/→)가 VC 로 가도록 선택 비활성
+            tv.drawsBackground = false
+            host.addSubview(tv, positioned: .below, relativeTo: pageIndicator)
+            pageViews.append(tv)
+            x += box.width + gutter
+        }
+
         captureAnchor()
         updatePageIndicator()
         NotificationCenter.default.post(name: .readerPageChanged, object: self)
@@ -446,24 +470,32 @@ class ReaderViewController: NSViewController {
         (currentPage + 1, max(1, pageContainers.count))
     }
 
+    /// 한 번에 넘길 쪽 수 — 펼침면이면 두 쪽씩.
+    private var pageStep: Int { isSpread ? 2 : 1 }
+
     func goToNextPage() {
-        guard currentPage < pageContainers.count - 1 else { return }
-        currentPage += 1
-        showCurrentPage()
+        guard currentPage + pageStep < pageContainers.count else { return }
+        currentPage += pageStep
+        showCurrentSpread()
     }
 
     func goToPreviousPage() {
         guard currentPage > 0 else { return }
-        currentPage -= 1
-        showCurrentPage()
+        currentPage = max(0, currentPage - pageStep)
+        showCurrentSpread()
     }
 
     // MARK: - Page Indicator
     @objc private func updatePageIndicator() {
         guard pageMode == .paged else { pageIndicator?.isHidden = true; return }
-        let info = pageInfo
         pageIndicator?.isHidden = false
-        pageIndicator?.stringValue = "‹ \(info.current) / \(info.total) ›"
+        let total = max(1, pageContainers.count)
+        let indices = visiblePageIndices()
+        if indices.count == 2 {
+            pageIndicator?.stringValue = "‹ \(indices[0] + 1)–\(indices[1] + 1) / \(total) ›"
+        } else {
+            pageIndicator?.stringValue = "‹ \(currentPage + 1) / \(total) ›"
+        }
     }
 
     deinit {
@@ -472,13 +504,38 @@ class ReaderViewController: NSViewController {
     }
 
     // MARK: - Keyboard Paging
+
+    /// 페이징 화면에서 글자를 치려는 신호가 왔을 때 알린다. 페이징은 읽기 전용이므로
+    /// 호출자가 스크롤 조판으로 갈아타 그 자리에서 이어 쓰게 한다 (ADR-0009).
+    /// 방아쇠가 된 이벤트를 함께 넘겨 전환 후 첫 글자를 잃지 않게 한다.
+    var onEditRequested: ((Int, NSEvent?) -> Void)?
+
     override func keyDown(with event: NSEvent) {
         guard pageMode == .paged else { super.keyDown(with: event); return }
         switch event.keyCode {
         case 124: goToNextPage()      // →
         case 123: goToPreviousPage()  // ←
-        default: super.keyDown(with: event)
+        default:
+            if let handler = onEditRequested, ReaderViewController.isTextInput(event) {
+                handler(currentCharacterOffset, event)
+                return
+            }
+            super.keyDown(with: event)
         }
+    }
+
+    /// 글자를 입력하려는 키인지 — 단축키(⌘·⌃)와 방향키·기능키는 제외한다.
+    static func isTextInput(_ event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if flags.contains(.command) || flags.contains(.control) { return false }
+        guard let chars = event.charactersIgnoringModifiers, let scalar = chars.unicodeScalars.first else {
+            return false
+        }
+        // 방향키·F키 등은 유니코드 사용자 영역에 실려 온다.
+        if (0xF700...0xF8FF).contains(scalar.value) { return false }
+        // 탈출·삭제 같은 제어 문자는 입력으로 보지 않는다 (단, 줄바꿈·탭은 입력).
+        if scalar.value == 0x1B || scalar.value == 0x7F { return false }
+        return true
     }
 
     override var acceptsFirstResponder: Bool { true }
@@ -492,20 +549,22 @@ class ReaderViewController: NSViewController {
             return
         }
         host.frame = scrollView.bounds
-        // 크기가 바뀐 경우에만 페이지 재분할(비용 큼). 그 외엔 현재 페이지만 다시 배치.
-        if host.bounds.size != lastPagedSize {
+        // 페이지 경계는 컨테이너 크기(컬럼 폭 × 페이지 높이)에만 의존한다. 창 폭만 바뀐
+        // 리사이즈는 배치·펼침면 판정만 다시 하면 되므로 재분할(비용 큼)을 건너뛴다.
+        if pageBoxSize() != lastPageBoxSize {
             rebuildPages()
         } else if needsAnchorApply {
             applyAnchor()
         } else {
-            showCurrentPage()
+            showCurrentSpread()
         }
     }
 
     override func viewDidAppear() {
         super.viewDidAppear()
         view.window?.makeFirstResponder(self)
-        setPageMode(SettingsManager.shared.readingPageMode)
+        // 이 오버레이는 페이징 조판 전용이다 — 스크롤 조판은 에디터가 직접 그린다 (ADR-0009).
+        setPageMode(.paged)
     }
 }
 

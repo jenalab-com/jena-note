@@ -17,6 +17,14 @@ class ReaderToolbar: NSToolbar {
     /// 책갈피 토글 버튼 — 현재 화면에 책갈피가 있는지에 따라 아이콘이 채워진다.
     private weak var bookmarkButton: NSButton?
 
+    /// 스크롤/페이징 세그먼트 — 코드가 조판을 바꿨을 때 선택 상태를 맞춰준다.
+    private weak var pageModeControl: NSSegmentedControl?
+
+    /// 조판이 코드에서 바뀐 경우(페이징 중 타이핑 → 스크롤 전환 등) 세그먼트를 따라 맞춘다.
+    func updatePageModeSelection(_ mode: SettingsManager.ReadingPageMode) {
+        pageModeControl?.selectedSegment = (mode == .paged) ? 1 : 0
+    }
+
     override init(identifier: NSToolbar.Identifier) {
         super.init(identifier: identifier)
         delegate = self
@@ -88,6 +96,7 @@ extension ReaderToolbar: NSToolbarDelegate {
             seg.widthAnchor.constraint(equalToConstant: 120).isActive = true
             seg.heightAnchor.constraint(equalToConstant: 26).isActive = true
             item.view = seg
+            pageModeControl = seg
             return item
         case ReaderToolbar.itemWidth:
             return segmentItem(id, label: L10n.tr("reader.width"),
