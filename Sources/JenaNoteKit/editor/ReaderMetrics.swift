@@ -27,24 +27,35 @@ enum ReaderMetrics {
                        scale: CGFloat,
                        font family: SettingsManager.ReadingFont,
                        lineHeightMultiple: CGFloat,
+                       weight: SettingsManager.ReadingWeight = .regular,
                        maxImageWidth: CGFloat = .greatestFiniteMagnitude) -> NSAttributedString {
         let result = NSMutableAttributedString(attributedString: content)
         let full = NSRange(location: 0, length: result.length)
 
-        // 1) 폰트: 패밀리 교체 + 크기 배율 (trait 유지)
+        // 1) 폰트: 패밀리 교체 + 크기 배율 + 굵기 (trait 유지)
         //    원본 폰트를 .mdBaseFont 에 백업해 둔다 — 조판을 벗길 때 추측 없이 되돌리고,
         //    이미 조판된 텍스트를 다시 조판할 때도 배율이 누적되지 않게 하는 기준이 된다.
-        var fontChanges: [(NSRange, NSFont, NSFont)] = []
+        var fontChanges: [(NSRange, NSFont, NSFont, Bool)] = []
         result.enumerateAttribute(.font, in: full) { value, range, _ in
             guard let current = value as? NSFont else { return }
             let origin = (result.attribute(.mdBaseFont, at: range.location, effectiveRange: nil) as? NSFont) ?? current
             let traits = origin.fontDescriptor.symbolicTraits
-            let newFont = readerFont(family: family, size: origin.pointSize * scale, traits: traits)
-            fontChanges.append((range, newFont, origin))
+            let newFont = readerFont(family: family, size: origin.pointSize * scale,
+                                     traits: traits, weight: weight)
+            // 원본에 없던 볼드가 조판 과정에서 생겼다면 그건 읽기 굵기지 사용자의 `**볼드**` 가 아니다.
+            let addedBold = newFont.fontDescriptor.symbolicTraits.contains(.bold)
+                && !traits.contains(.bold)
+            fontChanges.append((range, newFont, origin, addedBold))
         }
-        for (range, f, origin) in fontChanges {
+        for (range, f, origin, addedBold) in fontChanges {
             result.addAttribute(.font, value: f, range: range)
             result.addAttribute(.mdBaseFont, value: origin, range: range)
+            // 재조판 시 지난 표시가 남지 않도록 매번 새로 세운다.
+            if addedBold {
+                result.addAttribute(.mdReaderBold, value: true, range: range)
+            } else {
+                result.removeAttribute(.mdReaderBold, range: range)
+            }
         }
 
         // 2) 행간: 문단별 lineHeightMultiple 설정 (정렬 등 기존 속성 유지).
@@ -123,6 +134,7 @@ enum ReaderMetrics {
 
         result.removeAttribute(.mdBaseFont, range: full)
         result.removeAttribute(.mdBaseParagraph, range: full)
+        result.removeAttribute(.mdReaderBold, range: full)
         return result
     }
 
@@ -144,7 +156,9 @@ enum ReaderMetrics {
         }
         // 기준 폰트가 이미 가진 trait 은 블록의 성질이므로 다시 씌우지 않는다.
         let want = styled.fontDescriptor.symbolicTraits.subtracting(base.fontDescriptor.symbolicTraits)
-        let userTraits = want.intersection([.bold, .italic])
+        var userTraits = want.intersection([.bold, .italic])
+        // 읽기 굵기가 얹은 볼드는 사용자 의도가 아니다 — 물려받으면 저장 시 `**볼드**` 가 된다.
+        if attrs[.mdReaderBold] as? Bool == true { userTraits.remove(.bold) }
         guard !userTraits.isEmpty else { return base }
         return applying(userTraits, to: base, size: base.pointSize)
     }
@@ -158,35 +172,103 @@ enum ReaderMetrics {
         return found
     }
 
-    /// 명조 후보 — 설치된 첫 서체를 쓴다. 볼드·이탤릭 변형이 있는 서체를 앞에 둔다.
+    // MARK: - 서체 해석
+
+    /// 읽기 서체별 **패밀리 이름** 후보 — 설치된 첫 패밀리를 쓴다.
     ///
-    /// AppleMyungjo(macOS 기본 탑재)에는 볼드·이탤릭 변형이 없어 `NSFontManager` 가
-    /// 원본을 그대로 돌려준다 — 즉 **trait 이 소실된다**. 마크다운 직렬화는 볼드·이탤릭을
-    /// 폰트 trait 으로 판정하므로(MarkdownSerializer), 조판된 텍스트가 저장 경로를 타면
-    /// `**볼드**` 마크업이 실제로 사라진다. 그래서 변형이 있는 명조를 먼저 찾는다.
-    static let serifCandidates = ["NanumMyeongjo", "AppleMyungjo"]
+    /// PostScript 이름이 아니라 패밀리로 관리하는 이유는 굵기 때문이다. 굵기 전환은
+    /// `NSFontManager.font(withFamily:traits:weight:size:)` 가 같은 패밀리 안에서
+    /// 가장 가까운 굵기를 골라주는데, 이 API 가 패밀리 이름을 요구한다.
+    ///
+    /// 같은 서체라도 설치 경로(ttf/otf)에 따라 패밀리 이름이 갈리므로 변종을 함께 둔다.
+    static func familyCandidates(for font: SettingsManager.ReadingFont) -> [String] {
+        switch font {
+        // 자동 — 설치 상황에 따라 체인에서 고른다.
+        // 첫 후보는 앱 번들 동봉 글꼴(Resources/Fonts, Info.plist ATSApplicationFontsPath)이라
+        // 어느 머신에서든 항상 잡힌다. 뒤는 번들 등록이 실패했을 때만 닿는 안전망.
+        case .serif: return ["KoPubBatang", "KoPubWorldBatang",
+                             "Nanum Myeongjo", "NanumMyeongjo", "AppleMyungjo"]
+        case .sans:  return []   // 시스템 폰트
+
+        case .kopubBatang:        return ["KoPubBatang", "KoPubWorldBatang"]
+        case .nanumMyeongjo:      return ["Nanum Myeongjo", "NanumMyeongjo", "NanumMyeongjoOTF"]
+        case .kimjungchulMyungjo: return ["Kim jung chul Myungjo", "KimjungchulMyungjo"]
+        case .appleMyungjo:       return ["AppleMyungjo"]
+
+        case .appleGothicNeo: return ["Apple SD Gothic Neo"]
+        case .nanumGothic:    return ["Nanum Gothic", "NanumGothic"]
+        case .notoSansKR:     return ["Noto Sans CJK KR", "Noto Sans KR"]
+        case .pretendard:     return ["Pretendard"]
+        }
+    }
+
+    /// 이 서체가 지금 머신에서 실제로 쓸 수 있는지. 툴바 목록을 추리는 데 쓴다.
+    /// `sans` 는 시스템 폰트라 항상 참.
+    static func isAvailable(_ font: SettingsManager.ReadingFont) -> Bool {
+        if font == .sans { return true }
+        return resolvedFamily(for: font) != nil
+    }
+
+    /// 후보 중 설치된 첫 패밀리 이름. 하나도 없으면 nil.
+    static func resolvedFamily(for font: SettingsManager.ReadingFont) -> String? {
+        let installed = NSFontManager.shared.availableFontFamilies
+        return familyCandidates(for: font).first { installed.contains($0) }
+    }
+
+    /// 툴바에 띄울 서체 목록 — 설치된 것만, 정의 순서대로.
+    /// `serif`(자동)는 항상 첫 자리에 남긴다 — 사용자가 서체를 특정하지 않을 자유.
+    static var availableReadingFonts: [SettingsManager.ReadingFont] {
+        SettingsManager.ReadingFont.allCases.filter(isAvailable)
+    }
 
     /// 설치된 첫 명조 후보. 하나도 없으면 시스템 폰트.
     static func serifFont(size: CGFloat) -> NSFont {
-        for name in serifCandidates {
-            if let f = NSFont(name: name, size: size) { return f }
-        }
-        return NSFont.systemFont(ofSize: size)
+        resolvedFont(for: .serif, size: size, weight: .regular) ?? NSFont.systemFont(ofSize: size)
     }
 
-    /// 패밀리·크기·trait에 맞는 읽기 모드 폰트.
+    /// 서체·크기·굵기로 실제 폰트를 만든다. 서체가 없으면 nil.
+    private static func resolvedFont(for font: SettingsManager.ReadingFont,
+                                     size: CGFloat,
+                                     weight: SettingsManager.ReadingWeight) -> NSFont? {
+        guard let family = resolvedFamily(for: font) else { return nil }
+        let w = weight.fontManagerWeight
+        // 서체에 그 굵기가 없으면 NSFontManager 가 가장 가까운 것으로 대체해 준다.
+        if let f = NSFontManager.shared.font(withFamily: family, traits: [], weight: w, size: size) {
+            return f
+        }
+        // 패밀리는 있는데 굵기 조회가 빈손인 드문 경우 — 첫 멤버로라도 서체는 지킨다.
+        if let ps = NSFontManager.shared.availableMembers(ofFontFamily: family)?.first?.first as? String {
+            return NSFont(name: ps, size: size)
+        }
+        return nil
+    }
+
+    /// 서체·크기·trait·굵기에 맞는 읽기 모드 폰트.
     /// 요청한 trait 을 서체가 표현하지 못하면 표현 가능한 폰트로 내려가 **trait 을 지킨다**.
     static func readerFont(family: SettingsManager.ReadingFont,
                            size: CGFloat,
-                           traits: NSFontDescriptor.SymbolicTraits) -> NSFont {
+                           traits: NSFontDescriptor.SymbolicTraits,
+                           weight: SettingsManager.ReadingWeight = .regular) -> NSFont {
         let base: NSFont
-        switch family {
-        case .sans:
-            base = NSFont.systemFont(ofSize: size)
-        case .serif:
-            base = serifFont(size: size)
+        if family == .sans {
+            base = systemFont(size: size, weight: weight)
+        } else {
+            // 고른 서체가 사라진 머신(설정만 남은 경우)에서는 자동 명조로 물러난다.
+            base = resolvedFont(for: family, size: size, weight: weight)
+                ?? resolvedFont(for: .serif, size: size, weight: weight)
+                ?? systemFont(size: size, weight: weight)
         }
         return applying(traits, to: base, size: size)
+    }
+
+    /// 시스템 폰트의 굵기 대응.
+    private static func systemFont(size: CGFloat,
+                                   weight: SettingsManager.ReadingWeight) -> NSFont {
+        switch weight {
+        case .light:   return NSFont.systemFont(ofSize: size, weight: .light)
+        case .regular: return NSFont.systemFont(ofSize: size)
+        case .bold:    return NSFont.systemFont(ofSize: size, weight: .bold)
+        }
     }
 
     /// 폰트에 trait 을 씌운다. 서체가 그 변형을 갖고 있지 않아 trait 이 붙지 않으면,

@@ -18,6 +18,8 @@ build:
 	@cp .build/release/$(APP_NAME) $(BINARY)
 	@cp Resources/Info.plist $(BUNDLE)/Contents/Info.plist
 	@[ -f Resources/$(APP_NAME).icns ] && cp Resources/$(APP_NAME).icns $(BUNDLE)/Contents/Resources/$(APP_NAME).icns || true
+	@mkdir -p $(BUNDLE)/Contents/Resources/Fonts
+	@cp Resources/Fonts/*.ttf $(BUNDLE)/Contents/Resources/Fonts/
 	@echo "✓ 빌드 완료: $(BUNDLE)"
 
 test:

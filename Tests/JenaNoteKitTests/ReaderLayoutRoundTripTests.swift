@@ -26,9 +26,11 @@ final class ReaderLayoutRoundTripTests: XCTestCase {
 
     private func styledSample(scale: CGFloat = 1.4,
                               font: SettingsManager.ReadingFont = .serif,
-                              lineHeight: CGFloat = 1.5) -> NSAttributedString {
+                              lineHeight: CGFloat = 1.5,
+                              weight: SettingsManager.ReadingWeight = .regular) -> NSAttributedString {
         let parsed = MarkdownSerializer.parse(sample)
-        return ReaderMetrics.styled(parsed, scale: scale, font: font, lineHeightMultiple: lineHeight)
+        return ReaderMetrics.styled(parsed, scale: scale, font: font,
+                                    lineHeightMultiple: lineHeight, weight: weight)
     }
 
     // MARK: - 왕복 불변성
@@ -151,5 +153,99 @@ final class ReaderLayoutRoundTripTests: XCTestCase {
     func testReaderFontWithoutTraitsStaysInRequestedFamily() {
         let plain = ReaderMetrics.readerFont(family: .serif, size: 18, traits: [])
         XCTAssertEqual(plain.fontName, ReaderMetrics.serifFont(size: 18).fontName)
+    }
+
+    // MARK: - 읽기 굵기가 문서를 오염시키지 않는가 (데이터 안전)
+    //
+    // 본문 굵기를 '굵게'로 두면 조판 폰트에 볼드 trait 이 생긴다. 직렬화는 볼드 trait 으로
+    // `**` 를 판정하므로, 조판 굵기와 사용자의 `**볼드**` 를 구분하지 못하면 문서가 망가진다.
+
+    func testBoldWeightDoesNotAddMarkupToPlainBody() {
+        let before = MarkdownSerializer.serialize(MarkdownSerializer.parse(sample))
+        let restored = ReaderMetrics.unstyled(styledSample(weight: .bold))
+        XCTAssertEqual(MarkdownSerializer.serialize(restored), before,
+                       "읽기 굵기 '굵게'가 원본 마크다운을 바꿔 놓았다")
+    }
+
+    func testBoldWeightDoesNotLeakIntoSerializationWhileStyled() {
+        // 조판을 벗기지 않고 저장하는 경로 — 본문이 통째로 볼드 마크업이 되면 안 된다.
+        let md = MarkdownSerializer.serialize(styledSample(weight: .bold))
+        XCTAssertFalse(md.contains("**마지막 문단.**"),
+                       "읽기 굵기가 평범한 본문을 볼드 마크업으로 만들었다")
+        XCTAssertTrue(md.contains("**볼드**"),
+                      "사용자가 준 볼드는 굵기 설정과 무관하게 살아 있어야 한다")
+    }
+
+    func testBoldWeightKeepsUserBoldDistinct() {
+        // 굵게 조판이어도 '사용자 볼드'와 '조판 굵기'는 서로 다른 것으로 남아야 한다.
+        let styled = styledSample(weight: .bold)
+        let full = NSRange(location: 0, length: styled.length)
+        var markedPlain = false, unmarkedUserBold = false
+        styled.enumerateAttributes(in: full) { attrs, range, _ in
+            let text = (styled.string as NSString).substring(with: range)
+            if text.contains("마지막 문단") { markedPlain = attrs[.mdReaderBold] as? Bool == true }
+            if text == "볼드" { unmarkedUserBold = attrs[.mdReaderBold] == nil }
+        }
+        XCTAssertTrue(markedPlain, "조판이 얹은 굵기에 표시가 없다 — 저장 시 볼드로 새어 나간다")
+        XCTAssertTrue(unmarkedUserBold, "사용자 볼드에 조판 표시가 잘못 붙었다")
+    }
+
+    func testUnstyledRemovesReaderBoldMarker() {
+        let restored = ReaderMetrics.unstyled(styledSample(weight: .bold))
+        let full = NSRange(location: 0, length: restored.length)
+        var found = false
+        restored.enumerateAttribute(.mdReaderBold, in: full) { value, _, stop in
+            if value != nil { found = true; stop.pointee = true }
+        }
+        XCTAssertFalse(found, "조판 표시가 문서에 남으면 안 된다")
+    }
+
+    func testTypedTextUnderBoldWeightDoesNotBecomeMarkup() {
+        // 조판이 켜진 채 새로 친 글자 — .mdBaseFont 백업이 없는 가장 위험한 경로.
+        let readerBold = ReaderMetrics.readerFont(family: .serif, size: 15 * 1.4,
+                                                  traits: [], weight: .bold)
+        let typed = NSAttributedString(string: "새로 친 글자",
+                                       attributes: [.font: readerBold,
+                                                    .mdBlockType: "body",
+                                                    .mdReaderBold: true])
+        let restored = ReaderMetrics.unstyled(typed)
+        let f = restored.attribute(.font, at: 0, effectiveRange: nil) as! NSFont
+        XCTAssertFalse(f.fontDescriptor.symbolicTraits.contains(.bold),
+                       "읽기 굵기로 친 글자가 볼드로 굳었다 — 저장하면 **볼드** 가 된다")
+        XCTAssertFalse(MarkdownSerializer.serialize(restored).contains("**"),
+                       "새로 친 글자가 볼드 마크업으로 저장됐다")
+    }
+
+    func testRoundTripForEveryWeight() {
+        let before = MarkdownSerializer.serialize(MarkdownSerializer.parse(sample))
+        for w in SettingsManager.ReadingWeight.allCases {
+            let restored = ReaderMetrics.unstyled(styledSample(weight: w))
+            XCTAssertEqual(MarkdownSerializer.serialize(restored), before,
+                           "굵기 \(w.rawValue) 왕복에서 마크다운이 변했다")
+        }
+    }
+
+    // MARK: - 서체 목록
+
+    func testAvailableFontsAlwaysIncludeAutoAndSans() {
+        let fonts = ReaderMetrics.availableReadingFonts
+        XCTAssertTrue(fonts.contains(.sans), "시스템 고딕은 언제나 고를 수 있어야 한다")
+        XCTAssertTrue(fonts.contains(.serif), "자동 명조는 번들 글꼴이 있으므로 언제나 있어야 한다")
+    }
+
+    func testEveryAvailableFontResolvesToARealFont() {
+        for f in ReaderMetrics.availableReadingFonts {
+            let font = ReaderMetrics.readerFont(family: f, size: 16, traits: [])
+            XCTAssertGreaterThan(font.pointSize, 0, "\(f.rawValue) 가 폰트로 풀리지 않는다")
+        }
+    }
+
+    func testMissingFontFallsBackInsteadOfCrashing() {
+        // 설정에 남았지만 머신에서 사라진 서체 — 자동 명조로 물러나야 한다.
+        for f in SettingsManager.ReadingFont.allCases {
+            let font = ReaderMetrics.readerFont(family: f, size: 16, traits: [.bold])
+            XCTAssertTrue(font.fontDescriptor.symbolicTraits.contains(.bold),
+                          "\(f.rawValue) 폴백에서 볼드 trait 이 소실됐다")
+        }
     }
 }

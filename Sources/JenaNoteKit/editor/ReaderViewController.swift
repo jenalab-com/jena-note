@@ -49,6 +49,7 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
     private var scale: CGFloat = SettingsManager.shared.readingFontScale
     private var pageMode: SettingsManager.ReadingPageMode = SettingsManager.shared.readingPageMode
     private var fontFamily: SettingsManager.ReadingFont = SettingsManager.shared.readingFont
+    private var fontWeight: SettingsManager.ReadingWeight = SettingsManager.shared.readingWeight
     private var lineSpacing: CGFloat = SettingsManager.shared.readingLineSpacing
     private var widthMode: WidthMode = .book
 
@@ -147,6 +148,7 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
     private func styledContent() -> NSAttributedString {
         ReaderMetrics.styled(sourceContent, scale: scale,
                              font: fontFamily, lineHeightMultiple: lineSpacing,
+                             weight: fontWeight,
                              maxImageWidth: columnWidthForCurrentSettings())
     }
 
@@ -294,6 +296,12 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
         renderContent()
     }
 
+    func setWeight(_ weight: SettingsManager.ReadingWeight) {
+        fontWeight = weight
+        SettingsManager.shared.readingWeight = weight
+        renderContent()
+    }
+
     func setLineSpacing(_ value: CGFloat) {
         lineSpacing = min(max(value, 1.0), 2.5)
         SettingsManager.shared.readingLineSpacing = lineSpacing
@@ -302,6 +310,7 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
 
     var currentLineSpacing: CGFloat { lineSpacing }
     var currentFont: SettingsManager.ReadingFont { fontFamily }
+    var currentWeight: SettingsManager.ReadingWeight { fontWeight }
 
     /// 읽기 단 폭 프리셋 토글. 저장하지 않으며 현재 모드(스크롤/페이징) 양쪽에 반영된다.
     func setWidthMode(_ mode: WidthMode) {

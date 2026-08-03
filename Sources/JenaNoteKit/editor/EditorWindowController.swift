@@ -407,11 +407,23 @@ class EditorWindowController: NSWindowController {
         editorVC.refreshReadingLayout()
     }
 
+    /// 서체 선택 — 팝업 항목에 실린 `ReadingFont.rawValue` 로 되짚는다.
+    /// 목록이 설치 상황에 따라 달라지므로 선택 인덱스는 신뢰할 수 없다.
     @objc func changeReaderFont(_ sender: Any?) {
-        guard let seg = sender as? NSSegmentedControl else { return }
-        let font: SettingsManager.ReadingFont = (seg.selectedSegment == 1) ? .sans : .serif
+        guard let popup = sender as? NSPopUpButton,
+              let raw = popup.selectedItem?.representedObject as? String,
+              let font = SettingsManager.ReadingFont(rawValue: raw) else { return }
         SettingsManager.shared.readingFont = font
         readerVC?.setFont(font)
+        editorVC.refreshReadingLayout()
+    }
+
+    @objc func changeReaderWeight(_ sender: Any?) {
+        guard let seg = sender as? NSSegmentedControl else { return }
+        let weights = SettingsManager.ReadingWeight.allCases
+        let w = weights[min(max(seg.selectedSegment, 0), weights.count - 1)]
+        SettingsManager.shared.readingWeight = w
+        readerVC?.setWeight(w)
         editorVC.refreshReadingLayout()
     }
 
@@ -430,7 +442,8 @@ class EditorWindowController: NSWindowController {
             #selector(exitReadingMode(_:)), #selector(changeReaderPageMode(_:)),
             #selector(changeReaderWidth(_:)),
             #selector(decreaseReaderFont(_:)), #selector(increaseReaderFont(_:)),
-            #selector(changeReaderFont(_:)), #selector(changeReaderLineSpacing(_:))
+            #selector(changeReaderFont(_:)), #selector(changeReaderWeight(_:)),
+            #selector(changeReaderLineSpacing(_:))
         ]
         if sels.contains(aSelector) { return true }
         return super.responds(to: aSelector)

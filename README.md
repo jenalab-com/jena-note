@@ -99,6 +99,9 @@ make clean     # 빌드 산출물 삭제
 ## 프로젝트 구조
 
 ```
+Resources/
+  Info.plist        번들 메타데이터
+  Fonts/            읽기 모드 명조 (KoPub 바탕, 앱 번들 동봉)
 Sources/
   JenaNote/         실행 진입점 (main.swift)
   JenaNoteKit/
@@ -118,3 +121,9 @@ docs/               spec, architecture, 개발 로그(devlog)
 ## 라이선스
 
 [MIT](LICENSE) © 2026 JenaLab
+
+### 동봉 글꼴
+
+읽기 모드의 명조 본문에 **KoPub 바탕체**(Medium·Bold)를 앱 번들에 동봉합니다.
+KoPub 서체는 한국출판인회의가 제작·배포하는 무료 글꼴로, 저작권은 한국출판인회의에 있습니다.
+이용 조건 전문은 배포처 [kopus.org](https://www.kopus.org/biz/electronic/font/)에서 확인하세요.

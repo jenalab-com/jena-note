@@ -24,6 +24,12 @@ extension NSAttributedString.Key {
     static let mdBaseFont = NSAttributedString.Key("MDBaseFont")
     /// 읽기 조판을 입히기 전의 원본 문단 스타일 — 행간 배수를 되돌리기 위한 백업.
     static let mdBaseParagraph = NSAttributedString.Key("MDBaseParagraph")
+    /// 이 구간의 볼드 trait 은 **읽기 조판이 얹은 것**이지 사용자의 `**볼드**` 가 아니라는 표시.
+    ///
+    /// 직렬화는 볼드 trait 으로 `**` 를 판정하므로(MarkdownSerializer), 표시가 없으면
+    /// 읽기 굵기를 '굵게'로 둔 채 새로 친 글자가 저장 시 통째로 볼드 마크업이 된다.
+    /// 조판을 벗길 때(ReaderMetrics.unstyled) 이 구간의 볼드는 사용자 의도에서 제외한다.
+    static let mdReaderBold = NSAttributedString.Key("MDReaderBold")
 }
 
 // MARK: - Color ↔ Hex Helpers
@@ -383,8 +389,11 @@ enum MarkdownSerializer {
             let isInlineCode = attrs[.mdInlineCode] as? Bool == true
             let font = attrs[.font] as? NSFont ?? MemoFont.body
             let fontTraits = font.fontDescriptor.symbolicTraits
-            // 기준 폰트에 이미 있는 trait은 사용자가 명시적으로 적용한 것이 아님
-            let isBold   = fontTraits.contains(.bold)   && !baseTraits.contains(.bold)
+            // 기준 폰트에 이미 있는 trait은 사용자가 명시적으로 적용한 것이 아님.
+            // 읽기 조판이 얹은 굵기(.mdReaderBold)도 마찬가지 — 표시 전용이라 마크업이 아니다.
+            // 조판을 벗기지 않고 저장하는 경로가 있어(ReaderLayoutRoundTripTests) 여기서도 걸러야 한다.
+            let isReaderBold = attrs[.mdReaderBold] as? Bool == true
+            let isBold   = fontTraits.contains(.bold)   && !baseTraits.contains(.bold) && !isReaderBold
             let isItalic = fontTraits.contains(.italic) && !baseTraits.contains(.italic)
             let hasCustomColor = attrs[.mdCustomColor] as? Bool == true
 

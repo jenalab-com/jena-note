@@ -7,6 +7,7 @@ class ReaderToolbar: NSToolbar {
     private static let itemExit  = NSToolbarItem.Identifier("readerExit")
     private static let itemMode  = NSToolbarItem.Identifier("readerPageMode")
     private static let itemFontFamily = NSToolbarItem.Identifier("readerFontFamily")
+    private static let itemFontWeight = NSToolbarItem.Identifier("readerFontWeight")
     private static let itemLineSpacing = NSToolbarItem.Identifier("readerLineSpacing")
     private static let itemFontDown = NSToolbarItem.Identifier("readerFontDown")
     private static let itemFontUp   = NSToolbarItem.Identifier("readerFontUp")
@@ -53,6 +54,7 @@ extension ReaderToolbar: NSToolbarDelegate {
          ReaderToolbar.itemMode, .space,
          ReaderToolbar.itemWidth, .space,
          ReaderToolbar.itemFontFamily, .space,
+         ReaderToolbar.itemFontWeight, .space,
          ReaderToolbar.itemLineSpacing, .space,
          ReaderToolbar.itemFontDown, ReaderToolbar.itemFontUp, .space,
          ReaderToolbar.itemBookmark, ReaderToolbar.itemBookmarkList, .flexibleSpace]
@@ -104,10 +106,14 @@ extension ReaderToolbar: NSToolbarDelegate {
                                selected: 1,   // 매 진입 시 기본은 '책' (저장하지 않음)
                                action: #selector(EditorWindowController.changeReaderWidth(_:)))
         case ReaderToolbar.itemFontFamily:
-            return segmentItem(id, label: L10n.tr("reader.font"),
-                               labels: [L10n.tr("reader.serif"), L10n.tr("reader.sans")],
-                               selected: SettingsManager.shared.readingFont == .sans ? 1 : 0,
-                               action: #selector(EditorWindowController.changeReaderFont(_:)))
+            return fontPopUpItem(id)
+        case ReaderToolbar.itemFontWeight:
+            let weights = SettingsManager.ReadingWeight.allCases
+            let sel = weights.firstIndex(of: SettingsManager.shared.readingWeight) ?? 1
+            return segmentItem(id, label: L10n.tr("reader.weight"),
+                               labels: weights.map { L10n.tr($0.locKey) },
+                               selected: sel,
+                               action: #selector(EditorWindowController.changeReaderWeight(_:)))
         case ReaderToolbar.itemLineSpacing:
             let ls = SettingsManager.shared.readingLineSpacing
             let sel = ls <= 1.35 ? 0 : (ls >= 1.75 ? 2 : 1)
@@ -124,6 +130,40 @@ extension ReaderToolbar: NSToolbarDelegate {
         default:
             return nil
         }
+    }
+
+    /// 서체 선택 팝업 — 지금 머신에 설치된 서체만 담는다.
+    ///
+    /// 각 항목의 `representedObject` 에 `ReadingFont.rawValue` 를 실어 보낸다. 목록이
+    /// 설치 상황에 따라 달라지므로 선택 인덱스로 서체를 되짚으면 어긋난다.
+    private func fontPopUpItem(_ id: NSToolbarItem.Identifier) -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: id)
+        item.label = L10n.tr("reader.font"); item.toolTip = L10n.tr("reader.font")
+
+        let popup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 150, height: 26),
+                                  pullsDown: false)
+        let fonts = ReaderMetrics.availableReadingFonts
+        for f in fonts {
+            popup.addItem(withTitle: L10n.tr(f.locKey))
+            popup.lastItem?.representedObject = f.rawValue
+            // 항목을 그 서체로 그려 준다 — 고르기 전에 생김새가 보이도록.
+            if let menuItem = popup.lastItem {
+                let font = ReaderMetrics.readerFont(family: f, size: 13, traits: [])
+                menuItem.attributedTitle = NSAttributedString(string: L10n.tr(f.locKey),
+                                                              attributes: [.font: font])
+            }
+        }
+        // 저장된 서체가 이 머신에 없으면(폰트를 지운 경우) 자동 명조로 표시한다.
+        let current = SettingsManager.shared.readingFont
+        popup.selectItem(at: fonts.firstIndex(of: current) ?? 0)
+
+        popup.target = target
+        popup.action = #selector(EditorWindowController.changeReaderFont(_:))
+        popup.translatesAutoresizingMaskIntoConstraints = false
+        popup.widthAnchor.constraint(equalToConstant: 150).isActive = true
+        popup.heightAnchor.constraint(equalToConstant: 26).isActive = true
+        item.view = popup
+        return item
     }
 
     private func segmentItem(_ id: NSToolbarItem.Identifier, label: String,
