@@ -140,7 +140,8 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         let s = SettingsManager.shared
         let next = isReadingLayout
             ? ReaderMetrics.styled(source, scale: s.readingFontScale, font: s.readingFont,
-                                   lineHeightMultiple: s.readingLineSpacing)
+                                   lineHeightMultiple: s.readingLineSpacing,
+                                   weight: s.readingWeight)
             : ReaderMetrics.unstyled(source)
 
         storage.beginEditing()

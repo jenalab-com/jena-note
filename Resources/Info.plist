@@ -20,6 +20,10 @@
     <string>JenaNote</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <!-- 번들 동봉 글꼴(KoPub 바탕) 자동 등록. 앱 프로세스 안에서만 보인다.
+         읽기 모드 명조가 사용자 머신의 폰트 설치 여부에 의존하지 않게 한다. -->
+    <key>ATSApplicationFontsPath</key>
+    <string>Fonts</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>CFBundleDocumentTypes</key>

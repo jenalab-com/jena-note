@@ -14,6 +14,7 @@ final class SettingsManager {
         static let readingFontScale = "jn_readingFontScale"
         static let readingLineLength = "jn_readingLineLength"
         static let readingFont = "jn_readingFont"
+        static let readingWeight = "jn_readingWeight"
         static let readingLineSpacing = "jn_readingLineSpacing"
         static let sidebarSortKey = "jn_sidebarSortKey"
         static let sidebarSortOrder = "jn_sidebarSortOrder"
@@ -50,10 +51,51 @@ final class SettingsManager {
         case paged  = "paged"
     }
 
-    /// 읽기 모드 본문 글꼴. 한글 기준 명조(serif) / 고딕(sans).
+    /// 읽기 모드 본문 글꼴.
+    ///
+    /// `serif`/`sans` 는 서체를 특정하지 않는 "자동" — 설치 상황에 따라 후보 체인에서
+    /// 고른다. 구버전 설정값("serif"/"sans")이 그대로 살아 있으므로 케이스를 지우지 않는다.
+    /// 나머지는 사용자가 툴바에서 직접 고른 서체다.
+    ///
+    /// 실제 서체 해석(패밀리 후보·설치 여부)은 `ReaderMetrics` 가 맡는다 — 설정은
+    /// 무엇을 골랐는지만 알고, 그것이 어떤 폰트인지는 모른다.
     enum ReadingFont: String, CaseIterable {
-        case serif = "serif"   // 명조 (AppleMyungjo)
-        case sans  = "sans"    // 고딕 (시스템)
+        case serif = "serif"   // 자동: 명조 계열
+        case sans  = "sans"    // 자동: 고딕 계열 (시스템)
+
+        case kopubBatang        = "kopubBatang"
+        case nanumMyeongjo      = "nanumMyeongjo"
+        case kimjungchulMyungjo = "kimjungchulMyungjo"
+        case appleMyungjo       = "appleMyungjo"
+
+        case appleGothicNeo = "appleGothicNeo"
+        case nanumGothic    = "nanumGothic"
+        case notoSansKR     = "notoSansKR"
+        case pretendard     = "pretendard"
+
+        var locKey: String { "reader.font.\(rawValue)" }
+    }
+
+    /// 읽기 모드 본문 굵기.
+    ///
+    /// `bold` 는 조판 전용 굵기일 뿐 마크다운 `**볼드**` 가 아니다 — 이 둘을 섞지 않는 처리가
+    /// `ReaderMetrics` 에 있다(`.mdReaderBold`). 없으면 읽기 모드에서 새로 친 글자가
+    /// 저장 시 통째로 볼드 마크업이 되어 문서가 오염된다.
+    enum ReadingWeight: String, CaseIterable {
+        case light   = "light"
+        case regular = "regular"
+        case bold    = "bold"
+
+        /// `NSFontManager` 굵기 척도(0~15). 서체에 없는 굵기는 가장 가까운 것으로 대체된다.
+        var fontManagerWeight: Int {
+            switch self {
+            case .light:   return 3
+            case .regular: return 5
+            case .bold:    return 9
+            }
+        }
+
+        var locKey: String { "reader.weight.\(rawValue)" }
     }
 
     // MARK: - Sidebar Sort
@@ -149,6 +191,15 @@ final class SettingsManager {
             return f
         }
         set { defaults.set(newValue.rawValue, forKey: Key.readingFont) }
+    }
+
+    var readingWeight: ReadingWeight {
+        get {
+            guard let raw = defaults.string(forKey: Key.readingWeight),
+                  let w = ReadingWeight(rawValue: raw) else { return .regular }
+            return w
+        }
+        set { defaults.set(newValue.rawValue, forKey: Key.readingWeight) }
     }
 
     /// 본문 줄 높이 배수. 기본 1.5(넉넉하게), 범위 1.0~2.5.
