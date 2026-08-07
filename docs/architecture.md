@@ -183,7 +183,12 @@ func applyList(ordered: Bool, to textView: NSTextView) { ... }
 - updatePageIndicator(): 페이징 모드에서만 "‹ N / M ›"(펼침면은 "‹ N–N+1 / M ›") 표시
 - updateContent(_:): 문서 교체 시(파일 스왑) 원본 갱신 후 재렌더
 - goToNextPage() / goToPreviousPage(): 좌우 방향키·휠·트랙패드. 펼침면이면 두 쪽씩
-- onEditRequested: 페이징 화면에서 글자를 치면 알린다 → 호출자가 스크롤 조판으로 전환
+- PageTextView: 한 쪽을 그리는 읽기 전용 텍스트 뷰. 선택·복사(⌘C)가 열려 있고,
+  선택을 켜면 이 뷰가 first responder 를 가져가므로 ←/→ 와 타이핑을 VC 로 되넘긴다
+- focusPage(): 페이지를 갈아끼울 때 키보드 포커스를 새 쪽으로 넘긴다. 포커스가
+  리더 밖(사이드바 등)에 있었으면 뺏지 않는다
+- onEditRequested: 페이징 화면에서 글자를 치면 알린다 → 호출자가 스크롤 조판으로 전환.
+  넘기는 위치는 고른 자리(캐럿·선택 시작점), 짚은 데가 없으면 그 쪽 첫 글자
 ```
 
 **금지:** document 또는 NSTextStorage에 쓰기, 파일 I/O 직접 호출

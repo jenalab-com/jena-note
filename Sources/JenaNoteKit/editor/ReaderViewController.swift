@@ -28,6 +28,35 @@ final class PagedHostView: NSView {
     }
 }
 
+/// 페이징 화면의 한 쪽(page)을 그리는 텍스트 뷰.
+///
+/// 읽기 전용이지만 **글자는 고를 수 있다** — 인용을 옮겨 적으려면 선택이 있어야 하니까.
+/// 대신 선택을 켜는 순간 이 뷰가 first responder 를 가져가므로, 예전에 VC 가 받던
+/// 페이지 넘김(←/→)과 "글자를 쳐서 편집으로 갈아타기"를 여기서 직접 위로 흘려보낸다.
+final class PageTextView: NSTextView {
+    /// ←/→ 를 눌렀다. `next == true` 면 다음 쪽.
+    var onPageKey: ((Bool) -> Void)?
+    /// 글자를 치려는 키가 왔다 — 편집 조판으로 갈아탈 신호 (ADR-0009).
+    var onTextInput: ((NSEvent) -> Void)?
+
+    override func keyDown(with event: NSEvent) {
+        switch event.keyCode {
+        case 124: onPageKey?(true);  return   // →
+        case 123: onPageKey?(false); return   // ←
+        default: break
+        }
+        if let handler = onTextInput, ReaderViewController.isTextInput(event) {
+            handler(event)
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    /// 드래그가 쪽 밖으로 나가도 배경 스크롤뷰를 끌어당기지 않게 한다 —
+    /// 페이지는 고정 크기라 스크롤할 것이 없다.
+    override func autoscroll(with event: NSEvent) -> Bool { false }
+}
+
 /// 페이징 조판 전용 읽기 오버레이. 원본 사본을 받아 한글 35자 컬럼으로 조판하며
 /// 원본은 절대 수정하지 않는다.
 ///
@@ -60,7 +89,7 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
     // MARK: - Paged-mode views (멀티 컨테이너 페이지네이션)
     private var pagedHost: PagedHostView?
     /// 지금 화면에 얹힌 페이지 뷰들 — 낱쪽이면 1개, 펼침면이면 좌·우 2개.
-    private var pageViews: [NSTextView] = []
+    private var pageViews: [PageTextView] = []
     private var pagedStorage: NSTextStorage?
     private var pagedLM: NSLayoutManager?
     private var pageContainers: [NSTextContainer] = []
@@ -280,7 +309,7 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
             textView.scroll(.zero)
             // 문서 전환 시 사이드바로 옮겨간 포커스를 리더로 되돌린다.
             // 안 그러면 페이징 모드에서 키보드 ←/→ 가 리더로 오지 않아 먹지 않는다.
-            if pageMode == .paged { view.window?.makeFirstResponder(self) }
+            if pageMode == .paged { focusPage() }
         }
     }
 
@@ -363,7 +392,7 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
         scrollView.addSubview(host)
         lastPageBoxSize = .zero     // 강제 rebuild
         rebuildPages()
-        view.window?.makeFirstResponder(self)
+        focusPage()
     }
 
     private func removePagedOverlay() {
@@ -444,6 +473,9 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
 
     /// 현재 펼침면(또는 낱쪽)을 호스트 가운데에 배치한다.
     private func showCurrentSpread() {
+        // 페이지 뷰를 갈아끼우면 그 뷰가 쥐고 있던 키보드 포커스가 사라진다. 리더가
+        // 쥐고 있던 포커스면 새 뷰에 다시 넘겨주고, 사이드바처럼 밖에 있었으면 뺏지 않는다.
+        let hadFocus = readerHasFocus()
         pageViews.forEach { $0.removeFromSuperview() }
         pageViews = []
         guard let host = pagedHost, currentPage < pageContainers.count else { return }
@@ -460,19 +492,43 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
         var x = max(0, (host.bounds.width - totalW) / 2)
 
         for index in indices {
-            let tv = NSTextView(frame: NSRect(x: x, y: pageVMargin, width: box.width, height: box.height),
-                                textContainer: pageContainers[index])
+            let tv = PageTextView(frame: NSRect(x: x, y: pageVMargin, width: box.width, height: box.height),
+                                  textContainer: pageContainers[index])
             tv.isEditable = false
-            tv.isSelectable = false       // 키(←/→)가 VC 로 가도록 선택 비활성
+            tv.isSelectable = true        // 읽으면서 인용을 고를 수 있어야 한다
             tv.drawsBackground = false
+            tv.onPageKey = { [weak self] next in
+                if next { self?.goToNextPage() } else { self?.goToPreviousPage() }
+            }
+            tv.onTextInput = { [weak self] event in
+                guard let self = self else { return }
+                self.onEditRequested?(self.editingOffset(), event)
+            }
             host.addSubview(tv, positioned: .below, relativeTo: pageIndicator)
             pageViews.append(tv)
             x += box.width + gutter
         }
+        if hadFocus { focusPage() }
 
         captureAnchor()
         updatePageIndicator()
         NotificationCenter.default.post(name: .readerPageChanged, object: self)
+    }
+
+    // MARK: - Focus
+
+    /// 지금 키보드 포커스가 리더 안(페이지 뷰 또는 VC 자신)에 있는지.
+    private func readerHasFocus() -> Bool {
+        guard let responder = view.window?.firstResponder else { return false }
+        if responder === self { return true }
+        guard let focused = responder as? NSView else { return false }
+        return pageViews.contains { focused === $0 || focused.isDescendant(of: $0) }
+    }
+
+    /// 키보드 포커스를 첫 페이지 뷰에 준다 — 페이지 뷰가 선택과 키(←/→)를 함께 받는다.
+    /// 아직 페이지가 없으면 VC 가 대신 받는다(안전망).
+    private func focusPage() {
+        view.window?.makeFirstResponder(pageViews.first ?? self)
     }
 
     var pageInfo: (current: Int, total: Int) {
@@ -519,6 +575,21 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
     /// 방아쇠가 된 이벤트를 함께 넘겨 전환 후 첫 글자를 잃지 않게 한다.
     var onEditRequested: ((Int, NSEvent?) -> Void)?
 
+    /// 편집으로 갈아탈 때 커서를 놓을 자리. 보고 있는 쪽 안에 캐럿(또는 선택 시작점)이
+    /// 있으면 그 자리를 쓴다 — 글자를 골라둔 데서 이어 쓰게 된다. 아직 아무 데도 안
+    /// 짚었다면 쪽 첫 글자로 물러난다(선택 기본값 0 이 문서 맨 앞으로 튀지 않도록).
+    private func editingOffset() -> Int {
+        let visible = visibleCharacterRange
+        for tv in pageViews {
+            let sel = tv.selectedRange()
+            guard sel.location != NSNotFound else { continue }
+            if NSLocationInRange(sel.location, visible) || sel.location == NSMaxRange(visible) {
+                return sel.location
+            }
+        }
+        return currentCharacterOffset
+    }
+
     override func keyDown(with event: NSEvent) {
         guard pageMode == .paged else { super.keyDown(with: event); return }
         switch event.keyCode {
@@ -526,7 +597,7 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
         case 123: goToPreviousPage()  // ←
         default:
             if let handler = onEditRequested, ReaderViewController.isTextInput(event) {
-                handler(currentCharacterOffset, event)
+                handler(editingOffset(), event)
                 return
             }
             super.keyDown(with: event)
