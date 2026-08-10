@@ -396,12 +396,25 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
     }
 
     private func removePagedOverlay() {
+        tearDownPageViews()
         pagedHost?.removeFromSuperview()
-        pageViews.forEach { $0.removeFromSuperview() }
-        pageViews = []
         pageContainers = []
         pagedLM = nil
         pagedStorage = nil
+    }
+
+    /// 옛 페이지 뷰를 컨테이너와 끊어낸 뒤 버린다. NSTextContainer 의 textView 역참조는
+    /// zeroing weak 이 아니라서, 뷰만 죽고 컨테이너가 layout manager 에 남으면 살아 있는
+    /// 형제 뷰의 ruler·responder 경로가 죽은 뷰를 메시징한다 (2026-08-10 크래시).
+    /// 포커스도 뷰가 살아 있는 지금 회수한다 — resign 이 해제 뒤로 미뤄지지 않게.
+    private func tearDownPageViews() {
+        guard !pageViews.isEmpty else { return }
+        if readerHasFocus() { view.window?.makeFirstResponder(self) }
+        for tv in pageViews {
+            tv.removeFromSuperview()
+            tv.textContainer?.textView = nil
+        }
+        pageViews = []
     }
 
     /// 페이지 컨테이너 한 장의 크기. 페이지 경계는 오직 이 크기에서 나온다
@@ -415,6 +428,9 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
     /// 페이지마다 NSTextContainer 를 추가해 전체 텍스트를 페이지로 나눈다.
     private func rebuildPages() {
         guard pagedHost != nil else { return }
+        // 옛 조판 네트워크(storage·LM·컨테이너)를 갈아끼우기 전에 뷰부터 끊는다 —
+        // 뷰가 죽은 네트워크를 물고 남는 순간을 만들지 않는다.
+        tearDownPageViews()
         let size = pageBoxSize()
 
         let storage = NSTextStorage(attributedString: styledContent())
@@ -476,8 +492,7 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
         // 페이지 뷰를 갈아끼우면 그 뷰가 쥐고 있던 키보드 포커스가 사라진다. 리더가
         // 쥐고 있던 포커스면 새 뷰에 다시 넘겨주고, 사이드바처럼 밖에 있었으면 뺏지 않는다.
         let hadFocus = readerHasFocus()
-        pageViews.forEach { $0.removeFromSuperview() }
-        pageViews = []
+        tearDownPageViews()
         guard let host = pagedHost, currentPage < pageContainers.count else { return }
 
         updateSpreadState()
