@@ -397,6 +397,7 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
 
     private func removePagedOverlay() {
         tearDownPageViews()
+        discardPageViews()      // 텍스트 시스템을 놓기 전에 페이지뷰부터 떼어낸다
         pagedHost?.removeFromSuperview()
         pageContainers = []
         pagedLM = nil
@@ -410,6 +411,18 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
     private func tearDownPageViews() {
         guard !pageViews.isEmpty else { return }
         if readerHasFocus() { view.window?.makeFirstResponder(self) }
+    /// 페이지뷰를 화면에서 걷어내고 **텍스트 시스템에서 떼어낸다.**
+    ///
+    /// NSLayoutManager 는 자기 텍스트뷰를 비소유(`assign`) 포인터로 기억한다
+    /// (`textViewForBeginningOfSelection` 등 — AppKit 헤더에 그렇게 선언돼 있다).
+    /// 그래서 페이지뷰를 그냥 버리면, 해제된 뒤에도 레이아웃 매니저 안에 죽은 포인터가
+    /// 남는다. 다음에 포커스가 옮겨가는 순간(= 아무 데나 클릭) 살아 있는 페이지뷰의
+    /// `-[NSTextView updateRuler]` 가 그 죽은 포인터에 `enclosingScrollView` 를 보내며
+    /// 앱이 통째로 죽는다(2026-08-08 크래시).
+    ///
+    /// 컨테이너의 `textView` 를 비우면 AppKit 이 레이아웃 매니저의 캐시까지 같이 정리한다.
+    /// 컨테이너가 살아 있는 동안 불러야 하므로, 조판을 새로 짜기 **전에** 부른다.
+    private func discardPageViews() {
         for tv in pageViews {
             tv.removeFromSuperview()
             tv.textContainer?.textView = nil
@@ -432,6 +445,11 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
         // 뷰가 죽은 네트워크를 물고 남는 순간을 만들지 않는다.
         tearDownPageViews()
         let size = pageBoxSize()
+
+        // 옛 컨테이너·레이아웃 매니저가 살아 있는 지금 페이지뷰를 떼어낸다. 새 조판으로
+        // 갈아끼운 뒤에는 옛 컨테이너가 이미 해제돼 있어 떼어낼 방법이 없다.
+        let hadFocus = readerHasFocus()
+        discardPageViews()
 
         let storage = NSTextStorage(attributedString: styledContent())
         let lm = NSLayoutManager()
@@ -461,6 +479,8 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
         currentPage = min(max(0, pageIndex(containing: anchorOffset)), max(0, containers.count - 1))
         needsAnchorApply = false
         showCurrentSpread()
+        // 방금 페이지뷰를 떼어냈으므로 포커스는 창으로 돌아가 있다 — 떼기 전에 봐 둔 값을 넘긴다.
+        showCurrentSpread(restoringFocus: hadFocus)
     }
 
     /// 주어진 문자 오프셋이 속한 페이지 인덱스.
@@ -489,10 +509,16 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
 
     /// 현재 펼침면(또는 낱쪽)을 호스트 가운데에 배치한다.
     private func showCurrentSpread() {
+    ///
+    /// `restoringFocus` 는 "리더가 포커스를 쥐고 있었는가" — 호출자가 이미 페이지뷰를
+    /// 떼어낸 뒤라면(rebuildPages) 여기서는 되읽을 수 없으므로 넘겨받는다.
+    private func showCurrentSpread(restoringFocus: Bool? = nil) {
         // 페이지 뷰를 갈아끼우면 그 뷰가 쥐고 있던 키보드 포커스가 사라진다. 리더가
         // 쥐고 있던 포커스면 새 뷰에 다시 넘겨주고, 사이드바처럼 밖에 있었으면 뺏지 않는다.
         let hadFocus = readerHasFocus()
         tearDownPageViews()
+        let hadFocus = restoringFocus ?? readerHasFocus()
+        discardPageViews()
         guard let host = pagedHost, currentPage < pageContainers.count else { return }
 
         updateSpreadState()
@@ -512,6 +538,9 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
             tv.isEditable = false
             tv.isSelectable = true        // 읽으면서 인용을 고를 수 있어야 한다
             tv.drawsBackground = false
+            // 자(ruler)는 이 앱에 없다(에디터도 같은 설정). 겸해서 포커스가 옮겨갈 때마다
+            // 텍스트 시스템을 훑는 updateRuler 경로를 닫아 둔다.
+            tv.usesRuler = false
             tv.onPageKey = { [weak self] next in
                 if next { self?.goToNextPage() } else { self?.goToPreviousPage() }
             }
@@ -581,6 +610,9 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
     deinit {
         NotificationCenter.default.removeObserver(self)
         positionSaveTimer?.invalidate()
+        // 리더가 통째로 사라질 때도 텍스트 시스템과의 연결은 손으로 끊어 준다 —
+        // 페이지뷰가 오토릴리스 풀에 잠깐 더 살아남아도 죽은 컨테이너를 짚지 않도록.
+        discardPageViews()
     }
 
     // MARK: - Keyboard Paging
