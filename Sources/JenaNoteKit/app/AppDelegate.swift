@@ -181,12 +181,8 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         toggleSidebar.keyEquivalentModifierMask = [.command, .option]
 
         viewMenu.addItem(.separator())
-        let readingMode = viewMenu.addItem(withTitle: L10n.tr("menu.view.readingMode"),
-                                           action: #selector(EditorWindowController.toggleReadingMode(_:)),
-                                           keyEquivalent: "r")
-        readingMode.keyEquivalentModifierMask = [.command, .shift]
-
-        // 책갈피는 읽기 모드 전용 — validateMenuItem 에서 비활성 처리된다 (ADR-0008)
+        viewMenu.addItem(withTitle: L10n.tr("source.title"),
+                         action: #selector(EditorWindowController.showMarkdownSource(_:)), keyEquivalent: "")
         viewMenu.addItem(withTitle: L10n.tr("menu.view.toggleBookmark"),
                          action: #selector(EditorWindowController.toggleBookmark(_:)),
                          keyEquivalent: "d")

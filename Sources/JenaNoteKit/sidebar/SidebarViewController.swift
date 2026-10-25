@@ -54,6 +54,10 @@ final class SidebarViewController: NSViewController {
     private var emptyStateView: NSView!
     private var addButton: NSButton!
     private var sortButton: NSButton!
+    private var pendingRowClick: DispatchWorkItem?
+    private var contextNode: SidebarNode?
+    private var newDocumentButton: NSButton!
+    private var newFolderButton: NSButton!
 
     /// 폴더 / 이미지 탭 전환
     private var tabControl: NSSegmentedControl!
@@ -108,6 +112,7 @@ final class SidebarViewController: NSViewController {
 
         view = container
         updateTabVisibility()
+        updateCreationButtons()
     }
 
     override func viewDidLoad() {
@@ -153,6 +158,27 @@ final class SidebarViewController: NSViewController {
         addButton.translatesAutoresizingMaskIntoConstraints = false
         headerView.addSubview(addButton)
 
+        newDocumentButton = NSButton(frame: .zero)
+        newDocumentButton.image = NSImage(systemSymbolName: "doc.badge.plus", accessibilityDescription: L10n.tr("menu.file.new"))
+        newDocumentButton.isBordered = false
+        newDocumentButton.bezelStyle = .inline
+        newDocumentButton.target = self
+        newDocumentButton.action = #selector(createDocument(_:))
+        newDocumentButton.toolTip = L10n.tr("sidebar.create.document")
+        newDocumentButton.setAccessibilityLabel(L10n.tr("menu.file.new"))
+        newDocumentButton.translatesAutoresizingMaskIntoConstraints = false
+        headerView.addSubview(newDocumentButton)
+
+        newFolderButton = NSButton(frame: .zero)
+        newFolderButton.image = NSImage(systemSymbolName: "folder.badge.plus", accessibilityDescription: L10n.tr("sidebar.create.folder"))
+        newFolderButton.isBordered = false
+        newFolderButton.bezelStyle = .inline
+        newFolderButton.target = self
+        newFolderButton.action = #selector(createFolder(_:))
+        newFolderButton.toolTip = L10n.tr("sidebar.create.folder")
+        newFolderButton.translatesAutoresizingMaskIntoConstraints = false
+        headerView.addSubview(newFolderButton)
+
         sortButton = NSButton(frame: .zero)
         sortButton.image = NSImage(systemSymbolName: "arrow.up.arrow.down", accessibilityDescription: L10n.tr("sidebar.sort.tooltip"))
         sortButton.isBordered = false
@@ -178,13 +204,24 @@ final class SidebarViewController: NSViewController {
 
             title.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 12),
             title.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+            title.trailingAnchor.constraint(lessThanOrEqualTo: searchSpinner.leadingAnchor, constant: -4),
 
             addButton.trailingAnchor.constraint(equalTo: headerView.trailingAnchor, constant: -8),
             addButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
             addButton.widthAnchor.constraint(equalToConstant: 22),
             addButton.heightAnchor.constraint(equalToConstant: 22),
 
-            sortButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -2),
+            newFolderButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -4),
+            newFolderButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+            newFolderButton.widthAnchor.constraint(equalToConstant: 22),
+            newFolderButton.heightAnchor.constraint(equalToConstant: 22),
+
+            newDocumentButton.trailingAnchor.constraint(equalTo: newFolderButton.leadingAnchor, constant: -4),
+            newDocumentButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+            newDocumentButton.widthAnchor.constraint(equalToConstant: 22),
+            newDocumentButton.heightAnchor.constraint(equalToConstant: 22),
+
+            sortButton.trailingAnchor.constraint(equalTo: newDocumentButton.leadingAnchor, constant: -4),
             sortButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
             sortButton.widthAnchor.constraint(equalToConstant: 22),
             sortButton.heightAnchor.constraint(equalToConstant: 22),
@@ -247,6 +284,7 @@ final class SidebarViewController: NSViewController {
         outlineView.rowHeight = 22
         outlineView.target = self
         outlineView.action = #selector(outlineRowClicked(_:))
+        outlineView.doubleAction = #selector(renameDoubleClicked(_:))
         outlineView.menu = makeContextMenu()
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
@@ -288,6 +326,8 @@ final class SidebarViewController: NSViewController {
         imageOutlineView.rowHeight = 24
         imageOutlineView.target = self
         imageOutlineView.action = #selector(imageOutlineRowClicked(_:))
+        imageOutlineView.doubleAction = #selector(renameDoubleClicked(_:))
+        imageOutlineView.menu = makeContextMenu()
         imageOutlineView.setDraggingSourceOperationMask(.copy, forLocal: false)
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("image"))
@@ -360,6 +400,15 @@ final class SidebarViewController: NSViewController {
     private func makeContextMenu() -> NSMenu {
         let menu = NSMenu()
         menu.delegate = self
+        for (key, action) in [
+            ("sidebar.action.rename", #selector(contextRename(_:))),
+            ("sidebar.action.delete", #selector(contextDelete(_:))),
+            ("menu.file.new", #selector(contextCreateDocument(_:))),
+            ("sidebar.action.newFolder", #selector(contextCreateFolder(_:)))
+        ] {
+            let item = menu.addItem(withTitle: L10n.tr(key), action: action, keyEquivalent: "")
+            item.target = self
+        }
         menu.addItem(withTitle: L10n.tr("sidebar.context.remove"),
                      action: #selector(contextRemoveFolder(_:)),
                      keyEquivalent: "")
@@ -380,6 +429,8 @@ final class SidebarViewController: NSViewController {
         if capture { captureExpansionState() }
         // reloadData()는 스크롤을 맨 위로 되돌리므로, 보던 위치를 저장했다가 복원한다
         // (외부 파일 변경으로 갱신될 때 스크롤이 튀지 않도록).
+        let selectedURL = outlineView.selectedRow >= 0
+            ? (outlineView.item(atRow: outlineView.selectedRow) as? SidebarNode)?.url : nil
         let savedOrigin = scrollView.contentView.bounds.origin
 
         roots = store.folders.map { url -> SidebarNode in
@@ -396,7 +447,12 @@ final class SidebarViewController: NSViewController {
         outlineView.reloadData()
         restoreExpansionState()
         updateEmptyState()
-        highlightCurrentFile()
+        if let selectedURL = selectedURL, let row = findRow(forURL: selectedURL) {
+            outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        } else {
+            highlightCurrentFile()
+        }
+        updateCreationButtons()
 
         scrollView.contentView.scroll(to: savedOrigin)
         scrollView.reflectScrolledClipView(scrollView.contentView)
@@ -416,13 +472,9 @@ final class SidebarViewController: NSViewController {
             let isDir = values?.isDirectory ?? false
             let modDate = values?.contentModificationDate ?? .distantPast
             if isDir {
-                // 안에 .md가 하나라도 있으면 표시
-                let children = scanDirectory(entry)
-                if !children.isEmpty {
-                    let node = SidebarNode(url: entry, isDirectory: true, isRoot: false, modificationDate: modDate)
-                    node.children = children
-                    subdirs.append(node)
-                }
+                let node = SidebarNode(url: entry, isDirectory: true, isRoot: false, modificationDate: modDate)
+                node.children = scanDirectory(entry)
+                subdirs.append(node)
             } else if entry.pathExtension.lowercased() == "md" {
                 files.append(SidebarNode(url: entry, isDirectory: false, isRoot: false, modificationDate: modDate))
             }
@@ -516,6 +568,7 @@ final class SidebarViewController: NSViewController {
             reloadImageTree()
         }
         updateTabVisibility()
+        updateCreationButtons()
     }
 
     private func updateTabVisibility() {
@@ -609,6 +662,13 @@ final class SidebarViewController: NSViewController {
     @objc private func imageOutlineRowClicked(_ sender: Any?) {
         let row = imageOutlineView.clickedRow
         guard row >= 0, let node = imageOutlineView.item(atRow: row) as? SidebarNode else { return }
+        pendingRowClick?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.toggleImageFolder(node) }
+        pendingRowClick = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + NSEvent.doubleClickInterval, execute: work)
+    }
+
+    private func toggleImageFolder(_ node: SidebarNode) {
         // 폴더는 펼침/접기만. 이미지는 드래그로 본문에 삽입(클릭 동작 없음 — 미리보기는 hover 팝업).
         guard node.isDirectory else { return }
         if imageOutlineView.isItemExpanded(node) {
@@ -663,6 +723,69 @@ final class SidebarViewController: NSViewController {
     }
 
     // MARK: - Actions
+
+    private var creationDirectory: URL? {
+        let outline = selectedTab == .images ? imageOutlineView : outlineView
+        guard let outline = outline, outline.selectedRow >= 0,
+              let node = outline.item(atRow: outline.selectedRow) as? SidebarNode,
+              !node.isMissing else { return nil }
+        let url = node.isDirectory ? node.url : node.url.deletingLastPathComponent()
+        return store.isAccessible(url) ? url : nil
+    }
+
+    private func updateCreationButtons() {
+        let enabled = creationDirectory != nil
+        newDocumentButton?.isEnabled = enabled
+        newFolderButton?.isEnabled = enabled
+    }
+
+    @objc private func createDocument(_ sender: Any?) { showCreationSheet(isDirectory: false) }
+    @objc private func createFolder(_ sender: Any?) { showCreationSheet(isDirectory: true) }
+
+    private func showCreationSheet(isDirectory: Bool, parentURL: URL? = nil) {
+        guard let parent = parentURL ?? creationDirectory, let window = view.window else { return }
+        let alert = NSAlert()
+        alert.messageText = L10n.tr(isDirectory ? "sidebar.create.folder" : "sidebar.create.document")
+        alert.informativeText = parent.path
+        let name = NSTextField(string: L10n.tr(isDirectory ? "sidebar.create.folderName" : "sidebar.create.documentName"))
+        name.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
+        name.setAccessibilityLabel(alert.messageText)
+        alert.accessoryView = name
+        alert.addButton(withTitle: L10n.tr("sidebar.create.confirm"))
+        alert.addButton(withTitle: L10n.tr("confirm.cancel"))
+        alert.window.initialFirstResponder = name
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard response == .alertFirstButtonReturn, let self = self else { return }
+            do {
+                let url = try SidebarItemCreation.create(named: name.stringValue, in: parent, isDirectory: isDirectory)
+                if self.selectedTab != .folders {
+                    self.tabControl.selectedSegment = Tab.folders.rawValue
+                    self.tabChanged(self.tabControl)
+                }
+                self.searchField.stringValue = ""
+                self.exitSearch()
+                self.reloadTree()
+                // 새 항목의 조상 폴더를 펼쳐 빈 폴더도 즉시 선택할 수 있게 한다.
+                var row = 0
+                while row < self.outlineView.numberOfRows {
+                    if let node = self.outlineView.item(atRow: row) as? SidebarNode, node.isDirectory,
+                       url.path.hasPrefix(node.url.path + "/") {
+                        self.outlineView.expandItem(node)
+                    }
+                    row += 1
+                }
+                if let row = self.findRow(forURL: url) {
+                    self.outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+                    self.outlineView.scrollRowToVisible(row)
+                }
+                if !isDirectory, let opener = window.windowController as? SidebarFileOpener {
+                    opener.openFileFromSidebar(at: url, jumpingTo: nil)
+                }
+            } catch {
+                self.presentError(error, modalFor: window, delegate: nil, didPresent: nil, contextInfo: nil)
+            }
+        }
+    }
 
     @objc func showAddFolderPanel(_ sender: Any?) {
         let panel = NSOpenPanel()
@@ -743,7 +866,13 @@ final class SidebarViewController: NSViewController {
         let row = outlineView.clickedRow
         guard row >= 0 else { return }
         let item = outlineView.item(atRow: row)
+        pendingRowClick?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.activateSidebarItem(item) }
+        pendingRowClick = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + NSEvent.doubleClickInterval, execute: work)
+    }
 
+    private func activateSidebarItem(_ item: Any?) {
         // 검색 결과 모드
         if item is SearchNotice { return }
         if let result = item as? FileSearchResult {
@@ -780,6 +909,107 @@ final class SidebarViewController: NSViewController {
         }
     }
 
+    @objc private func contextCreateDocument(_ sender: Any?) {
+        guard let node = clickedNode(), node.isDirectory else { return }
+        showCreationSheet(isDirectory: false, parentURL: node.url)
+    }
+
+    @objc private func contextCreateFolder(_ sender: Any?) {
+        guard let node = clickedNode(), node.isDirectory else { return }
+        showCreationSheet(isDirectory: true, parentURL: node.url)
+    }
+
+    @objc private func contextRename(_ sender: Any?) {
+        guard let node = clickedNode() else { return }
+        showRenameSheet(node)
+    }
+
+    @objc private func renameDoubleClicked(_ sender: NSOutlineView) {
+        pendingRowClick?.cancel()
+        guard sender.clickedRow >= 0,
+              let node = sender.item(atRow: sender.clickedRow) as? SidebarNode else { return }
+        showRenameSheet(node)
+    }
+
+    private func showRenameSheet(_ node: SidebarNode) {
+        guard !node.isMissing, let window = view.window else { return }
+        let alert = NSAlert()
+        alert.messageText = L10n.tr("sidebar.action.rename")
+        alert.informativeText = node.url.path
+        let name = NSTextField(string: node.url.lastPathComponent)
+        name.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
+        name.setAccessibilityLabel(alert.messageText)
+        alert.accessoryView = name
+        alert.addButton(withTitle: L10n.tr("sidebar.action.rename"))
+        alert.addButton(withTitle: L10n.tr("confirm.cancel"))
+        alert.window.initialFirstResponder = name
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard response == .alertFirstButtonReturn, let self = self else { return }
+            do {
+                let destination = try SidebarItemOperations.rename(node.url, to: name.stringValue)
+                for document in NSDocumentController.shared.documents {
+                    guard let url = document.fileURL,
+                          let moved = SidebarItemOperations.relocatedURL(url, from: node.url, to: destination) else { continue }
+                    document.fileURL = moved
+                    for controller in document.windowControllers {
+                        controller.synchronizeWindowTitleWithDocumentName()
+                        (controller as? EditorWindowController)?.updateSidebarSelection()
+                    }
+                }
+                self.store.relocateFolders(from: node.url, to: destination)
+                self.expandedPaths = Set(self.expandedPaths.map {
+                    SidebarItemOperations.relocatedURL(URL(fileURLWithPath: $0), from: node.url, to: destination)?.path ?? $0
+                })
+                self.reloadTree(capture: false)
+                if self.selectedTab == .images { self.reloadImageTree() }
+                self.selectCreatedOrRenamedItem(destination)
+            } catch {
+                self.presentError(error, modalFor: window, delegate: nil, didPresent: nil, contextInfo: nil)
+            }
+        }
+    }
+
+    private func selectCreatedOrRenamedItem(_ url: URL) {
+        let outline = selectedTab == .images ? imageOutlineView! : outlineView!
+        for row in 0..<outline.numberOfRows {
+            if let node = outline.item(atRow: row) as? SidebarNode, node.url.standardizedFileURL == url.standardizedFileURL {
+                outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+                outline.scrollRowToVisible(row)
+                break
+            }
+        }
+    }
+
+    @objc private func contextDelete(_ sender: Any?) {
+        guard let node = clickedNode(), let window = view.window else { return }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = L10n.tr("sidebar.action.delete")
+        alert.informativeText = node.url.path + "\n" + L10n.tr("sidebar.action.deleteInfo")
+        alert.addButton(withTitle: L10n.tr("sidebar.action.delete"))
+        alert.addButton(withTitle: L10n.tr("confirm.cancel"))
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard response == .alertFirstButtonReturn, let self = self else { return }
+            let documents = NSDocumentController.shared.documents.filter {
+                guard let url = $0.fileURL else { return false }
+                return SidebarItemOperations.relocatedURL(url, from: node.url, to: node.url) != nil
+            }
+            let check = SidebarDocumentCloseCheck(documents: documents) { [weak self] allowed in
+                guard allowed, let self = self else { return }
+                do {
+                    try FileManager.default.trashItem(at: node.url, resultingItemURL: nil)
+                    for document in documents { document.close() }
+                    self.store.removeFolders(inside: node.url)
+                    self.reloadTree()
+                    if self.selectedTab == .images { self.reloadImageTree() }
+                } catch {
+                    self.presentError(error, modalFor: window, delegate: nil, didPresent: nil, contextInfo: nil)
+                }
+            }
+            check.start()
+        }
+    }
+
     @objc private func contextRemoveFolder(_ sender: Any?) {
         guard let node = clickedNode(), node.isRoot else { return }
         store.removeFolder(node.url)
@@ -791,9 +1021,7 @@ final class SidebarViewController: NSViewController {
     }
 
     private func clickedNode() -> SidebarNode? {
-        let row = outlineView.clickedRow
-        guard row >= 0 else { return nil }
-        return outlineView.item(atRow: row) as? SidebarNode
+        return contextNode
     }
 
     // MARK: - 전체 검색 (Full-Text Search)
@@ -998,7 +1226,8 @@ extension SidebarViewController: NSOutlineViewDelegate {
     }
 
     func outlineViewSelectionDidChange(_ notification: Notification) {
-        // 강조만 — 실제 파일 열기는 click action에서 처리 (키보드 네비게이션 시 의도 없는 swap 방지)
+        updateCreationButtons()
+        // 실제 파일 열기는 click action에서 처리한다.
     }
 
     private func makeCell(identifier: NSUserInterfaceItemIdentifier) -> NSTableCellView {
@@ -1055,13 +1284,20 @@ extension SidebarViewController: NSOutlineViewDelegate {
 extension SidebarViewController: NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
-        let row = outlineView.clickedRow
-        let node = (row >= 0) ? outlineView.item(atRow: row) as? SidebarNode : nil
+        pendingRowClick?.cancel()
+        let outline = menu === imageOutlineView.menu ? imageOutlineView! : outlineView!
+        let row = outline.clickedRow
+        contextNode = row >= 0 ? outline.item(atRow: row) as? SidebarNode : nil
+        let node = contextNode
 
         for item in menu.items {
             switch item.action {
             case #selector(contextRemoveFolder(_:)):
                 item.isHidden = !(node?.isRoot == true)
+            case #selector(contextCreateDocument(_:)), #selector(contextCreateFolder(_:)):
+                item.isHidden = node?.isDirectory != true || node?.isMissing == true
+            case #selector(contextRename(_:)), #selector(contextDelete(_:)):
+                item.isHidden = node == nil || node?.isMissing == true
             case #selector(contextRevealInFinder(_:)):
                 item.isHidden = (node == nil)
             default:

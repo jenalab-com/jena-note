@@ -29,6 +29,7 @@ final class ReaderPageViewLifecycleTests: XCTestCase {
         // 손으로 만든 창은 close() 가 스스로 release 한다 — ARC 참조와 겹쳐 이중 해제가 된다.
         window.isReleasedWhenClosed = false
         window.contentViewController = reader
+        window.setContentSize(NSSize(width: 1200, height: 800))
         window.makeKeyAndOrderFront(nil)
         window.layoutIfNeeded()
         reader.view.layoutSubtreeIfNeeded()

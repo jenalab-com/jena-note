@@ -3,6 +3,8 @@ import AppKit
 @objc(MarkdownDocument)
 class MarkdownDocument: NSDocument {
 
+    let aiIdentity = UUID()
+
     /// 문서 내용의 단일 진실 공급원 (Single Source of Truth)
     var content: NSMutableAttributedString = NSMutableAttributedString()
 
@@ -68,6 +70,25 @@ class MarkdownDocument: NSDocument {
         updateChangeCount(.changeDone)
     }
 
+    /// 페이지 뷰가 사라져도 Undo는 문서에 남는다. 표시용 서식이 제거된 변경분만 받는다.
+    func replaceReaderContent(in range: NSRange, with replacement: NSAttributedString,
+                              origin: AnyObject? = nil) {
+        guard range.location != NSNotFound, NSMaxRange(range) <= content.length else { return }
+        let previous = content.attributedSubstring(from: range)
+        let replacement = NSAttributedString(attributedString: replacement)
+        let inverseRange = NSRange(location: range.location, length: replacement.length)
+        undoManager?.registerUndo(withTarget: self) { doc in
+            doc.replaceReaderContent(in: inverseRange, with: previous)
+        }
+        content.replaceCharacters(in: range, with: replacement)
+        // NSDocument counts registered undo groups, including normal edits. Counting
+        // each storage notification as well leaves the document dirty after Undo.
+        if undoManager == nil { updateChangeCount(.changeDone) }
+        var info: [String: Any] = ["range": NSValue(range: range), "replacement": replacement]
+        if let origin = origin { info["origin"] = origin }
+        NotificationCenter.default.post(name: .documentReaderContentChanged, object: self, userInfo: info)
+    }
+
     // MARK: - External Change Reload
 
     /// 디스크의 파일이 외부에서 바뀌었고 미저장 편집이 없으면 조용히 다시 읽는다.
@@ -125,6 +146,7 @@ class MarkdownDocument: NSDocument {
 }
 
 extension Notification.Name {
+    static let documentReaderContentChanged = Notification.Name("JNDocumentReaderContentChanged")
     /// 문서가 디스크에서 다시 읽혔음(수동 되돌리기·외부 변경 자동 리로드).
     /// object 는 해당 MarkdownDocument.
     static let documentDidReloadFromDisk = Notification.Name("JNDocumentDidReloadFromDisk")

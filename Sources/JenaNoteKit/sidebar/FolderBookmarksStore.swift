@@ -33,6 +33,18 @@ final class FolderBookmarksStore {
         notifyChange()
     }
 
+    func relocateFolders(from source: URL, to destination: URL) {
+        folders = folders.map { SidebarItemOperations.relocatedURL($0, from: source, to: destination) ?? $0 }
+        save()
+        notifyChange()
+    }
+
+    func removeFolders(inside source: URL) {
+        folders.removeAll { SidebarItemOperations.relocatedURL($0, from: source, to: source) != nil }
+        save()
+        notifyChange()
+    }
+
     /// 디스크 접근 가능 여부 — 외부 볼륨 분리/삭제 감지
     func isAccessible(_ url: URL) -> Bool {
         var isDir: ObjCBool = false

@@ -9,24 +9,29 @@ class EditorWindowController: NSWindowController {
     private var splitVC: NSSplitViewController!
     private let statusBar = StatusBarView()
     private var lastNotifiedMissingURL: URL?
+    private var readerCountWork: DispatchWorkItem?
+    private(set) var aiChatVC: AIChatViewController?
+    private(set) var isAIActive = false
+    private var previousMinimumSize: NSSize?
+    private(set) var sourcePreview: MarkdownSourceViewController?
+    private(set) var isShowingSource = false
+    private var sourceReturnSelection = NSRange(location: 0, length: 0)
+    private var sourceReturnOffset = 0
+    private var aiPanelWidth = AIChatViewController.defaultPanelWidth
 
     /// 검색 결과 클릭으로 문서를 여는 중일 때, 스왑 완료 후 실행할 점프.
     private var pendingSearchJump: SearchJump?
 
-    // MARK: - Reading Mode State (ADR-0006, ADR-0009)
+    // MARK: - Unified document layout
 
-    /// 읽기 조판이 켜져 있는지. 조판일 뿐이라 스크롤 조판에서는 편집이 그대로 된다.
-    private(set) var isReadingMode = false
-    /// 페이징 조판일 때만 존재하는 읽기 전용 오버레이. 스크롤 조판에서는 nil 이고
-    /// 에디터가 직접 조판을 입는다.
-    private var readerVC: ReaderViewController?
-    private var formatToolbar: FormatToolbar?
+    /// 페이지 보기에서는 페이지 편집기, 스크롤 보기에서는 연속 편집기를 사용한다.
+    private(set) var readerVC: ReaderViewController?
     private var readerToolbar: ReaderToolbar?
     private var bookmarkPopover: NSPopover?
 
     /// 지금 읽던 자리를 쥐고 있는 화면 — 페이징이면 리더 오버레이, 스크롤이면 에디터.
     private var positionProvider: ReadingPositionProviding? {
-        guard isReadingMode else { return nil }
+        guard !isShowingSource else { return nil }
         return readerVC ?? editorVC
     }
 
@@ -67,10 +72,18 @@ class EditorWindowController: NSWindowController {
 
         self.sidebarVC = sidebar
         self.editorVC = editor
+        editor.hostWindowController = self
         self.splitVC = split
 
         setupContentLayout(window: window, split: split)
         setupToolbar(for: window)
+        editorVC.setReadingLayout(true)
+        editorVC.onPositionChanged = { [weak self] offset in
+            self?.saveReadingProgress(offset: offset)
+            self?.updateBookmarkButtonState()
+        }
+        NotificationCenter.default.addObserver(self, selector: #selector(aiWindowWillClose),
+                                                name: NSWindow.willCloseNotification, object: window)
 
         NotificationCenter.default.addObserver(
             self, selector: #selector(handleExternalContentsChange),
@@ -80,9 +93,14 @@ class EditorWindowController: NSWindowController {
             self, selector: #selector(handleDocumentReloadedFromDisk(_:)),
             name: .documentDidReloadFromDisk, object: nil
         )
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(handleReaderContentChanged(_:)),
+            name: .documentReaderContentChanged, object: nil
+        )
     }
 
     deinit {
+        readerCountWork?.cancel()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -129,10 +147,11 @@ class EditorWindowController: NSWindowController {
     // MARK: - Toolbar
 
     private func setupToolbar(for window: NSWindow) {
-        let toolbar = FormatToolbar(identifier: NSToolbar.Identifier("FormatToolbar"))
-        toolbar.target = editorVC
+        let toolbar = ReaderToolbar(identifier: NSToolbar.Identifier("UnifiedToolbar"))
+        toolbar.target = self
+        toolbar.formatTarget = editorVC
         window.toolbar = toolbar
-        formatToolbar = toolbar
+        readerToolbar = toolbar
     }
 
     // MARK: - Document → View 연결
@@ -146,8 +165,29 @@ class EditorWindowController: NSWindowController {
     override var document: AnyObject? {
         get { super.document }
         set {
+            if let old = super.document as? MarkdownDocument, isAIActive {
+                _ = AIConversationStore.shared.conversation(for: old)
+            }
+            if super.document != nil { positionProvider?.flushPositionChange() }
             super.document = newValue
+            sourcePreview?.setDocument(newValue as? MarkdownDocument)
+            if isShowingSource {
+                sourceReturnSelection = NSRange(location: 0, length: 0)
+                sourceReturnOffset = 0
+                if let doc = newValue as? MarkdownDocument, let url = doc.fileURL,
+                   let anchor = ReadingProgressStore.shared.anchor(for: url) {
+                    sourceReturnOffset = anchor.resolve(in: doc.content.string)
+                }
+            }
+            if let doc = newValue as? MarkdownDocument, editorVC != nil {
+                editorVC.loadContent(of: doc)
+                if let reader = readerVC { reader.updateContent(doc.content) }
+                else if !isAIActive && !isShowingSource { applyReadingPageMode(SettingsManager.shared.readingPageMode) }
+                restoreReadingProgress()
+                updateCharCount(for: doc.content.string)
+            }
             updateSidebarSelection()
+            aiChatVC?.switchDocument()
         }
     }
 
@@ -157,6 +197,120 @@ class EditorWindowController: NSWindowController {
         super.synchronizeWindowTitleWithDocumentName()
         if document == nil {
             window?.title = L10n.tr("untitled")
+        }
+    }
+
+    @objc func showMarkdownSource(_ sender: Any?) {
+        if isShowingSource { hideMarkdownSource(); return }
+        guard let doc = document as? MarkdownDocument else { return }
+        readerVC?.finishComposition()
+        sourceReturnSelection = documentSelection
+        sourceReturnOffset = positionProvider?.currentCharacterOffset ?? 0
+        positionProvider?.flushPositionChange()
+        if sourcePreview == nil { sourcePreview = MarkdownSourceViewController() }
+        sourcePreview?.show(document: doc)
+        isShowingSource = true
+        swapRightPane(to: sourcePreview!)
+        readerToolbar?.setSourceActive(true)
+        window?.makeFirstResponder(sourcePreview?.textView)
+    }
+
+    private func hideMarkdownSource() {
+        guard isShowingSource else { return }
+        isShowingSource = false
+        sourcePreview?.suspend()
+        swapRightPane(to: readerVC ?? editorVC)
+        readerToolbar?.setSourceActive(false)
+        positionProvider?.restore(to: sourceReturnOffset)
+        if let doc = document as? MarkdownDocument, sourceReturnSelection.length > 0,
+           NSMaxRange(sourceReturnSelection) <= doc.content.length {
+            selectDocumentRange(sourceReturnSelection)
+        } else {
+            window?.makeFirstResponder((readerVC?.visiblePageTextViews.first as NSTextView?) ?? editorVC.textView)
+        }
+        editorVC.updateToolbarState()
+    }
+
+    func refreshSourcePreview() { sourcePreview?.scheduleRefresh() }
+
+    // MARK: - AI chat
+
+    @objc func toggleAI(_ sender: Any?) {
+        if isShowingSource { hideMarkdownSource() }
+        if isAIActive {
+            aiChatVC?.suspend()
+            if let chat = aiChatVC {
+                aiPanelWidth = min(max(chat.view.bounds.width, AIChatViewController.minimumPanelWidth),
+                                   AIChatViewController.maximumPanelWidth)
+            }
+            if let item = splitVC.splitViewItems.first(where: { $0.viewController === aiChatVC }) {
+                splitVC.removeSplitViewItem(item)
+            }
+            aiChatVC = nil
+            isAIActive = false
+            if let size = previousMinimumSize { window?.minSize = size }
+            readerToolbar?.setAIActive(false)
+            applyReadingPageMode(SettingsManager.shared.readingPageMode)
+            readerToolbar?.updatePageModeSelection(SettingsManager.shared.readingPageMode)
+            return
+        }
+        let selection = readerVC?.selectedTextRange ?? editorVC.textView.selectedRange()
+        isAIActive = true
+        removePagedReader()
+        if NSMaxRange(selection) <= editorVC.textView.string.utf16.count {
+            editorVC.textView.setSelectedRange(selection)
+        }
+        readerToolbar?.setAIActive(true)
+        let chat = AIChatViewController()
+        chat.currentDocument = { [weak self] in self?.document as? MarkdownDocument }
+        chat.currentSelection = { [weak self] in
+            guard let self = self, !self.isShowingSource else { return NSRange(location: 0, length: 0) }
+            return self.editorVC.textView.selectedRange()
+        }
+        chat.applyEdit = { [weak self] snapshot, text in
+            guard let self = self, let doc = self.document as? MarkdownDocument,
+                  snapshot.canApply(to: doc), !self.editorVC.textView.hasMarkedText() else {
+                throw AIError(message: L10n.tr("ai.editConflict"))
+            }
+            let (range, replacement) = try snapshot.replacement(text)
+            guard range.length > 0 || replacement.length > 0 else { return }
+            self.editorVC.textView.breakUndoCoalescing()
+            doc.undoManager?.beginUndoGrouping()
+            doc.replaceReaderContent(in: range, with: replacement)
+            doc.undoManager?.setActionName(L10n.tr("ai.edit"))
+            doc.undoManager?.endUndoGrouping()
+            self.editorVC.textView.setSelectedRange(NSRange(location: range.location, length: replacement.length))
+            self.editorVC.textView.scrollRangeToVisible(NSRange(location: range.location, length: replacement.length))
+        }
+        aiChatVC = chat
+        let item = NSSplitViewItem(viewController: chat)
+        item.minimumThickness = AIChatViewController.minimumPanelWidth
+        item.maximumThickness = AIChatViewController.maximumPanelWidth
+        item.holdingPriority = NSLayoutConstraint.Priority(rawValue: 260)
+        chat.view.setFrameSize(NSSize(width: aiPanelWidth, height: splitVC.splitView.bounds.height))
+        previousMinimumSize = window?.minSize
+        window?.minSize = NSSize(width: 900, height: 560)
+        if let window = window {
+            var frame = window.frame
+            frame.size.width = max(frame.width, 1100)
+            frame.size.height = max(frame.height, 640)
+            window.setFrame(frame, display: true)
+        }
+        splitVC.addSplitViewItem(item)
+        splitVC.view.layoutSubtreeIfNeeded()
+        let divider = splitVC.splitViewItems.count - 2
+        splitVC.splitView.setPosition(splitVC.splitView.bounds.width - aiPanelWidth - splitVC.splitView.dividerThickness,
+                                     ofDividerAt: divider)
+        chat.switchDocument()
+    }
+
+    @objc private func aiWindowWillClose() {
+        sourcePreview?.suspend()
+        positionProvider?.flushPositionChange()
+        bookmarkPopover?.performClose(nil)
+        aiChatVC?.suspend()
+        if let doc = document as? MarkdownDocument, isAIActive {
+            _ = AIConversationStore.shared.conversation(for: doc)
         }
     }
 
@@ -174,65 +328,23 @@ class EditorWindowController: NSWindowController {
         sidebarVC.focusSearchField()
     }
 
-    // MARK: - Reading Mode (ADR-0006)
-
-    @objc func toggleReadingMode(_ sender: Any?) {
-        isReadingMode ? exitReadingMode(sender) : enterReadingMode(sender)
-    }
-
-    /// 읽기 조판을 켠다. 우측 페인을 갈아끼우지 않고 **에디터가 조판을 입는다** —
-    /// 그래서 스크롤 조판에서는 편집·서식·저장이 그대로 살아있다 (ADR-0009).
-    @objc func enterReadingMode(_ sender: Any?) {
-        guard !isReadingMode else { return }
-        isReadingMode = true
-        editorVC.setReadingLayout(true)
-        editorVC.onPositionChanged = { [weak self] offset in
-            self?.saveReadingProgress(offset: offset)
-            self?.updateBookmarkButtonState()
-        }
-
-        let rToolbar = ReaderToolbar(identifier: NSToolbar.Identifier("ReaderToolbar"))
-        rToolbar.target = self
-        window?.toolbar = rToolbar
-        readerToolbar = rToolbar
-
-        applyReadingPageMode(SettingsManager.shared.readingPageMode)
-
-        // 툴바가 붙은 뒤에 복원한다 — 책갈피 아이콘 상태를 같이 맞춰야 하기 때문.
-        restoreReadingProgress()
-        updateBookmarkButtonState()
-    }
-
-    @objc func exitReadingMode(_ sender: Any?) {
-        guard isReadingMode else { return }
-        positionProvider?.flushPositionChange()
-        bookmarkPopover?.performClose(nil)
-        bookmarkPopover = nil
-
-        removePagedReader()
-        editorVC.setReadingLayout(false)
-        editorVC.onPositionChanged = nil
-        isReadingMode = false
-
-        if let f = formatToolbar {
-            window?.toolbar = f
-        } else if let window = window {
-            setupToolbar(for: window)
-        }
-        readerToolbar = nil
-    }
-
     // MARK: - 조판 전환 (스크롤 ↔ 페이징)
 
-    /// 페이징이면 읽기 전용 오버레이를 띄우고, 스크롤이면 에디터로 되돌린다.
+    /// 페이지·스크롤 보기 사이에서 편집 화면을 바꾼다.
     /// 읽던 자리는 넘겨받는 쪽이 이어받는다.
-    private func applyReadingPageMode(_ mode: SettingsManager.ReadingPageMode) {
+    func applyReadingPageMode(_ mode: SettingsManager.ReadingPageMode) {
+        guard !isShowingSource else { return }
+        let selection = documentSelection
         SettingsManager.shared.readingPageMode = mode
+        readerToolbar?.updatePageModeSelection(mode)
         if mode == .paged { installPagedReader() } else { removePagedReader() }
+        if selection.length > 0, let doc = document as? MarkdownDocument, NSMaxRange(selection) <= doc.content.length {
+            selectDocumentRange(selection)
+        }
     }
 
     private func installPagedReader() {
-        guard isReadingMode, readerVC == nil else { return }
+        guard !isAIActive, readerVC == nil else { return }
         let offset = editorVC.currentCharacterOffset
         editorVC.flushPositionChange()
 
@@ -241,24 +353,32 @@ class EditorWindowController: NSWindowController {
             ?? (document as? MarkdownDocument)?.content
             ?? NSAttributedString()
         let reader = ReaderViewController(content: live)
+        reader.formattingTarget = editorVC
         reader.onPositionChanged = { [weak self] offset in
             self?.saveReadingProgress(offset: offset)
             self?.updateBookmarkButtonState()
         }
-        // 페이징 화면에서 글자를 치면 스크롤 조판으로 갈아타 그 자리에서 이어 쓰게 한다.
-        reader.onEditRequested = { [weak self] offset, event in
-            self?.switchToScrollForEditing(at: offset, replaying: event)
+        reader.onContentEdit = { [weak self, weak reader] range, replacement in
+            (self?.document as? MarkdownDocument)?.replaceReaderContent(
+                in: range, with: replacement, origin: reader)
+        }
+        reader.documentUndoManager = { [weak self] in
+            (self?.document as? MarkdownDocument)?.undoManager
         }
         readerVC = reader
         swapRightPane(to: reader)
+        // Programmatic split replacement may not deliver viewDidAppear immediately.
+        reader.setPageMode(.paged)
         NotificationCenter.default.addObserver(
             self, selector: #selector(handleReaderPageChanged(_:)),
             name: .readerPageChanged, object: reader)
+        reader.setWidthMode(editorVC.readingWidthMode)
         reader.restore(to: offset)
     }
 
     private func removePagedReader() {
         guard let reader = readerVC else { return }
+        reader.finishComposition()
         let offset = reader.currentCharacterOffset
         reader.flushPositionChange()
         NotificationCenter.default.removeObserver(self, name: .readerPageChanged, object: reader)
@@ -274,18 +394,38 @@ class EditorWindowController: NSWindowController {
         editorVC.restore(to: offset)
     }
 
-    /// 페이징 조판에서 타이핑이 시작됐을 때 — 스크롤 조판으로 바꾸고 그 자리에 커서를 둔다.
-    /// 방아쇠가 된 키 입력은 전환이 끝난 뒤 에디터에 다시 흘려보내 첫 글자를 잃지 않는다.
-    private func switchToScrollForEditing(at offset: Int, replaying event: NSEvent?) {
-        applyReadingPageMode(.scroll)
-        readerToolbar?.updatePageModeSelection(.scroll)
-        editorVC.placeCursor(at: offset)
-        guard let event = event else { return }
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            self.window?.makeFirstResponder(self.editorVC.textView)
-            self.editorVC.textView.interpretKeyEvents([event])
+    /// 문서가 Undo를 소유하므로 페이지 이동·모드 전환 후에도 같은 이력을 쓴다.
+    @objc private func handleReaderContentChanged(_ note: Notification) {
+        guard let doc = document as? MarkdownDocument,
+              (note.object as? MarkdownDocument) === doc,
+              let range = (note.userInfo?["range"] as? NSValue)?.rangeValue,
+              let replacement = note.userInfo?["replacement"] as? NSAttributedString else { return }
+        if let reader = readerVC {
+            if (note.userInfo?["origin"] as AnyObject?) !== reader {
+                reader.applyDocumentEdit(in: range, replacement: replacement)
+            }
+        } else {
+            editorVC.loadContent(of: doc)
         }
+        if let url = doc.fileURL {
+            BookmarkStore.shared.adjustForEdit(in: range, replacementLength: replacement.length,
+                                               text: doc.content.string, for: url)
+        }
+        updateBookmarkButtonState()
+        if isShowingSource {
+            sourceReturnOffset = ReadingAnchor.offsetAfterEdit(sourceReturnOffset, range: range, replacementLength: replacement.length)
+            sourceReturnSelection = NSRange(location: min(sourceReturnSelection.location, doc.content.length), length: 0)
+        }
+        refreshSourcePreview()
+        // Counting a whole novel is unrelated to the typing-critical path.
+        readerCountWork?.cancel()
+        let work = DispatchWorkItem { [weak self, weak doc] in
+            guard let self = self, let doc = doc,
+                  (self.document as? MarkdownDocument) === doc else { return }
+            self.updateCharCount(for: doc.content.string)
+        }
+        readerCountWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)
     }
 
     // MARK: - 책갈피 (ADR-0008)
@@ -372,7 +512,7 @@ class EditorWindowController: NSWindowController {
         }
         let item = NSSplitViewItem(viewController: vc)
         item.minimumThickness = 360
-        split.addSplitViewItem(item)
+        split.insertSplitViewItem(item, at: 1)
     }
 
     // MARK: - Reader Toolbar Actions
@@ -381,6 +521,7 @@ class EditorWindowController: NSWindowController {
     // 페이징이면 리더가, 스크롤이면 에디터가 조판을 다시 입는다.
 
     @objc func changeReaderPageMode(_ sender: Any?) {
+        guard !isAIActive else { readerToolbar?.setAIActive(true); return }
         guard let seg = sender as? NSSegmentedControl else { return }
         applyReadingPageMode((seg.selectedSegment == 1) ? .paged : .scroll)
     }
@@ -438,8 +579,7 @@ class EditorWindowController: NSWindowController {
 
     override func responds(to aSelector: Selector!) -> Bool {
         let sels: [Selector] = [
-            #selector(toggleReadingMode(_:)), #selector(enterReadingMode(_:)),
-            #selector(exitReadingMode(_:)), #selector(changeReaderPageMode(_:)),
+            #selector(changeReaderPageMode(_:)),
             #selector(changeReaderWidth(_:)),
             #selector(decreaseReaderFont(_:)), #selector(increaseReaderFont(_:)),
             #selector(changeReaderFont(_:)), #selector(changeReaderWeight(_:)),
@@ -497,13 +637,14 @@ class EditorWindowController: NSWindowController {
     @objc private func handleDocumentReloadedFromDisk(_ note: Notification) {
         guard let doc = document as? MarkdownDocument,
               (note.object as? MarkdownDocument) === doc else { return }
-        if isReadingMode {
+        if readerVC != nil {
             // 같은 문서의 리로드이므로 읽던 페이지는 유지한다(범위 밖이면 클램프).
             readerVC?.updateContent(doc.content, resetPage: false)
         } else {
             editorVC.loadDocumentContent()
         }
         updateCharCount(for: doc.content.string)
+        refreshSourcePreview()
     }
 }
 
@@ -521,8 +662,8 @@ extension EditorWindowController: SidebarFileOpener {
         // 같은 파일 클릭: 스왑 없이 점프만 (일반 클릭이면 무시 — 기존 동작 유지)
         if let currentURL = currentDoc.fileURL?.standardizedFileURL,
            currentURL == url.standardizedFileURL {
-            if let jump = jump, !isReadingMode {
-                editorVC.jumpToMatch(jump)
+            if let jump = jump {
+                jumpToMatch(jump)
             }
             return
         }
@@ -571,7 +712,7 @@ extension EditorWindowController: SidebarFileOpener {
     private func swapDocument(to url: URL, replacing oldDoc: MarkdownDocument?) {
         // 문서가 바뀌기 전에 저장 — 콜백 안에서는 self.document 가 이미 새 문서라
         // 이전 문서의 위치가 새 문서 키에 얹히게 된다.
-        readerVC?.flushPositionChange()
+        positionProvider?.flushPositionChange()
         NSDocumentController.shared.openDocument(withContentsOf: url, display: false) { [weak self] newDoc, alreadyOpen, error in
             guard let self = self else { return }
             guard error == nil, let newDoc = newDoc else { return }
@@ -592,17 +733,12 @@ extension EditorWindowController: SidebarFileOpener {
             self.editorVC.loadDocumentContent()
             if let jump = self.pendingSearchJump {
                 self.pendingSearchJump = nil
-                // 읽기 모드에서는 에디터가 분리돼 있어 점프 생략 (읽기 화면은 문서 교체만)
-                if !self.isReadingMode {
-                    self.editorVC.jumpToMatch(jump)
-                }
+                self.jumpToMatch(jump)
             }
             // 읽기 모드 중 사이드바로 문서를 바꿨다면 읽기 화면 내용도 새 문서로 갱신.
             // (에디터 뷰는 윈도우에서 분리돼 있어 loadDocumentContent 가 조용히
             //  건너뛰므로, 글자수도 여기서 직접 새 문서 기준으로 맞춘다.)
-            if self.isReadingMode, let newDoc = self.document as? MarkdownDocument {
-                self.readerVC?.updateContent(newDoc.content)
-                self.restoreReadingProgress()
+            if let newDoc = self.document as? MarkdownDocument {
                 self.updateCharCount(for: newDoc.content.string)
             }
             self.window?.makeKeyAndOrderFront(nil)
@@ -618,9 +754,12 @@ extension EditorWindowController: NSMenuItemValidation {
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         switch menuItem.action {
+        case #selector(showMarkdownSource(_:)):
+            menuItem.state = isShowingSource ? .on : .off
+            return document is MarkdownDocument
         case #selector(toggleBookmark(_:)), #selector(showBookmarkList(_:)):
-            // 읽기 모드 전용이며, 위치를 매어 둘 파일이 있어야 한다(저장 안 된 새 문서 제외).
-            return isReadingMode && (document as? MarkdownDocument)?.fileURL != nil
+            // 책갈피 위치를 매어 둘 파일이 필요하다(저장 안 된 새 문서 제외).
+            return !isShowingSource && (document as? MarkdownDocument)?.fileURL != nil
         default:
             return true
         }

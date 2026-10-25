@@ -74,6 +74,18 @@ final class BookmarkStore {
         save()
     }
 
+    /// 직접 편집 때 문맥 검색 대신 정확한 변경 범위로 위치를 옮긴다.
+    func adjustForEdit(in range: NSRange, replacementLength: Int, text: String, for url: URL) {
+        let k = key(for: url)
+        guard let list = bookmarks[k], !list.isEmpty else { return }
+        bookmarks[k] = list.map { anchor in
+            let offset = ReadingAnchor.offsetAfterEdit(anchor.characterOffset, range: range,
+                                                       replacementLength: replacementLength)
+            return ReadingAnchor.make(offset: offset, in: text)
+        }.sorted { $0.characterOffset < $1.characterOffset }
+        save()
+    }
+
     // MARK: - Persistence
 
     private func key(for url: URL) -> String {
