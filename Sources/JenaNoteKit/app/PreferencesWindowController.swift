@@ -8,6 +8,7 @@ class PreferencesWindowController: NSWindowController {
 
     private var languagePopup: NSPopUpButton!
     private var appearancePopup: NSPopUpButton!
+    private var aiSettingsVC: AISettingsViewController?
 
     convenience init() {
         let window = NSWindow(
@@ -22,6 +23,15 @@ class PreferencesWindowController: NSWindowController {
 
         self.init(window: window)
         setupUI()
+        // Keep the existing general settings intact above the AI connection panel.
+        window.setContentSize(NSSize(width: 620, height: 620))
+        if let content = window.contentView {
+            for child in content.subviews { child.frame.origin.y += 440 }
+            let ai = AISettingsViewController()
+            ai.view.frame = NSRect(x: 0, y: 0, width: 620, height: 440)
+            content.addSubview(ai.view)
+            aiSettingsVC = ai
+        }
     }
 
     func show() {
@@ -29,6 +39,11 @@ class PreferencesWindowController: NSWindowController {
         window?.center()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func showAI() {
+        show()
+        window?.makeFirstResponder(aiSettingsVC?.view)
     }
 
     // MARK: - UI Setup

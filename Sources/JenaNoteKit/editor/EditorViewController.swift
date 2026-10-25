@@ -5,11 +5,12 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
 
     // MARK: - Properties
 
+    weak var hostWindowController: EditorWindowController?
     var textView: EditorTextView!
     private var scrollView: NSScrollView!
 
     var document: MarkdownDocument? {
-        return view.window?.windowController?.document as? MarkdownDocument
+        return (hostWindowController?.document ?? view.window?.windowController?.document) as? MarkdownDocument
     }
 
     /// 마지막으로 로드한 문서 — 문서가 바뀐 로드인지(→ 맨 위로), 같은 문서의
@@ -278,46 +279,51 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         controller?.updateCharCount(for: storage.string)
     }
 
+    private func performFormatting(_ command: (NSTextView) -> Void) {
+        if let host = hostWindowController { host.performDocumentFormatting(command) }
+        else { command(textView) }
+    }
+
     // MARK: - Format Actions (Responder Chain)
 
     @objc func toggleBold(_ sender: Any?) {
-        FormatCommands.toggleBold(textView)
+        performFormatting { FormatCommands.toggleBold($0) }
     }
 
     @objc func toggleItalic(_ sender: Any?) {
-        FormatCommands.toggleItalic(textView)
+        performFormatting { FormatCommands.toggleItalic($0) }
     }
 
     @objc func toggleInlineCode(_ sender: Any?) {
-        FormatCommands.toggleInlineCode(textView)
+        performFormatting { FormatCommands.toggleInlineCode($0) }
     }
 
     @objc func setHeading1(_ sender: Any?) {
-        FormatCommands.setHeading(1, textView: textView)
+        performFormatting { FormatCommands.setHeading(1, textView: $0) }
     }
 
     @objc func setHeading2(_ sender: Any?) {
-        FormatCommands.setHeading(2, textView: textView)
+        performFormatting { FormatCommands.setHeading(2, textView: $0) }
     }
 
     @objc func setHeading3(_ sender: Any?) {
-        FormatCommands.setHeading(3, textView: textView)
+        performFormatting { FormatCommands.setHeading(3, textView: $0) }
     }
 
     @objc func setBodyText(_ sender: Any?) {
-        FormatCommands.setHeading(0, textView: textView)
+        performFormatting { FormatCommands.setHeading(0, textView: $0) }
     }
 
     @objc func toggleUnorderedList(_ sender: Any?) {
-        FormatCommands.toggleUnorderedList(textView)
+        performFormatting { FormatCommands.toggleUnorderedList($0) }
     }
 
     @objc func toggleOrderedList(_ sender: Any?) {
-        FormatCommands.toggleOrderedList(textView)
+        performFormatting { FormatCommands.toggleOrderedList($0) }
     }
 
     @objc func toggleBlockquote(_ sender: Any?) {
-        FormatCommands.toggleBlockquote(textView)
+        performFormatting { FormatCommands.toggleBlockquote($0) }
     }
 
     @objc func insertLink(_ sender: Any?) {
@@ -325,11 +331,18 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
     }
 
     @objc func insertHorizontalRule(_ sender: Any?) {
-        FormatCommands.insertHorizontalRule(textView)
+        performFormatting { FormatCommands.insertHorizontalRule($0) }
     }
 
     /// 툴바 🔍 버튼 → 찾기 바 노출.
     @objc func showFindBar(_ sender: Any?) {
+        if let host = hostWindowController, host.isShowingSource {
+            let proxy = NSMenuItem()
+            proxy.tag = NSTextFinder.Action.showFindInterface.rawValue
+            host.sourcePreview?.textView.performTextFinderAction(proxy)
+            return
+        }
+        if let host = hostWindowController, host.readerVC != nil { host.showPagedFind(); return }
         view.window?.makeFirstResponder(textView)
         let proxy = NSMenuItem()
         proxy.tag = NSTextFinder.Action.showFindInterface.rawValue
@@ -340,7 +353,8 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
 
     /// 툴바 이미지 버튼 → 이미지 선택 → attachments로 복사 → 커서 위치에 삽입.
     @objc func insertImage(_ sender: Any?) {
-        guard let doc = document, let window = view.window else { return }
+        guard hostWindowController?.isShowingSource != true else { return }
+        guard let doc = document, let window = hostWindowController?.window ?? view.window else { return }
         // 미저장 새 문서는 attachments를 둘 폴더(노트 위치)가 없음 → 먼저 저장 유도
         guard doc.fileURL != nil else {
             promptSaveBeforeAttaching(doc, in: window)
@@ -383,11 +397,16 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         do {
             let relPath = try doc.importImage(from: url)
             let alt = url.deletingPathExtension().lastPathComponent
-            textView.insertImageAttachment(
-                relPath: relPath, alt: alt,
-                baseURL: doc.attachmentBaseURL,
-                at: textView.selectedRange().location
-            )
+            guard document === doc else { return }
+            if let host = hostWindowController {
+                host.performDocumentFormatting { text in
+                    (text as? EditorTextView)?.insertImageAttachment(relPath: relPath, alt: alt,
+                        baseURL: doc.attachmentBaseURL, at: text.selectedRange().location)
+                }
+            } else {
+                textView.insertImageAttachment(relPath: relPath, alt: alt, baseURL: doc.attachmentBaseURL,
+                                               at: textView.selectedRange().location)
+            }
         } catch {
             if let window = view.window {
                 presentError(error, modalFor: window, delegate: nil, didPresent: nil, contextInfo: nil)
@@ -406,11 +425,12 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
     /// 선택 범위가 있을 때만 색을 적용한다.
     @objc func changeTextColor(_ sender: Any?) {
         guard let well = sender as? NSColorWell else { return }
-        FormatCommands.applyTextColor(textView, color: well.color)
+        performFormatting { FormatCommands.applyTextColor($0, color: well.color) }
     }
 
     /// 메뉴 > 서식 > 글자 색… — NSColorPanel을 직접 띄운다.
     @objc func showColorPanel(_ sender: Any?) {
+        guard hostWindowController?.isShowingSource != true else { return }
         let panel = NSColorPanel.shared
         panel.setTarget(self)
         panel.setAction(#selector(colorPanelDidChange(_:)))
@@ -418,7 +438,7 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
     }
 
     @objc private func colorPanelDidChange(_ sender: NSColorPanel) {
-        FormatCommands.applyTextColor(textView, color: sender.color)
+        performFormatting { FormatCommands.applyTextColor($0, color: sender.color) }
     }
 
     private func applyLineSpacing(_ multiplier: CGFloat) {
@@ -447,7 +467,10 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
     // MARK: - Link Dialog
 
     private func showLinkDialog() {
-        guard textView.selectedRange().length > 0 else { return }
+        guard hostWindowController?.isShowingSource != true else { return }
+        let selection = hostWindowController?.documentSelection ?? textView.selectedRange()
+        guard selection.length > 0, let window = hostWindowController?.window ?? view.window else { return }
+        let originalDocument = document
 
         let alert = NSAlert()
         alert.messageText = "링크 삽입"
@@ -459,11 +482,14 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         urlField.placeholderString = "https://"
         alert.accessoryView = urlField
 
-        alert.beginSheetModal(for: view.window!) { response in
+        alert.beginSheetModal(for: window) { response in
             guard response == .alertFirstButtonReturn else { return }
             let url = urlField.stringValue.trimmingCharacters(in: .whitespaces)
             guard !url.isEmpty else { return }
-            FormatCommands.insertLink(self.textView, url: url)
+            guard self.document === originalDocument else { return }
+            if let host = self.hostWindowController {
+                host.performDocumentFormatting(selection: selection) { FormatCommands.insertLink($0, url: url) }
+            } else { FormatCommands.insertLink(self.textView, url: url) }
         }
     }
 
@@ -492,6 +518,7 @@ extension EditorViewController: NSTextViewDelegate {
         // 덕분에 조판을 켠 채 저장해도 파일에 읽기용 서체·배율이 눌러앉지 않는다.
         let content: NSAttributedString = isReadingLayout ? ReaderMetrics.unstyled(storage) : storage
         document?.textDidChange(content)
+        hostWindowController?.refreshSourcePreview()
         updateStatusBarCharCount()
     }
 
@@ -499,14 +526,15 @@ extension EditorViewController: NSTextViewDelegate {
         updateToolbarState()
     }
 
-    private func updateToolbarState() {
-        guard let toolbar = view.window?.toolbar as? FormatToolbar else { return }
-        guard let storage = textView.textStorage, storage.length > 0 else {
-            toolbar.updateState(attributes: textView.typingAttributes)
+    func updateToolbarState() {
+        guard let toolbar = (hostWindowController?.window ?? view.window)?.toolbar as? ReaderToolbar else { return }
+        toolbar.updateSelection(hasSelectedText: (hostWindowController?.documentSelection ?? textView.selectedRange()).length > 0)
+        guard let storage = document?.content ?? textView.textStorage, storage.length > 0 else {
+            toolbar.updateState(attributes: [.font: MemoFont.body, .mdBlockType: "body"])
             return
         }
 
-        let sel = textView.selectedRange()
+        let sel = hostWindowController?.documentSelection ?? textView.selectedRange()
 
         // 커서 바로 앞 문자에서 인라인 속성(font/code/link) 읽기
         let readPos: Int
@@ -515,8 +543,7 @@ extension EditorViewController: NSTextViewDelegate {
         } else if sel.location > 0 {
             readPos = sel.location - 1
         } else {
-            toolbar.updateState(attributes: textView.typingAttributes)
-            return
+            readPos = 0
         }
 
         var attrs = storage.attributes(at: readPos, effectiveRange: nil)

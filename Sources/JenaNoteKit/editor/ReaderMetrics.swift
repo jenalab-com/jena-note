@@ -40,8 +40,11 @@ enum ReaderMetrics {
             guard let current = value as? NSFont else { return }
             let origin = (result.attribute(.mdBaseFont, at: range.location, effectiveRange: nil) as? NSFont) ?? current
             let traits = origin.fontDescriptor.symbolicTraits
-            let newFont = readerFont(family: family, size: origin.pointSize * scale,
-                                     traits: traits, weight: weight)
+            let isCode = result.attribute(.mdInlineCode, at: range.location, effectiveRange: nil) as? Bool == true
+                || result.attribute(.mdBlockType, at: range.location, effectiveRange: nil) as? String == "codeblock"
+            let newFont = isCode
+                ? (NSFont(descriptor: origin.fontDescriptor, size: origin.pointSize * scale) ?? origin)
+                : readerFont(family: family, size: origin.pointSize * scale, traits: traits, weight: weight)
             // 원본에 없던 볼드가 조판 과정에서 생겼다면 그건 읽기 굵기지 사용자의 `**볼드**` 가 아니다.
             let addedBold = newFont.fontDescriptor.symbolicTraits.contains(.bold)
                 && !traits.contains(.bold)

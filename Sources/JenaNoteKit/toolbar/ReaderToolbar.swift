@@ -3,8 +3,43 @@ import AppKit
 class ReaderToolbar: NSToolbar {
 
     weak var target: AnyObject?
+    weak var formatTarget: EditorViewController? {
+        didSet { formatItems.target = formatTarget }
+    }
+    private let formatItems = FormatToolbar(identifier: .init("FormatItemFactory"))
+    private var isSourceActive = false
+    private weak var sourceButton: NSButton?
+    private var appearancePopover: NSPopover?
+    private weak var headingControl: NSPopUpButton?
+    private static let itemSource = NSToolbarItem.Identifier("markdownSource")
+    private static let itemAppearance = NSToolbarItem.Identifier("appearance")
+    private static let itemHeading = NSToolbarItem.Identifier("heading")
+    private static let itemLists = NSToolbarItem.Identifier("lists")
+    private static let itemInsert = NSToolbarItem.Identifier("insert")
 
-    private static let itemExit  = NSToolbarItem.Identifier("readerExit")
+    func updateSelection(hasSelectedText: Bool) { formatItems.updateSelection(hasSelectedText: hasSelectedText && !isSourceActive) }
+
+    func setSourceActive(_ active: Bool) {
+        isSourceActive = active
+        sourceButton?.state = active ? .on : .off
+        for item in items {
+            let allowed = [Self.itemSource, Self.itemAI, NSToolbarItem.Identifier("find")].contains(item.itemIdentifier)
+            (item.view as? NSControl)?.isEnabled = !active || allowed
+        }
+        pageModeControl?.setEnabled(!active, forSegment: 0)
+        pageModeControl?.setEnabled(!active && !isAIActive, forSegment: 1)
+        if active { formatItems.updateSelection(hasSelectedText: false) }
+    }
+
+    func updateState(attributes: [NSAttributedString.Key: Any]) {
+        formatItems.updateState(attributes: attributes)
+        let block = attributes[.mdBlockType] as? String ?? "body"
+        let index = ["body", "h1", "h2", "h3"].firstIndex(of: block) ?? 0
+        headingControl?.selectItem(at: index)
+    }
+    var isAIActive = false
+    private static let itemAI = NSToolbarItem.Identifier("aiChat")
+
     private static let itemMode  = NSToolbarItem.Identifier("readerPageMode")
     private static let itemFontFamily = NSToolbarItem.Identifier("readerFontFamily")
     private static let itemFontWeight = NSToolbarItem.Identifier("readerFontWeight")
@@ -24,6 +59,12 @@ class ReaderToolbar: NSToolbar {
     /// 조판이 코드에서 바뀐 경우(페이징 중 타이핑 → 스크롤 전환 등) 세그먼트를 따라 맞춘다.
     func updatePageModeSelection(_ mode: SettingsManager.ReadingPageMode) {
         pageModeControl?.selectedSegment = (mode == .paged) ? 1 : 0
+    }
+
+    func setAIActive(_ active: Bool) {
+        isAIActive = active
+        pageModeControl?.setEnabled(!active && !isSourceActive, forSegment: 1)
+        if active { updatePageModeSelection(.scroll) }
     }
 
     override init(identifier: NSToolbar.Identifier) {
@@ -50,14 +91,10 @@ class ReaderToolbar: NSToolbar {
 extension ReaderToolbar: NSToolbarDelegate {
 
     func toolbarDefaultItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.flexibleSpace, ReaderToolbar.itemExit, .space,
-         ReaderToolbar.itemMode, .space,
-         ReaderToolbar.itemWidth, .space,
-         ReaderToolbar.itemFontFamily, .space,
-         ReaderToolbar.itemFontWeight, .space,
-         ReaderToolbar.itemLineSpacing, .space,
-         ReaderToolbar.itemFontDown, ReaderToolbar.itemFontUp, .space,
-         ReaderToolbar.itemBookmark, ReaderToolbar.itemBookmarkList, .flexibleSpace]
+        [ReaderToolbar.itemMode, ReaderToolbar.itemAppearance, ReaderToolbar.itemSource, .space,
+         ReaderToolbar.itemHeading, .init("bold"), .init("italic"), .init("inlineCode"),
+         ReaderToolbar.itemLists, ReaderToolbar.itemInsert, .init("textColor"), .init("find"),
+         .flexibleSpace, ReaderToolbar.itemBookmark, ReaderToolbar.itemBookmarkList, ReaderToolbar.itemAI]
     }
 
     func toolbarAllowedItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -68,9 +105,55 @@ extension ReaderToolbar: NSToolbarDelegate {
                  itemForItemIdentifier id: NSToolbarItem.Identifier,
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         switch id {
-        case ReaderToolbar.itemExit:
-            return iconItem(id, label: L10n.tr("reader.exit"), symbol: "pencil",
-                            action: #selector(EditorWindowController.exitReadingMode(_:)))
+        case ReaderToolbar.itemSource:
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.label = L10n.tr("source.title")
+            item.toolTip = L10n.tr("source.hint")
+            let button = NSButton(title: item.label, target: target,
+                                  action: #selector(EditorWindowController.showMarkdownSource(_:)))
+            button.toolTip = item.toolTip
+            button.setButtonType(.pushOnPushOff)
+            button.state = isSourceActive ? .on : .off
+            sourceButton = button
+            item.view = button
+            let menu = NSMenuItem(title: item.label, action: button.action, keyEquivalent: "")
+            menu.target = target
+            item.menuFormRepresentation = menu
+            return item
+        case ReaderToolbar.itemAI:
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.visibilityPriority = .high
+            item.label = L10n.tr("ai.title")
+            item.view = NSButton(title: "AI", target: target, action: #selector(EditorWindowController.toggleAI(_:)))
+            item.toolTip = L10n.tr("ai.title")
+            return item
+        case ReaderToolbar.itemAppearance:
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.label = L10n.tr("toolbar.appearance")
+            item.view = NSButton(title: item.label, target: self, action: #selector(showAppearance(_:)))
+            item.toolTip = item.label
+            return item
+        case ReaderToolbar.itemHeading:
+            let item = menuItem(id, label: L10n.tr("menu.format.body"), entries: [
+                (L10n.tr("menu.format.body"), #selector(EditorViewController.setBodyText)),
+                ("H1", #selector(EditorViewController.setHeading1)),
+                ("H2", #selector(EditorViewController.setHeading2)),
+                ("H3", #selector(EditorViewController.setHeading3))
+            ], pullsDown: false)
+            headingControl = item.view as? NSPopUpButton
+            return item
+        case ReaderToolbar.itemLists:
+            return menuItem(id, label: L10n.tr("toolbar.lists"), entries: [
+                (L10n.tr("menu.format.ul"), #selector(EditorViewController.toggleUnorderedList)),
+                (L10n.tr("menu.format.ol"), #selector(EditorViewController.toggleOrderedList)),
+                (L10n.tr("menu.format.quote"), #selector(EditorViewController.toggleBlockquote))
+            ])
+        case ReaderToolbar.itemInsert:
+            return menuItem(id, label: L10n.tr("toolbar.insert"), entries: [
+                (L10n.tr("menu.format.link"), #selector(EditorViewController.insertLink)),
+                (L10n.tr("toolbar.image"), #selector(EditorViewController.insertImage)),
+                (L10n.tr("toolbar.rule"), #selector(EditorViewController.insertHorizontalRule))
+            ])
         case ReaderToolbar.itemBookmark:
             let item = iconItem(id, label: L10n.tr("reader.bookmark.toggle"), symbol: "bookmark",
                                 action: #selector(EditorWindowController.toggleBookmark(_:)))
@@ -99,11 +182,12 @@ extension ReaderToolbar: NSToolbarDelegate {
             seg.heightAnchor.constraint(equalToConstant: 26).isActive = true
             item.view = seg
             pageModeControl = seg
+            setAIActive(isAIActive)
             return item
         case ReaderToolbar.itemWidth:
             return segmentItem(id, label: L10n.tr("reader.width"),
                                labels: [L10n.tr("reader.widthMobile"), L10n.tr("reader.widthBook")],
-                               selected: 1,   // 매 진입 시 기본은 '책' (저장하지 않음)
+                               selected: formatTarget?.readingWidthMode == .mobile ? 0 : 1,
                                action: #selector(EditorWindowController.changeReaderWidth(_:)))
         case ReaderToolbar.itemFontFamily:
             return fontPopUpItem(id)
@@ -128,8 +212,57 @@ extension ReaderToolbar: NSToolbarDelegate {
             return iconItem(id, label: L10n.tr("reader.fontUp"), symbol: "textformat.size.larger",
                             action: #selector(EditorWindowController.increaseReaderFont(_:)))
         default:
-            return nil
+            return formatItems.toolbar(formatItems, itemForItemIdentifier: id, willBeInsertedIntoToolbar: flag)
         }
+    }
+
+    private func menuItem(_ id: NSToolbarItem.Identifier, label: String,
+                          entries: [(String, Selector)], pullsDown: Bool = true) -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: id)
+        item.label = label
+        item.toolTip = label
+        let popup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 70, height: 26), pullsDown: pullsDown)
+        if pullsDown { popup.addItem(withTitle: label) }
+        for (title, action) in entries {
+            popup.addItem(withTitle: title)
+            popup.lastItem?.target = formatTarget
+            popup.lastItem?.action = action
+        }
+        item.view = popup
+        return item
+    }
+
+    @objc private func showAppearance(_ sender: NSButton) {
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 12
+        stack.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        for id in [Self.itemWidth, Self.itemFontFamily, Self.itemFontWeight, Self.itemLineSpacing] {
+            guard let item = toolbar(self, itemForItemIdentifier: id, willBeInsertedIntoToolbar: false),
+                  let control = item.view else { continue }
+            let label = NSTextField(labelWithString: item.label)
+            label.font = .systemFont(ofSize: 12)
+            let row = NSStackView(views: [label, control])
+            row.spacing = 12
+            stack.addArrangedSubview(row)
+        }
+        let zoom = NSStackView()
+        zoom.addArrangedSubview(NSTextField(labelWithString: L10n.tr("toolbar.zoom")))
+        for id in [Self.itemFontDown, Self.itemFontUp] {
+            if let control = toolbar(self, itemForItemIdentifier: id, willBeInsertedIntoToolbar: false)?.view {
+                zoom.addArrangedSubview(control)
+            }
+        }
+        stack.addArrangedSubview(zoom)
+        let controller = NSViewController()
+        controller.view = stack
+        let popover = NSPopover()
+        popover.contentViewController = controller
+        popover.contentSize = NSSize(width: 320, height: 240)
+        popover.behavior = .transient
+        appearancePopover = popover
+        popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
     }
 
     /// 서체 선택 팝업 — 지금 머신에 설치된 서체만 담는다.

@@ -28,53 +28,44 @@ final class PagedHostView: NSView {
     }
 }
 
-/// 페이징 화면의 한 쪽(page)을 그리는 텍스트 뷰.
-///
-/// 읽기 전용이지만 **글자는 고를 수 있다** — 인용을 옮겨 적으려면 선택이 있어야 하니까.
-/// 대신 선택을 켜는 순간 이 뷰가 first responder 를 가져가므로, 예전에 VC 가 받던
-/// 페이지 넘김(←/→)과 "글자를 쳐서 편집으로 갈아타기"를 여기서 직접 위로 흘려보낸다.
+/// 본문 방향키는 NSTextView의 커서 이동에 맡기고 Page Up/Down만 페이지를 넘긴다.
 final class PageTextView: NSTextView {
-    /// ←/→ 를 눌렀다. `next == true` 면 다음 쪽.
     var onPageKey: ((Bool) -> Void)?
-    /// 글자를 치려는 키가 왔다 — 편집 조판으로 갈아탈 신호 (ADR-0009).
-    var onTextInput: ((NSEvent) -> Void)?
+    var onInputFinished: (() -> Void)?
+    var onFind: (() -> Void)?
+
+    override func performTextFinderAction(_ sender: Any?) { onFind?() }
 
     override func keyDown(with event: NSEvent) {
-        switch event.keyCode {
-        case 124: onPageKey?(true);  return   // →
-        case 123: onPageKey?(false); return   // ←
-        default: break
-        }
-        if let handler = onTextInput, ReaderViewController.isTextInput(event) {
-            handler(event)
+        if !hasMarkedText(), event.keyCode == 121 || event.keyCode == 116 {
+            onPageKey?(event.keyCode == 121)
             return
         }
         super.keyDown(with: event)
+        onInputFinished?()
     }
 
-    /// 드래그가 쪽 밖으로 나가도 배경 스크롤뷰를 끌어당기지 않게 한다 —
-    /// 페이지는 고정 크기라 스크롤할 것이 없다.
+    override func unmarkText() {
+        super.unmarkText()
+        onInputFinished?()
+    }
+
+    override func insertText(_ insertString: Any, replacementRange: NSRange) {
+        super.insertText(insertString, replacementRange: replacementRange)
+        onInputFinished?()
+    }
+
     override func autoscroll(with event: NSEvent) -> Bool { false }
 }
 
-/// 페이징 조판 전용 읽기 오버레이. 원본 사본을 받아 한글 35자 컬럼으로 조판하며
-/// 원본은 절대 수정하지 않는다.
-///
-/// ADR-0009 이후 스크롤 조판은 에디터가 직접 입는다(편집 가능). 이 클래스는 **페이징일
-/// 때만** 우측 페인에 올라오는 읽기 전용 화면이고, 여기서 글자를 치면 `onEditRequested`
-/// 로 알려 스크롤 조판으로 갈아타게 한다. 스크롤 경로는 모드 전환 과도기를 위해 남아 있다.
-///
-/// - 페이징: NSLayoutManager 에 페이지마다 NSTextContainer 를 두는 "진짜 페이지네이션".
-///   컨테이너에 안 들어가는 줄은 통째로 다음 페이지로 흐르므로 줄이 잘리지 않는다.
-///   창이 넓으면 좌·우 두 쪽을 나란히 펼친다.
-class ReaderViewController: NSViewController, ReadingPositionProviding {
+/// 편집 가능한 페이징 조판. 원본 서식과 표시 서식을 분리하고 변경 범위만 문서에 전달한다.
+/// 조판은 현재 펼침면을 먼저 계산하며 뒤쪽 페이지는 이벤트 사이에 나눠 계산한다.
+class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewDelegate, ReadingPositionProviding {
 
-    /// 읽기 단(컬럼) 폭 프리셋. 조판 계산과 함께 ReaderMetrics 로 옮겼다
-    /// (에디터도 같은 폭으로 조판해야 하므로). 기존 호출부를 위해 이름은 남긴다.
     typealias WidthMode = ReaderMetrics.WidthMode
 
     // MARK: - State
-    private var sourceContent: NSAttributedString
+    private var sourceContent: NSMutableAttributedString
     private var scale: CGFloat = SettingsManager.shared.readingFontScale
     private var pageMode: SettingsManager.ReadingPageMode = SettingsManager.shared.readingPageMode
     private var fontFamily: SettingsManager.ReadingFont = SettingsManager.shared.readingFont
@@ -90,10 +81,44 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
     private var pagedHost: PagedHostView?
     /// 지금 화면에 얹힌 페이지 뷰들 — 낱쪽이면 1개, 펼침면이면 좌·우 2개.
     private var pageViews: [PageTextView] = []
-    private var pagedStorage: NSTextStorage?
-    private var pagedLM: NSLayoutManager?
-    private var pageContainers: [NSTextContainer] = []
-    private var pageCharRanges: [NSRange] = []
+    private var paginator: IncrementalPaginator?
+    private var pagedStorage: NSTextStorage? { paginator?.storage }
+    private var pageContainers: [NSTextContainer] { paginator?.containers ?? [] }
+    private var pageCharRanges: [NSRange] { paginator?.ranges ?? [] }
+    private var paginationWork: DispatchWorkItem?
+    private var editRefreshWork: DispatchWorkItem?
+    private var isApplyingContent = false
+    private var isRefreshing = false
+    private var hasPendingEdit = false
+    private var deferredRender = false
+    /// 문서 소유 Undo에 전달할 원본 서식의 변경 범위.
+    var onContentEdit: ((NSRange, NSAttributedString) -> Void)?
+    var documentUndoManager: (() -> UndoManager?)?
+    private(set) var isPaginationComplete = false
+    var paginationCalculationCount: Int { paginator?.computedPageCount ?? 0 }
+    weak var formattingTarget: EditorViewController?
+    private var lastSelection: NSRange?
+    var selectedTextRange: NSRange? {
+        if let active = activePageTextView { return active.selectedRange() }
+        if let selection = lastSelection, rangeIsVisible(selection) { return selection }
+        return NSRange(location: visibleCharacterRange.location, length: 0)
+    }
+
+    func selectTextRange(_ range: NSRange) {
+        guard NSMaxRange(range) <= sourceContent.length else { return }
+        paginator?.ensureCharacter(range.location)
+        currentPage = pageIndex(containing: range.location)
+        showCurrentSpread()
+        lastSelection = range
+        selectInVisiblePage(range)
+    }
+
+    func setTypingAttributes(_ attributes: [NSAttributedString.Key: Any]) {
+        activePageTextView?.typingAttributes = attributes
+    }
+
+    var visiblePageTextViews: [PageTextView] { pageViews }
+
     private var currentPage = 0
     private weak var pageIndicator: NSTextField?
     /// 마지막으로 페이지를 나눈 컨테이너 크기(컬럼 폭 × 페이지 높이).
@@ -114,7 +139,7 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
 
     // MARK: - Init
     init(content: NSAttributedString) {
-        self.sourceContent = content
+        self.sourceContent = NSMutableAttributedString(attributedString: content)
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) unused") }
@@ -182,6 +207,11 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
     }
 
     private func renderContent() {
+        if pageViews.contains(where: { $0.hasMarkedText() }) {
+            deferredRender = true
+            return
+        }
+        deferredRender = false
         if let storage = textView.textStorage {
             storage.setAttributedString(styledContent())
         }
@@ -271,7 +301,8 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
     private func applyAnchor() {
         guard view.bounds.height > 0 else { return }
         if pageMode == .paged {
-            guard !pageContainers.isEmpty else { return }
+            paginator?.ensureCharacter(anchorOffset)
+            guard !pageCharRanges.isEmpty else { return }
             currentPage = pageIndex(containing: anchorOffset)
             needsAnchorApply = false
             showCurrentSpread()
@@ -298,8 +329,12 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
     /// 표시할 내용을 교체한다. 문서 전환이면 첫 페이지·맨 위로, 같은 문서의 리로드면
     /// `resetPage: false` 로 읽던 위치를 유지한다(페이지 수가 줄면 클램프).
     func updateContent(_ content: NSAttributedString, resetPage: Bool = true) {
-        sourceContent = content
+        finishComposition()
+        cancelPaginationWork()
+        hasPendingEdit = false
+        sourceContent = NSMutableAttributedString(attributedString: content)
         if resetPage {
+            lastSelection = nil
             currentPage = 0
             anchorOffset = 0        // 문서 전환 — 이전 문서의 위치를 물려주지 않는다
             needsAnchorApply = false
@@ -396,21 +431,24 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
     }
 
     private func removePagedOverlay() {
-        tearDownPageViews()
-        discardPageViews()      // 텍스트 시스템을 놓기 전에 페이지뷰부터 떼어낸다
+        tearDownPageViews()     // 텍스트 시스템을 놓기 전에 페이지뷰부터 떼어낸다
         pagedHost?.removeFromSuperview()
-        pageContainers = []
-        pagedLM = nil
-        pagedStorage = nil
+        cancelPaginationWork()
+        pagedStorage?.delegate = nil
+        paginator = nil
     }
 
-    /// 옛 페이지 뷰를 컨테이너와 끊어낸 뒤 버린다. NSTextContainer 의 textView 역참조는
-    /// zeroing weak 이 아니라서, 뷰만 죽고 컨테이너가 layout manager 에 남으면 살아 있는
-    /// 형제 뷰의 ruler·responder 경로가 죽은 뷰를 메시징한다 (2026-08-10 크래시).
-    /// 포커스도 뷰가 살아 있는 지금 회수한다 — resign 이 해제 뒤로 미뤄지지 않게.
+    /// 페이지 뷰를 버리는 화면 경로가 공통으로 쓰는 문
+    /// (`showCurrentSpread`·`rebuildPages`·`removePagedOverlay`).
+    ///
+    /// 포커스를 **뷰가 살아 있는 지금** 회수한 뒤 떼어낸다 — resign 이 해제 뒤로 미뤄지면
+    /// 죽은 뷰를 메시징하게 된다 (2026-08-10 크래시).
     private func tearDownPageViews() {
         guard !pageViews.isEmpty else { return }
         if readerHasFocus() { view.window?.makeFirstResponder(self) }
+        discardPageViews()
+    }
+
     /// 페이지뷰를 화면에서 걷어내고 **텍스트 시스템에서 떼어낸다.**
     ///
     /// NSLayoutManager 는 자기 텍스트뷰를 비소유(`assign`) 포인터로 기억한다
@@ -422,6 +460,7 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
     ///
     /// 컨테이너의 `textView` 를 비우면 AppKit 이 레이아웃 매니저의 캐시까지 같이 정리한다.
     /// 컨테이너가 살아 있는 동안 불러야 하므로, 조판을 새로 짜기 **전에** 부른다.
+    /// 포커스는 건드리지 않으므로 `deinit` 에서도 안전하다.
     private func discardPageViews() {
         for tv in pageViews {
             tv.removeFromSuperview()
@@ -438,56 +477,76 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
                       height: max(1, host.bounds.height - 2 * pageVMargin))
     }
 
-    /// 페이지마다 NSTextContainer 를 추가해 전체 텍스트를 페이지로 나눈다.
+    /// 표시 설정이 바뀔 때만 조판 네트워크를 교체한다. 타이핑은 기존 네트워크를 쓴다.
     private func rebuildPages() {
-        guard pagedHost != nil else { return }
-        // 옛 조판 네트워크(storage·LM·컨테이너)를 갈아끼우기 전에 뷰부터 끊는다 —
-        // 뷰가 죽은 네트워크를 물고 남는 순간을 만들지 않는다.
-        tearDownPageViews()
-        let size = pageBoxSize()
-
-        // 옛 컨테이너·레이아웃 매니저가 살아 있는 지금 페이지뷰를 떼어낸다. 새 조판으로
-        // 갈아끼운 뒤에는 옛 컨테이너가 이미 해제돼 있어 떼어낼 방법이 없다.
-        let hadFocus = readerHasFocus()
-        discardPageViews()
-
-        let storage = NSTextStorage(attributedString: styledContent())
-        let lm = NSLayoutManager()
-        storage.addLayoutManager(lm)
-
-        var containers: [NSTextContainer] = []
-        var charRanges: [NSRange] = []
-        while true {
-            let c = NSTextContainer(size: size)
-            c.lineFragmentPadding = 0
-            lm.addTextContainer(c)
-            containers.append(c)
-            lm.ensureLayout(for: c)
-            let laid = lm.glyphRange(for: c)
-            charRanges.append(lm.characterRange(forGlyphRange: laid, actualGlyphRange: nil))
-            if NSMaxRange(laid) >= lm.numberOfGlyphs { break }
-            if containers.count >= 9999 { break }   // 안전장치
+        guard let host = pagedHost, host.bounds.height > 2 * pageVMargin,
+              host.bounds.width > 0 else { return }
+        if pageViews.contains(where: { $0.hasMarkedText() }) {
+            deferredRender = true
+            return
         }
-
-        pagedStorage = storage
-        pagedLM = lm
-        pageContainers = containers
-        pageCharRanges = charRanges
-        lastPageBoxSize = size
-        // 페이지 경계가 새로 잡혔으므로 페이지 번호가 아니라 앵커에서 다시 찾는다.
-        // 폰트·행간·폭을 바꿔도 읽던 문장이 화면에 남는 이유다.
-        currentPage = min(max(0, pageIndex(containing: anchorOffset)), max(0, containers.count - 1))
+        cancelPaginationWork()
+        let hadFocus = readerHasFocus()
+        let selection = activePageTextView?.selectedRange()
+        tearDownPageViews()
+        pagedStorage?.delegate = nil
+        let storage = NSTextStorage(attributedString: styledContent())
+        paginator = IncrementalPaginator(storage: storage, pageSize: pageBoxSize())
+        let targetOffset = hadFocus ? (selection?.location ?? anchorOffset) : anchorOffset
+        paginator?.ensureCharacter(targetOffset)
+        currentPage = pageIndex(containing: targetOffset)
+        updateSpreadState()
+        ensureVisiblePages()
+        storage.delegate = self
+        lastPageBoxSize = pageBoxSize()
         needsAnchorApply = false
-        showCurrentSpread()
-        // 방금 페이지뷰를 떼어냈으므로 포커스는 창으로 돌아가 있다 — 떼기 전에 봐 둔 값을 넘긴다.
         showCurrentSpread(restoringFocus: hadFocus)
+        if let selection = selection, NSMaxRange(selection) <= storage.length, hadFocus {
+            selectInVisiblePage(selection)
+        }
+        schedulePagination()
     }
 
-    /// 주어진 문자 오프셋이 속한 페이지 인덱스.
     private func pageIndex(containing offset: Int) -> Int {
-        guard !pageCharRanges.isEmpty else { return 0 }
-        for (i, r) in pageCharRanges.enumerated() where offset < NSMaxRange(r) { return i }
-        return pageCharRanges.count - 1
+        paginator?.pageIndex(containing: offset) ?? 0
+    }
+
+    private func ensureVisiblePages() {
+        paginator?.ensurePage(currentPage + (isSpread ? 1 : 0))
+        currentPage = min(currentPage, max(0, pageCharRanges.count - 1))
+        isPaginationComplete = paginator?.isComplete ?? true
+    }
+
+    private func cancelPaginationWork() {
+        paginationWork?.cancel()
+        paginationWork = nil
+        editRefreshWork?.cancel()
+        editRefreshWork = nil
+    }
+
+    private func schedulePagination(after delay: TimeInterval = 0.03) {
+        paginationWork?.cancel()
+        guard let paginator = paginator, !paginator.isComplete, !paginator.isBlocked else {
+            isPaginationComplete = paginator?.isComplete ?? true
+            updatePageIndicator()
+            return
+        }
+        isPaginationComplete = false
+        let work = DispatchWorkItem { [weak self, weak paginator] in
+            guard let self = self, let paginator = paginator, self.paginator === paginator else { return }
+            if self.pageViews.contains(where: { $0.hasMarkedText() }) {
+                self.schedulePagination(after: 0.1)
+                return
+            }
+            paginator.advance(maxPages: 2)
+            self.isPaginationComplete = paginator.isComplete
+            self.updatePageIndicator()
+            // 새 다음 페이지가 계산됐을 때 필요한 표시 뷰만 추가한다.
+            self.showCurrentSpread()
+            self.schedulePagination()
+        }
+        paginationWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     /// 지금 창 폭에서 펼침면이 가능한지 다시 판정한다. 창 폭에서 파생될 뿐이라
@@ -502,62 +561,255 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
     /// 지금 화면에 얹을 페이지 인덱스 — 낱쪽이면 1개, 펼침면이면 좌·우 2개.
     /// 마지막이 홀수 장이면 오른쪽 면은 비운다.
     private func visiblePageIndices() -> [Int] {
-        guard currentPage >= 0, currentPage < pageContainers.count else { return [] }
-        guard isSpread, currentPage + 1 < pageContainers.count else { return [currentPage] }
+        guard currentPage >= 0, currentPage < pageCharRanges.count else { return [] }
+        guard isSpread, currentPage + 1 < pageCharRanges.count else { return [currentPage] }
         return [currentPage, currentPage + 1]
     }
 
     /// 현재 펼침면(또는 낱쪽)을 호스트 가운데에 배치한다.
-    private func showCurrentSpread() {
     ///
     /// `restoringFocus` 는 "리더가 포커스를 쥐고 있었는가" — 호출자가 이미 페이지뷰를
     /// 떼어낸 뒤라면(rebuildPages) 여기서는 되읽을 수 없으므로 넘겨받는다.
     private func showCurrentSpread(restoringFocus: Bool? = nil) {
-        // 페이지 뷰를 갈아끼우면 그 뷰가 쥐고 있던 키보드 포커스가 사라진다. 리더가
-        // 쥐고 있던 포커스면 새 뷰에 다시 넘겨주고, 사이드바처럼 밖에 있었으면 뺏지 않는다.
-        let hadFocus = readerHasFocus()
-        tearDownPageViews()
+        guard !isRefreshing, let host = pagedHost else { return }
+        // 입력기가 사용하는 뷰를 교체하면 조합 중인 글자가 유실된다.
+        guard !pageViews.contains(where: { $0.hasMarkedText() }) else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
         let hadFocus = restoringFocus ?? readerHasFocus()
-        discardPageViews()
-        guard let host = pagedHost, currentPage < pageContainers.count else { return }
-
+        let oldSelection = activePageTextView?.selectedRange()
         updateSpreadState()
-        // 펼침면의 왼쪽은 항상 짝수 쪽 — 책처럼 짝을 고정해 넘길 때 짝이 밀리지 않는다.
         if isSpread { currentPage = ReaderMetrics.spreadStart(page: currentPage) }
-
+        ensureVisiblePages()
         let indices = visiblePageIndices()
         guard !indices.isEmpty else { return }
-        let box = pageBoxSize()
-        let gutter = ReaderMetrics.spreadGutter
-        let totalW = CGFloat(indices.count) * box.width + CGFloat(indices.count - 1) * gutter
-        var x = max(0, (host.bounds.width - totalW) / 2)
-
-        for index in indices {
-            let tv = PageTextView(frame: NSRect(x: x, y: pageVMargin, width: box.width, height: box.height),
-                                  textContainer: pageContainers[index])
-            tv.isEditable = false
-            tv.isSelectable = true        // 읽으면서 인용을 고를 수 있어야 한다
-            tv.drawsBackground = false
-            // 자(ruler)는 이 앱에 없다(에디터도 같은 설정). 겸해서 포커스가 옮겨갈 때마다
-            // 텍스트 시스템을 훑는 updateRuler 경로를 닫아 둔다.
-            tv.usesRuler = false
-            tv.onPageKey = { [weak self] next in
-                if next { self?.goToNextPage() } else { self?.goToPreviousPage() }
-            }
-            tv.onTextInput = { [weak self] event in
-                guard let self = self else { return }
-                self.onEditRequested?(self.editingOffset(), event)
-            }
-            host.addSubview(tv, positioned: .below, relativeTo: pageIndicator)
-            pageViews.append(tv)
-            x += box.width + gutter
+        let desired = indices.map { pageContainers[$0] }
+        let removed = pageViews.filter { tv in !desired.contains { $0 === tv.textContainer } }
+        if removed.contains(where: { $0 === view.window?.firstResponder }) {
+            view.window?.makeFirstResponder(self)
         }
-        if hadFocus { focusPage() }
-
+        for tv in removed {
+            tv.delegate = nil
+            tv.removeFromSuperview()
+            tv.textContainer?.textView = nil
+        }
+        let retained = pageViews.filter { tv in desired.contains { $0 === tv.textContainer } }
+        let box = pageBoxSize()
+        let totalW = CGFloat(indices.count) * box.width + CGFloat(indices.count - 1) * ReaderMetrics.spreadGutter
+        var x = max(0, (host.bounds.width - totalW) / 2)
+        pageViews = indices.map { index in
+            let container = pageContainers[index]
+            let tv = retained.first { $0.textContainer === container }
+                ?? makePageTextView(container: container)
+            tv.frame = NSRect(x: x, y: pageVMargin, width: box.width, height: box.height)
+            if tv.superview == nil { host.addSubview(tv, positioned: .below, relativeTo: pageIndicator) }
+            x += box.width + ReaderMetrics.spreadGutter
+            return tv
+        }
+        if hadFocus, !pageViews.contains(where: { $0 === view.window?.firstResponder }) {
+            if let selection = oldSelection, rangeIsVisible(selection) {
+                selectInVisiblePage(selection)
+            } else {
+                focusPage()
+                pageViews.first?.setSelectedRange(NSRange(location: pagedOffset(), length: 0))
+            }
+        }
         captureAnchor()
         updatePageIndicator()
         NotificationCenter.default.post(name: .readerPageChanged, object: self)
     }
+
+    private func makePageTextView(container: NSTextContainer) -> PageTextView {
+        let tv = PageTextView(frame: NSRect(origin: .zero, size: pageBoxSize()), textContainer: container)
+        tv.isEditable = true
+        tv.isSelectable = true
+        tv.isRichText = true
+        // Undo actions target the document, never a transient page NSTextView.
+        tv.allowsUndo = false
+        tv.drawsBackground = false
+        tv.usesRuler = false
+        tv.isAutomaticQuoteSubstitutionEnabled = false
+        tv.isAutomaticDashSubstitutionEnabled = false
+        tv.textContainerInset = .zero
+        tv.isVerticallyResizable = false
+        tv.isHorizontallyResizable = false
+        tv.delegate = self
+        tv.onPageKey = { [weak self] next in
+            if next { self?.goToNextPage() } else { self?.goToPreviousPage() }
+        }
+        tv.onFind = { [weak self] in self?.formattingTarget?.showFindBar(nil) }
+        tv.onInputFinished = { [weak self] in self?.scheduleEditRefresh() }
+        syncTypingAttributes(tv)
+        return tv
+    }
+
+    private var activePageTextView: PageTextView? {
+        guard let focused = view.window?.firstResponder as? PageTextView,
+              pageViews.contains(where: { $0 === focused }) else { return nil }
+        return focused
+    }
+
+    private func rangeIsVisible(_ range: NSRange) -> Bool {
+        let visible = visibleCharacterRange
+        return range.location >= visible.location && range.location <= NSMaxRange(visible)
+    }
+
+    private func selectInVisiblePage(_ range: NSRange) {
+        let index = pageIndex(containing: range.location)
+        guard index < pageContainers.count else { return }
+        let target = pageViews.first { $0.textContainer === pageContainers[index] } ?? pageViews.first
+        target?.setSelectedRange(range)
+        if let target = target { view.window?.makeFirstResponder(target) }
+    }
+
+    private func syncTypingAttributes(_ tv: NSTextView) {
+        var attrs: [NSAttributedString.Key: Any]
+        if let storage = pagedStorage, storage.length > 0 {
+            let selection = tv.selectedRange()
+            let position = selection.length > 0 ? selection.location : selection.location - 1
+            let offset = min(max(0, position), storage.length - 1)
+            attrs = storage.attributes(at: offset, effectiveRange: nil)
+        } else {
+            let base = NSAttributedString(string: " ", attributes: [
+                .font: MemoFont.body, .foregroundColor: NSColor.labelColor,
+                .mdBlockType: "body", .paragraphStyle: FormatCommands.bodyParagraphStyle()
+            ])
+            attrs = ReaderMetrics.styled(base, scale: scale, font: fontFamily,
+                                        lineHeightMultiple: lineSpacing, weight: fontWeight)
+                .attributes(at: 0, effectiveRange: nil)
+        }
+        // Keep original paragraph attributes: new text inherits its actual paragraph's style.
+        tv.typingAttributes = attrs
+    }
+
+    // MARK: - Incremental editing
+
+    func textStorage(_ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorageEditActions,
+                     range editedRange: NSRange, changeInLength delta: Int) {
+        guard !isApplyingContent, textStorage === pagedStorage,
+              editedRange.location != NSNotFound else { return }
+        let oldRange = NSRange(location: editedRange.location, length: editedRange.length - delta)
+        guard oldRange.length >= 0, NSMaxRange(oldRange) <= sourceContent.length,
+              NSMaxRange(editedRange) <= textStorage.length else { return }
+        let replacement = ReaderMetrics.unstyled(textStorage.attributedSubstring(from: editedRange))
+        let changed = !sourceContent.attributedSubstring(from: oldRange).isEqual(to: replacement)
+        guard changed || editedMask.contains(.editedCharacters) else { return }
+        sourceContent.replaceCharacters(in: oldRange, with: replacement)
+        anchorOffset = ReadingAnchor.offsetAfterEdit(anchorOffset, range: oldRange,
+                                                     replacementLength: replacement.length)
+        paginator?.invalidate(editedRange: editedRange)
+        hasPendingEdit = true
+        isPaginationComplete = false
+        paginationWork?.cancel()
+        if changed { onContentEdit?(oldRange, replacement) }
+        // Layout is forbidden during NSTextStorage's editing transaction.
+        scheduleEditRefresh()
+    }
+
+    func textDidChange(_ notification: Notification) {
+        scheduleEditRefresh()
+    }
+
+    func textViewDidChangeSelection(_ notification: Notification) {
+        guard !isRefreshing, let tv = notification.object as? PageTextView else { return }
+        lastSelection = tv.selectedRange()
+        if !tv.hasMarkedText() { syncTypingAttributes(tv) }
+        formattingTarget?.updateToolbarState()
+        scheduleEditRefresh()
+    }
+
+    func undoManager(for view: NSTextView) -> UndoManager? { documentUndoManager?() }
+
+    func finishComposition() {
+        isApplyingContent = true
+        for tv in pageViews where tv.hasMarkedText() {
+            tv.unmarkText()
+            tv.inputContext?.discardMarkedText()
+        }
+        isApplyingContent = false
+    }
+
+    @objc func undo() {
+        finishComposition()
+        documentUndoManager?()?.undo()
+    }
+
+    @objc func redo() {
+        finishComposition()
+        documentUndoManager?()?.redo()
+    }
+
+    /// Undo/Redo from the document uses the same persistent TextKit network.
+    func applyDocumentEdit(in range: NSRange, replacement: NSAttributedString) {
+        guard NSMaxRange(range) <= sourceContent.length, let storage = pagedStorage else { return }
+        finishComposition()
+        sourceContent.replaceCharacters(in: range, with: replacement)
+        let styled = ReaderMetrics.styled(replacement, scale: scale, font: fontFamily,
+                                         lineHeightMultiple: lineSpacing, weight: fontWeight,
+                                         maxImageWidth: columnWidthForCurrentSettings())
+        isApplyingContent = true
+        storage.replaceCharacters(in: range, with: styled)
+        isApplyingContent = false
+        paginator?.invalidate(editedRange: NSRange(location: range.location, length: replacement.length))
+        anchorOffset = min(range.location, sourceContent.length)
+        hasPendingEdit = true
+        paginator?.ensureCharacter(range.location + replacement.length)
+        currentPage = pageIndex(containing: range.location + replacement.length)
+        showCurrentSpread()
+        selectInVisiblePage(NSRange(location: range.location + replacement.length, length: 0))
+        scheduleEditRefresh()
+    }
+
+    private func scheduleEditRefresh() {
+        guard !isRefreshing, pageMode == .paged else { return }
+        editRefreshWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.refreshAfterEditing() }
+        editRefreshWork = work
+        DispatchQueue.main.async(execute: work)
+    }
+
+    private func refreshAfterEditing() {
+        guard let paginator = paginator else { return }
+        if pageViews.contains(where: { $0.hasMarkedText() }) {
+            updatePageIndicator()
+            return
+        }
+        if deferredRender { renderContent(); return }
+        let selection = activePageTextView?.selectedRange()
+        if let selection = selection {
+            paginator.ensureCharacter(selection.location)
+            currentPage = paginator.pageIndex(containing: selection.location)
+        }
+        ensureVisiblePages()
+        showCurrentSpread()
+        if let selection = selection {
+            let index = pageIndex(containing: selection.location)
+            if index < pageContainers.count, activePageTextView?.textContainer !== pageContainers[index] {
+                selectInVisiblePage(selection)
+            }
+        }
+        if hasPendingEdit {
+            hasPendingEdit = false
+            schedulePositionChange()
+            schedulePagination(after: 0.25)
+        }
+    }
+
+    @objc func toggleBold(_ sender: Any?) { formattingTarget?.toggleBold(sender) }
+    @objc func toggleItalic(_ sender: Any?) { formattingTarget?.toggleItalic(sender) }
+    @objc func toggleInlineCode(_ sender: Any?) { formattingTarget?.toggleInlineCode(sender) }
+    @objc func setHeading1(_ sender: Any?) { formattingTarget?.setHeading1(sender) }
+    @objc func setHeading2(_ sender: Any?) { formattingTarget?.setHeading2(sender) }
+    @objc func setHeading3(_ sender: Any?) { formattingTarget?.setHeading3(sender) }
+    @objc func setBodyText(_ sender: Any?) { formattingTarget?.setBodyText(sender) }
+    @objc func toggleUnorderedList(_ sender: Any?) { formattingTarget?.toggleUnorderedList(sender) }
+    @objc func toggleOrderedList(_ sender: Any?) { formattingTarget?.toggleOrderedList(sender) }
+    @objc func toggleBlockquote(_ sender: Any?) { formattingTarget?.toggleBlockquote(sender) }
+    @objc func insertLink(_ sender: Any?) { formattingTarget?.insertLink(sender) }
+    @objc func insertImage(_ sender: Any?) { formattingTarget?.insertImage(sender) }
+    @objc func insertHorizontalRule(_ sender: Any?) { formattingTarget?.insertHorizontalRule(sender) }
+    @objc func showColorPanel(_ sender: Any?) { formattingTarget?.showColorPanel(sender) }
+    @objc func showFindBar(_ sender: Any?) { formattingTarget?.showFindBar(sender) }
 
     // MARK: - Focus
 
@@ -576,20 +828,22 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
     }
 
     var pageInfo: (current: Int, total: Int) {
-        (currentPage + 1, max(1, pageContainers.count))
+        (currentPage + 1, max(1, pageCharRanges.count))
     }
 
     /// 한 번에 넘길 쪽 수 — 펼침면이면 두 쪽씩.
     private var pageStep: Int { isSpread ? 2 : 1 }
 
     func goToNextPage() {
-        guard currentPage + pageStep < pageContainers.count else { return }
+        guard !pageViews.contains(where: { $0.hasMarkedText() }) else { return }
+        paginator?.ensurePage(currentPage + pageStep)
+        guard currentPage + pageStep < pageCharRanges.count else { return }
         currentPage += pageStep
         showCurrentSpread()
     }
 
     func goToPreviousPage() {
-        guard currentPage > 0 else { return }
+        guard currentPage > 0, !pageViews.contains(where: { $0.hasMarkedText() }) else { return }
         currentPage = max(0, currentPage - pageStep)
         showCurrentSpread()
     }
@@ -598,7 +852,10 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
     @objc private func updatePageIndicator() {
         guard pageMode == .paged else { pageIndicator?.isHidden = true; return }
         pageIndicator?.isHidden = false
-        let total = max(1, pageContainers.count)
+        let blocked = paginator?.isBlocked == true
+        let total = blocked ? "!" : (isPaginationComplete ? String(max(1, pageCharRanges.count)) : "…")
+        pageIndicator?.toolTip = blocked ? L10n.tr("reader.layoutUnavailable")
+            : (isPaginationComplete ? nil : L10n.tr("reader.paginating"))
         let indices = visiblePageIndices()
         if indices.count == 2 {
             pageIndicator?.stringValue = "‹ \(indices[0] + 1)–\(indices[1] + 1) / \(total) ›"
@@ -610,6 +867,8 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
     deinit {
         NotificationCenter.default.removeObserver(self)
         positionSaveTimer?.invalidate()
+        cancelPaginationWork()
+        pagedStorage?.delegate = nil
         // 리더가 통째로 사라질 때도 텍스트 시스템과의 연결은 손으로 끊어 준다 —
         // 페이지뷰가 오토릴리스 풀에 잠깐 더 살아남아도 죽은 컨테이너를 짚지 않도록.
         discardPageViews()
@@ -617,52 +876,15 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
 
     // MARK: - Keyboard Paging
 
-    /// 페이징 화면에서 글자를 치려는 신호가 왔을 때 알린다. 페이징은 읽기 전용이므로
-    /// 호출자가 스크롤 조판으로 갈아타 그 자리에서 이어 쓰게 한다 (ADR-0009).
-    /// 방아쇠가 된 이벤트를 함께 넘겨 전환 후 첫 글자를 잃지 않게 한다.
-    var onEditRequested: ((Int, NSEvent?) -> Void)?
-
-    /// 편집으로 갈아탈 때 커서를 놓을 자리. 보고 있는 쪽 안에 캐럿(또는 선택 시작점)이
-    /// 있으면 그 자리를 쓴다 — 글자를 골라둔 데서 이어 쓰게 된다. 아직 아무 데도 안
-    /// 짚었다면 쪽 첫 글자로 물러난다(선택 기본값 0 이 문서 맨 앞으로 튀지 않도록).
-    private func editingOffset() -> Int {
-        let visible = visibleCharacterRange
-        for tv in pageViews {
-            let sel = tv.selectedRange()
-            guard sel.location != NSNotFound else { continue }
-            if NSLocationInRange(sel.location, visible) || sel.location == NSMaxRange(visible) {
-                return sel.location
-            }
-        }
-        return currentCharacterOffset
-    }
-
     override func keyDown(with event: NSEvent) {
         guard pageMode == .paged else { super.keyDown(with: event); return }
         switch event.keyCode {
-        case 124: goToNextPage()      // →
-        case 123: goToPreviousPage()  // ←
+        case 121: goToNextPage()
+        case 116: goToPreviousPage()
         default:
-            if let handler = onEditRequested, ReaderViewController.isTextInput(event) {
-                handler(editingOffset(), event)
-                return
-            }
-            super.keyDown(with: event)
+            focusPage()
+            pageViews.first?.keyDown(with: event)
         }
-    }
-
-    /// 글자를 입력하려는 키인지 — 단축키(⌘·⌃)와 방향키·기능키는 제외한다.
-    static func isTextInput(_ event: NSEvent) -> Bool {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        if flags.contains(.command) || flags.contains(.control) { return false }
-        guard let chars = event.charactersIgnoringModifiers, let scalar = chars.unicodeScalars.first else {
-            return false
-        }
-        // 방향키·F키 등은 유니코드 사용자 영역에 실려 온다.
-        if (0xF700...0xF8FF).contains(scalar.value) { return false }
-        // 탈출·삭제 같은 제어 문자는 입력으로 보지 않는다 (단, 줄바꿈·탭은 입력).
-        if scalar.value == 0x1B || scalar.value == 0x7F { return false }
-        return true
     }
 
     override var acceptsFirstResponder: Bool { true }
@@ -689,6 +911,7 @@ class ReaderViewController: NSViewController, ReadingPositionProviding {
 
     override func viewDidAppear() {
         super.viewDidAppear()
+        guard paginator == nil else { return }
         view.window?.makeFirstResponder(self)
         // 이 오버레이는 페이징 조판 전용이다 — 스크롤 조판은 에디터가 직접 그린다 (ADR-0009).
         setPageMode(.paged)

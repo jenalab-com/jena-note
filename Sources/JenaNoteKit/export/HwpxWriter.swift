@@ -336,17 +336,20 @@ enum HwpxWriter {
     }
 
     private static func contentHpf() -> Data {
-        Data(("\(xmlDecl)<opf:package "
-            + "xmlns:opf=\"http://www.idpf.org/2007/opf/\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" "
-            + "version=\"\" unique-identifier=\"\" id=\"\">"
-            + "<opf:metadata><opf:title>Jena Note</opf:title><opf:language>ko</opf:language></opf:metadata>"
-            + "<opf:manifest>"
-            + "<opf:item id=\"header\" href=\"Contents/header.xml\" media-type=\"application/xml\"/>"
-            + "<opf:item id=\"section0\" href=\"Contents/section0.xml\" media-type=\"application/xml\"/>"
-            + "<opf:item id=\"settings\" href=\"settings.xml\" media-type=\"application/xml\"/>"
-            + "</opf:manifest>"
-            + "<opf:spine><opf:itemref idref=\"header\" linear=\"yes\"/><opf:itemref idref=\"section0\" linear=\"yes\"/></opf:spine>"
-            + "</opf:package>").utf8)
+        let parts: [String] = [
+            "\(xmlDecl)<opf:package ",
+            "xmlns:opf=\"http://www.idpf.org/2007/opf/\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" ",
+            "version=\"\" unique-identifier=\"\" id=\"\">",
+            "<opf:metadata><opf:title>Jena Note</opf:title><opf:language>ko</opf:language></opf:metadata>",
+            "<opf:manifest>",
+            "<opf:item id=\"header\" href=\"Contents/header.xml\" media-type=\"application/xml\"/>",
+            "<opf:item id=\"section0\" href=\"Contents/section0.xml\" media-type=\"application/xml\"/>",
+            "<opf:item id=\"settings\" href=\"settings.xml\" media-type=\"application/xml\"/>",
+            "</opf:manifest>",
+            "<opf:spine><opf:itemref idref=\"header\" linear=\"yes\"/><opf:itemref idref=\"section0\" linear=\"yes\"/></opf:spine>",
+            "</opf:package>"
+        ]
+        return Data(parts.joined().utf8)
     }
 
     private static func settingsXML() -> Data {

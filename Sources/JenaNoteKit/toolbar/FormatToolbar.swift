@@ -3,6 +3,8 @@ import AppKit
 class FormatToolbar: NSToolbar {
 
     weak var target: AnyObject?
+    weak var aiTarget: AnyObject?
+    private static let itemAI = NSToolbarItem.Identifier("aiChat")
 
     private static let itemBold         = NSToolbarItem.Identifier("bold")
     private static let itemItalic       = NSToolbarItem.Identifier("italic")
@@ -20,7 +22,6 @@ class FormatToolbar: NSToolbar {
     private static let itemColor         = NSToolbarItem.Identifier("textColor")
     private static let itemLineSpacing   = NSToolbarItem.Identifier("lineSpacing")
     private static let itemFind          = NSToolbarItem.Identifier("find")
-    private static let itemReadingMode   = NSToolbarItem.Identifier("readingMode")
 
     // 상태 표시용 버튼 참조
     private weak var boldButton: NSButton?
@@ -41,6 +42,12 @@ class FormatToolbar: NSToolbar {
         displayMode = .iconOnly
         allowsUserCustomization = false
         autosavesConfiguration = false
+    }
+
+    private var hasSelectedText = false
+    func updateSelection(hasSelectedText: Bool) {
+        self.hasSelectedText = hasSelectedText
+        codeButton?.isEnabled = hasSelectedText
     }
 
     // MARK: - State Update
@@ -94,7 +101,7 @@ extension FormatToolbar: NSToolbarDelegate {
             FormatToolbar.itemLineSpacing,
             .space,
             FormatToolbar.itemFind,
-            FormatToolbar.itemReadingMode,
+            FormatToolbar.itemAI,
             .flexibleSpace
         ]
     }
@@ -108,6 +115,13 @@ extension FormatToolbar: NSToolbarDelegate {
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
 
         switch itemIdentifier {
+        case FormatToolbar.itemAI:
+            let item = NSToolbarItem(itemIdentifier: itemIdentifier)
+            item.visibilityPriority = .high
+            item.label = L10n.tr("ai.title")
+            item.view = NSButton(title: "AI", target: aiTarget, action: #selector(EditorWindowController.toggleAI(_:)))
+            item.toolTip = L10n.tr("ai.title")
+            return item
         case FormatToolbar.itemBold:
             let item = makeItem(itemIdentifier, label: "굵게", systemImage: "bold",
                                 action: #selector(EditorViewController.toggleBold))
@@ -117,9 +131,15 @@ extension FormatToolbar: NSToolbarDelegate {
                                 action: #selector(EditorViewController.toggleItalic))
             italicButton = item.view as? NSButton; return item
         case FormatToolbar.itemCode:
-            let item = makeItem(itemIdentifier, label: "코드", systemImage: "chevron.left.forwardslash.chevron.right",
-                                action: #selector(EditorViewController.toggleInlineCode))
-            codeButton = item.view as? NSButton; return item
+            let item = makeTextItem(itemIdentifier, label: L10n.tr("toolbar.inlineCode"), text: L10n.tr("toolbar.inlineCode"),
+                                    action: #selector(EditorViewController.toggleInlineCode))
+            item.toolTip = L10n.tr("toolbar.inlineCodeHint")
+            codeButton = item.view as? NSButton
+            codeButton?.toolTip = item.toolTip
+            codeButton?.setAccessibilityLabel(item.label)
+            codeButton?.isEnabled = hasSelectedText
+            codeButton?.sizeToFit()
+            return item
         case FormatToolbar.itemH1:
             let item = makeTextItem(itemIdentifier, label: "H1", text: "H1",
                                     action: #selector(EditorViewController.setHeading1))
@@ -168,9 +188,6 @@ extension FormatToolbar: NSToolbarDelegate {
             // 찾기 버튼은 토글 상태가 없다 — 눌림 상태가 남지 않게 momentary로
             (item.view as? NSButton)?.setButtonType(.momentaryPushIn)
             return item
-        case FormatToolbar.itemReadingMode:
-            return makeItem(itemIdentifier, label: L10n.tr("menu.view.readingMode"), systemImage: "book",
-                            action: #selector(EditorWindowController.toggleReadingMode(_:)))
         default:
             return nil
         }
@@ -197,7 +214,7 @@ extension FormatToolbar: NSToolbarDelegate {
         button.isBordered = true
         button.setButtonType(.pushOnPushOff)
         button.action = action
-        button.target = nil
+        button.target = target
         item.view = button
         return item
     }
@@ -217,7 +234,7 @@ extension FormatToolbar: NSToolbarDelegate {
         button.isBordered = true
         button.setButtonType(.pushOnPushOff)
         button.action = action
-        button.target = nil
+        button.target = target
         item.view = button
         return item
     }

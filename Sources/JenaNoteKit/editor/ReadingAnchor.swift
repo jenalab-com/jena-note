@@ -46,6 +46,12 @@ struct ReadingAnchor: Codable, Equatable {
 
     // MARK: - Resolution
 
+    static func offsetAfterEdit(_ offset: Int, range: NSRange, replacementLength: Int) -> Int {
+        if offset < range.location { return offset }
+        if offset >= NSMaxRange(range) { return offset + replacementLength - range.length }
+        return range.location + min(offset - range.location, replacementLength)
+    }
+
     /// 현재 문서에서 이 앵커가 가리키는 실제 오프셋을 찾는다.
     ///
     /// 3단계 폴백:

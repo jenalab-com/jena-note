@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>JenaNote — J-shaped note with text lines and a rotated rear sheet</title>
+  <defs>
+    <!-- The foreground occupies a rounded rectangle. Its 52px expansion
+         creates a true, constant clearance without deforming the rear card. -->
+    <mask id="rear-clearance" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="white"/>
+      <rect x="192" y="202" width="656" height="566" rx="126" fill="black"/>
+    </mask>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="188" fill="#14243A"/>
+  <g transform="translate(36 -27)">
+    <g mask="url(#rear-clearance)">
+      <!-- One rigid rounded rectangle: rotation and translation only. -->
+      <g transform="translate(-45 110) rotate(12 520 485)">
+        <rect x="244" y="254" width="552" height="462" rx="42" fill="white"/>
+      </g>
+    </g>
+    <path d="M500 280 H722 A48 48 0 0 1 770 328 V642 A48 48 0 0 1 722 690 H318 A48 48 0 0 1 270 642 V555"
+          fill="none" stroke="white" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M365 420 H660 M365 505 H660 M365 590 H565"
+          fill="none" stroke="white" stroke-width="44" stroke-linecap="round"/>
+  </g>
+</svg>
