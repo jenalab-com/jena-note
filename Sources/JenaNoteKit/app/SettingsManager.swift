@@ -16,6 +16,9 @@ final class SettingsManager {
         static let readingFont = "jn_readingFont"
         static let readingWeight = "jn_readingWeight"
         static let readingLineSpacing = "jn_readingLineSpacing"
+        static let readingPageMarginLeft = "jn_readingPageMarginLeft"
+        static let readingPageMarginRight = "jn_readingPageMarginRight"
+        static let readingPageWidth = "jn_readingPageWidth"
         static let sidebarSortKey = "jn_sidebarSortKey"
         static let sidebarSortOrder = "jn_sidebarSortOrder"
     }
@@ -200,6 +203,26 @@ final class SettingsManager {
             return w
         }
         set { defaults.set(newValue.rawValue, forKey: Key.readingWeight) }
+    }
+
+    /// 페이지 왼쪽 여백(pt). 치수자로 조절하며 페이지 박스 안에서 글 영역을 줄인다.
+    /// 기본 0 — 여백이 없을 때 글 영역은 단 폭과 같다(치수자 도입 전과 동일).
+    var readingPageMarginLeft: CGFloat {
+        get { CGFloat((defaults.object(forKey: Key.readingPageMarginLeft) as? Double) ?? 0) }
+        set { defaults.set(Double(max(0, newValue)), forKey: Key.readingPageMarginLeft) }
+    }
+
+    /// 페이지 오른쪽 여백(pt). `readingPageMarginLeft` 와 같은 규칙.
+    var readingPageMarginRight: CGFloat {
+        get { CGFloat((defaults.object(forKey: Key.readingPageMarginRight) as? Double) ?? 0) }
+        set { defaults.set(Double(max(0, newValue)), forKey: Key.readingPageMarginRight) }
+    }
+
+    /// 치수자로 넓힌 "책" 페이지 폭(pt). 0 이면 글자수(readingLineLength) 기반 자동 폭.
+    /// 모바일 폭(고정 360)에는 적용하지 않는다.
+    var readingPageWidth: CGFloat {
+        get { CGFloat((defaults.object(forKey: Key.readingPageWidth) as? Double) ?? 0) }
+        set { defaults.set(Double(max(0, newValue)), forKey: Key.readingPageWidth) }
     }
 
     /// 본문 줄 높이 배수. 기본 1.5(넉넉하게), 범위 1.0~2.5.

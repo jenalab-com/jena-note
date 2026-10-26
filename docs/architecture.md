@@ -76,7 +76,8 @@ Sources/
       EditorTextView.swift          — NSTextView 서브클래스: 텍스트 입력 처리
       FormatCommands.swift          — 서식 액션 (bold, italic, heading, list 등)
       ReaderViewController.swift    — 읽기 전용 조판·스크롤/페이징·폰트 배율 (ADR-0006)
-      ReaderMetrics.swift           — 컬럼폭·페이지 높이 순수 함수 (단위 테스트 가능)
+      ReaderMetrics.swift           — 컬럼폭·페이지 높이·여백 계산 순수 함수 (단위 테스트 가능)
+      PageRulerView.swift           — 워드식 cm 치수자, 좌·우 여백 핸들 끌기 (ADR-0013)
       ReadingAnchor.swift           — 표시-독립 읽기 위치 + 문맥 재동기화 (ADR-0008)
       ReadingProgressStore.swift    — 문서별 이어읽기 위치 영속 (ADR-0008)
       BookmarkStore.swift           — 문서별 책갈피 N개 영속 (ADR-0008)
@@ -179,7 +180,12 @@ func applyList(ordered: Bool, to textView: NSTextView) { ... }
 - rebuildPages(): 페이지마다 NSTextContainer 를 붙여 물리 분할. 경계는 컨테이너 크기
   (컬럼 폭 × 페이지 높이)에만 의존하므로 창 폭만 바뀐 리사이즈는 재분할하지 않는다
 - showCurrentSpread(): 현재 낱쪽 또는 좌·우 펼침면을 호스트 가운데 배치.
-  펼침면 여부는 ReaderMetrics.fitsSpread 로 창 폭에서 매번 파생(저장하지 않음)
+  펼침면 여부는 ReaderMetrics.fitsSpread 로 창 폭에서 매번 파생(저장하지 않음).
+  페이지 박스(x, 컬럼 폭)는 배치 기준이고 글은 그 안에서 좌 여백만큼 들여 놓는다
+- layoutRulers(): 페이지 수만큼 PageRulerView 를 맞춰 각 페이지 위에 얹는다 (ADR-0013).
+  끄는 동안은 이웃 치수자만 따라 움직이고, 놓을 때 setPageMargins 로 한 번 재조판
+- setPageMargins(left:right:): 여백 영속 + renderContent. 페이지 컨테이너 크기는
+  textBoxSize()(= 페이지 폭 − 좌·우 여백)에서 나오므로 여백 변경은 재분할 사유다
 - updatePageIndicator(): 페이징 모드에서만 "‹ N / M ›"(펼침면은 "‹ N–N+1 / M ›") 표시
 - updateContent(_:): 문서 교체 시(파일 스왑) 원본 갱신 후 재렌더
 - goToNextPage() / goToPreviousPage(): 좌우 방향키·휠·트랙패드. 펼침면이면 두 쪽씩
@@ -479,3 +485,17 @@ clean:
 - **편집 경계:** 선택한 원본 문단을 임시 텍스트 뷰에 복사해 기존 FormatCommands를 수행한 뒤 변경 문단만 문서 소유 Undo 경로에 전달한다. 페이지 레이아웃은 점진적 갱신 경로를 유지한다. 화면용 폰트·배율을 원본 서식으로 오인하지 않는다.
 - **연결:** 페이지 뷰의 키보드 서식 명령은 같은 편집 액션으로 전달한다. 링크·이미지·색상은 현재 문서의 선택 범위를 사용한다. 검색 결과 점프와 문서 교체는 페이지/스크롤 구분 없이 현재 화면에 적용한다. AI가 켜지면 기존처럼 잠시 스크롤을 사용한다.
 - **트레이드오프:** 서식 명령은 선택된 문단 범위만 임시로 복사한다. 매우 긴 단일 문단은 그 문단 길이만큼 비용이 들지만 나머지 문서 전체를 복사하거나 전체 페이지를 다시 계산하지 않는다. 페이지의 찾기는 검색어 입력 후 다음 일치 항목으로 이동하는 시트이며, 스크롤은 기존 네이티브 찾기 바를 사용한다.
+
+### ADR-0013: 워드식 치수자 — 페이지 폭은 두고 글 영역만 줄이는 좌·우 여백 (2026-10-26)
+
+- **맥락:** 작성화면에 워드처럼 치수자를 두고 좌·우 간격을 끌어서 조절하고 싶다. 펼침면이면 페이지마다 치수자가 필요하다. 지금 페이지는 글자 단 폭(모바일 360pt / 책 글자수×글리프 폭)이 곧 페이지 박스이고, 텍스트 컨테이너 inset 은 0이다.
+- **대안:** ① 여백을 페이지 바깥에 더해 페이지를 넓히는 방식 — 페이지 테두리를 그리지 않는 지금 화면에서는 페이지 사이 간격만 벌어져 효과가 보이지 않는다. ② 문단 스타일 headIndent/tailIndent — 문서(원본 서식)를 더럽히고 저장 결과가 달라진다. ③ 페이지 박스는 그대로 두고 글 영역만 줄인다 — 워드의 의미와 같고 원본 불변 계약(ADR-0009)을 지킨다. ③을 택했다.
+- **결정:**
+  - `ReaderMetrics` 에 `clampedMargins`/`textWidth`/`snappedMargin` 순수 함수. 글 영역 최소 120pt, 격자 0.25cm(72pt=2.54cm 환산). 좁아진 페이지에 저장 여백이 안 들어가면 왼쪽을 지키고 오른쪽을 양보한다.
+  - `PageRulerView` 는 값을 저장하지 않는다. 끄는 동안 `onMarginsChanging`(이웃 치수자 동기화만), 놓을 때 `onCommitted(페이지 폭, 좌, 우)`(한 번 재조판), 더블클릭 `onReset`. 핸들은 반대쪽 여백을 밀지 않고 한계에서 멈춘다. 잡히는 범위는 ±12pt, `acceptsFirstMouse` 로 비활성 창에서도 첫 클릭에 잡힌다.
+  - **페이지 넓히기:** 여백 0 인 핸들을 바깥으로 끌면 치수자 자신의 프레임을 그 방향으로 늘려 보여주고, 놓을 때 페이지 폭으로 커밋한다. 폭은 `SettingsManager.readingPageWidth`(0=자동)에 저장되어 "책" 모드에서 글자수 폭을 대체한다(`ReaderMetrics.columnWidth(... pageWidthOverride:)`). 모바일은 고정 프리셋이라 `canGrowPage=false`. 상한은 `ReaderMetrics.maxPageWidth(hostWidth:spread:)` — 펼침면이면 두 장이 유지되는 폭까지(넓히다 펼침면이 무너지지 않게).
+  - 페이지 보기: `IncrementalPaginator` 의 컨테이너 크기를 `textBoxSize()`(페이지 폭 − 여백)로 바꾸고, 재분할 판정(`lastTextBoxSize`)도 이 크기로 한다. 페이지 뷰는 페이지 x + 좌 여백에 놓고, 치수자는 페이지 x 에 페이지 폭으로 얹는다. 이미지 상한 폭도 글 영역 폭이다.
+  - 스크롤 보기(`EditorViewController`): 단 폭 = 페이지 폭 − 여백으로 가운데 정렬하고, 치수자는 스크롤 뷰에 고정된 서브뷰로 글 시작점이 본문 시작점과 맞게 `inset − 좌 여백` 에 둔다. 텍스트 컨테이너 inset 이 대칭이라 페이지가 아닌 글 영역을 가운데 둔다.
+  - 여백은 `SettingsManager.readingPageMarginLeft/Right` 로 다른 보기 설정과 같이 전역 저장. 문서별 여백은 두지 않는다(필요해지면 ReadingProgressStore 와 같은 결로 확장).
+- **트레이드오프:** 여백을 넓히면 책 폭 설정(글자수)보다 한 줄 글자 수가 줄어든다 — 치수자가 그 사실을 눈금으로 드러내므로 숨은 상태가 아니다. 끄는 동안 본문은 움직이지 않고 놓을 때 재조판된다(매 픽셀 재분할 비용 회피). 치수자 표시를 끄는 토글은 두지 않았다.
+- **검증:** `PageRulerTests` 10개(넓히기 한도·여백 우선 축소·모바일 불가·리더 재조판·더블클릭 초기화 포함) — 격자·한계 순수 계산, 끌기 커밋 1회·반대쪽 불가침, 낱쪽 1개/펼침면 2개 치수자와 글 위치, 저장 여백 적용과 모바일 폭 안전망, 스크롤 보기 고정 치수자. 전체 242 통과. 실제 앱에서 합성 마우스 끌기로 펼침면 양쪽 재조판·설정 저장 확인.
