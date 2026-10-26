@@ -318,14 +318,18 @@ enum ReaderMetrics {
     }
 
     /// 현재 읽기 설정에서의 컬럼 폭. 리더와 에디터가 같은 조판 폭을 쓰도록 한곳에 둔다.
+    /// `pageWidthOverride` 가 0 보다 크면 "책" 폭은 글자수 대신 그 값을 쓴다
+    /// (치수자로 넓힌 폭). 모바일은 프리셋이므로 무시한다.
     static func columnWidth(mode: WidthMode,
                             scale: CGFloat,
                             family: SettingsManager.ReadingFont,
-                            charCount: Int) -> CGFloat {
+                            charCount: Int,
+                            pageWidthOverride: CGFloat = 0) -> CGFloat {
         switch mode {
         case .mobile:
             return mobileColumnWidth
         case .book:
+            if pageWidthOverride > 0 { return pageWidthOverride }
             let probe = readerFont(family: family, size: MemoFont.body.pointSize * scale, traits: [])
             let advance = ("한" as NSString).size(withAttributes: [.font: probe]).width
             return columnWidth(charCount: charCount, glyphAdvance: advance)
@@ -336,7 +340,57 @@ enum ReaderMetrics {
     static func columnWidth(mode: WidthMode) -> CGFloat {
         let s = SettingsManager.shared
         return columnWidth(mode: mode, scale: s.readingFontScale,
-                           family: s.readingFont, charCount: s.readingLineLength)
+                           family: s.readingFont, charCount: s.readingLineLength,
+                           pageWidthOverride: s.readingPageWidth)
+    }
+
+    /// 치수자로 페이지를 넓힐 수 있는 상한. 낱쪽이면 호스트에서 양옆 여백을 뺀 폭,
+    /// 펼침면이면 두 장과 홈이 그대로 들어가는 한 장의 폭 — 넓히다가 펼침면이 무너지지 않게.
+    static func maxPageWidth(hostWidth: CGFloat, spread: Bool) -> CGFloat {
+        let single = hostWidth - 2 * spreadSideMargin
+        let paired = (hostWidth - spreadGutter - 2 * spreadSideMargin) / 2
+        return max(minimumTextWidth, spread ? paired : single)
+    }
+
+    // MARK: - 페이지 여백 (치수자)
+
+    /// 치수자 눈금 단위. 화면 pt 를 종이 치수처럼 읽기 위한 환산값(72pt = 1in = 2.54cm).
+    static let pointsPerCentimeter: CGFloat = 72 / 2.54
+    /// 여백 핸들을 끌 때 붙는 격자(cm). 워드처럼 손끝이 떨려도 값이 정갈하게 떨어진다.
+    static let marginSnapCentimeters: CGFloat = 0.25
+    /// 여백을 아무리 넓혀도 남겨야 하는 글 영역 최소 폭(pt).
+    static let minimumTextWidth: CGFloat = 120
+
+    /// 여백을 격자에 맞춘다. 0 보다 작아지지 않는다.
+    static func snappedMargin(_ points: CGFloat) -> CGFloat {
+        let grid = marginSnapCentimeters * pointsPerCentimeter
+        return max(0, (points / grid).rounded() * grid)
+    }
+
+    /// 두 여백을 페이지 폭 안에 들어오도록 잘라낸다.
+    /// 왼쪽을 먼저 지키고 오른쪽을 양보한다 — 단 폭이 줄어(모바일 전환 등) 저장된 여백이
+    /// 더는 들어가지 않을 때, 글이 사라지지 않게 하는 안전망이다.
+    static func clampedMargins(left: CGFloat, right: CGFloat,
+                               pageWidth: CGFloat) -> (left: CGFloat, right: CGFloat) {
+        let l = max(0, left), r = max(0, right)
+        let room = max(0, pageWidth - minimumTextWidth)
+        let cl = min(l, room)
+        let cr = min(r, room - cl)
+        return (cl, cr)
+    }
+
+    /// 페이지 폭에서 여백을 뺀 글 영역 폭. 항상 `minimumTextWidth` 이상(페이지가 그보다
+    /// 좁으면 페이지 폭).
+    static func textWidth(pageWidth: CGFloat, left: CGFloat, right: CGFloat) -> CGFloat {
+        let m = clampedMargins(left: left, right: right, pageWidth: pageWidth)
+        return max(min(pageWidth, minimumTextWidth), pageWidth - m.left - m.right)
+    }
+
+    /// 지금 저장된 여백을 페이지 폭에 맞게 잘라 돌려준다.
+    static func storedMargins(pageWidth: CGFloat) -> (left: CGFloat, right: CGFloat) {
+        let s = SettingsManager.shared
+        return clampedMargins(left: s.readingPageMarginLeft, right: s.readingPageMarginRight,
+                              pageWidth: pageWidth)
     }
 
     // MARK: - 펼침면(2페이지) 레이아웃

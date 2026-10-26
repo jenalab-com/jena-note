@@ -72,6 +72,10 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
     private var fontWeight: SettingsManager.ReadingWeight = SettingsManager.shared.readingWeight
     private var lineSpacing: CGFloat = SettingsManager.shared.readingLineSpacing
     private var widthMode: WidthMode = .book
+    /// 페이지 좌·우 여백(pt). 치수자가 바꾸며 설정에 저장된다. 페이지 박스는 그대로 두고
+    /// 그 안의 글 영역만 줄인다(워드와 같은 뜻).
+    private var marginLeft: CGFloat = SettingsManager.shared.readingPageMarginLeft
+    private var marginRight: CGFloat = SettingsManager.shared.readingPageMarginRight
 
     // MARK: - Scroll-mode views
     private var scrollView: NSScrollView!
@@ -81,6 +85,8 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
     private var pagedHost: PagedHostView?
     /// 지금 화면에 얹힌 페이지 뷰들 — 낱쪽이면 1개, 펼침면이면 좌·우 2개.
     private var pageViews: [PageTextView] = []
+    /// 페이지마다 하나씩 얹는 치수자 — 낱쪽이면 1개, 펼침면이면 2개.
+    private var rulerViews: [PageRulerView] = []
     private var paginator: IncrementalPaginator?
     private var pagedStorage: NSTextStorage? { paginator?.storage }
     private var pageContainers: [NSTextContainer] { paginator?.containers ?? [] }
@@ -118,12 +124,13 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
     }
 
     var visiblePageTextViews: [PageTextView] { pageViews }
+    var visiblePageRulers: [PageRulerView] { rulerViews }
 
     private var currentPage = 0
     private weak var pageIndicator: NSTextField?
-    /// 마지막으로 페이지를 나눈 컨테이너 크기(컬럼 폭 × 페이지 높이).
+    /// 마지막으로 페이지를 나눈 컨테이너 크기(글 영역 폭 × 페이지 높이).
     /// 페이지 경계는 이 둘에만 의존하므로, 창 폭만 바뀐 리사이즈에서는 재분할하지 않는다.
-    private var lastPageBoxSize: NSSize = .zero
+    private var lastTextBoxSize: NSSize = .zero
     /// 지금 좌·우 두 페이지를 나란히 보여주는 중인지. 창 폭에서 파생될 뿐 저장하지 않는다.
     private var isSpread = false
 
@@ -136,6 +143,8 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
     private var positionSaveTimer: Timer?
 
     private let pageVMargin: CGFloat = 40
+    /// 치수자의 세로 자리 — 페이지 위 여백(pageVMargin) 안에 든다.
+    private let rulerTop: CGFloat = 12
 
     // MARK: - Init
     init(content: NSAttributedString) {
@@ -196,14 +205,27 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
     // MARK: - Rendering
     private func columnWidthForCurrentSettings() -> CGFloat {
         ReaderMetrics.columnWidth(mode: widthMode, scale: scale, family: fontFamily,
-                                  charCount: SettingsManager.shared.readingLineLength)
+                                  charCount: SettingsManager.shared.readingLineLength,
+                                  pageWidthOverride: SettingsManager.shared.readingPageWidth)
+    }
+
+    /// 지금 페이지 폭에 맞게 잘라낸 좌·우 여백.
+    private func pageMargins() -> (left: CGFloat, right: CGFloat) {
+        ReaderMetrics.clampedMargins(left: marginLeft, right: marginRight,
+                                     pageWidth: columnWidthForCurrentSettings())
+    }
+
+    /// 페이지 폭에서 여백을 뺀 글 영역 폭.
+    private func textWidthForCurrentSettings() -> CGFloat {
+        ReaderMetrics.textWidth(pageWidth: columnWidthForCurrentSettings(),
+                                left: marginLeft, right: marginRight)
     }
 
     private func styledContent() -> NSAttributedString {
         ReaderMetrics.styled(sourceContent, scale: scale,
                              font: fontFamily, lineHeightMultiple: lineSpacing,
                              weight: fontWeight,
-                             maxImageWidth: columnWidthForCurrentSettings())
+                             maxImageWidth: textWidthForCurrentSettings())
     }
 
     private func renderContent() {
@@ -227,7 +249,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
     private func updateColumnInset() {
         let avail = scrollView.contentView.bounds.width
         guard avail > 0 else { return }
-        let column = columnWidthForCurrentSettings()
+        let column = textWidthForCurrentSettings()
         let side = max(24, (avail - column) / 2)
         if abs(textView.textContainerInset.width - side) > 0.5 {
             textView.textContainerInset = NSSize(width: side, height: 48)
@@ -383,6 +405,43 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
     }
     var currentWidthMode: WidthMode { widthMode }
 
+    /// 치수자로 정한 페이지 좌·우 여백을 적용하고 저장한다. 글 영역 폭이 바뀌므로
+    /// 재조판한다(폭 프리셋 전환과 같은 경로).
+    func setPageMargins(left: CGFloat, right: CGFloat) {
+        setPageLayout(pageWidth: columnWidthForCurrentSettings(), left: left, right: right)
+    }
+
+    /// 치수자가 정한 페이지 폭과 여백을 함께 적용한다. 폭은 "책" 모드에서만 저장된다 —
+    /// 모바일은 고정 프리셋이라 치수자가 넓히지 못한다.
+    func setPageLayout(pageWidth: CGFloat, left: CGFloat, right: CGFloat) {
+        let s = SettingsManager.shared
+        var widthChanged = false
+        if widthMode == .book, abs(pageWidth - columnWidthForCurrentSettings()) > 0.5 {
+            s.readingPageWidth = pageWidth
+            widthChanged = true
+        }
+        let m = ReaderMetrics.clampedMargins(left: left, right: right,
+                                             pageWidth: columnWidthForCurrentSettings())
+        guard widthChanged || m.left != marginLeft || m.right != marginRight else { return }
+        marginLeft = m.left
+        marginRight = m.right
+        s.readingPageMarginLeft = m.left
+        s.readingPageMarginRight = m.right
+        renderContent()
+    }
+
+    /// 치수자 더블클릭 — 넓힌 폭과 여백을 기본(글자수 폭·여백 0)으로 되돌린다.
+    func resetPageLayout() {
+        SettingsManager.shared.readingPageWidth = 0
+        marginLeft = 0
+        marginRight = 0
+        SettingsManager.shared.readingPageMarginLeft = 0
+        SettingsManager.shared.readingPageMarginRight = 0
+        renderContent()
+    }
+    var currentPageMargins: (left: CGFloat, right: CGFloat) { pageMargins() }
+    var currentPageWidth: CGFloat { columnWidthForCurrentSettings() }
+
     func setPageMode(_ mode: SettingsManager.ReadingPageMode) {
         // 모드를 바꾸기 전에 현재 모드 기준으로 위치를 읽어둔다 — 스크롤↔페이징 왕복에도
         // 읽던 자리가 유지된다.
@@ -425,7 +484,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         }
         host.frame = scrollView.bounds
         scrollView.addSubview(host)
-        lastPageBoxSize = .zero     // 강제 rebuild
+        lastTextBoxSize = .zero     // 강제 rebuild
         rebuildPages()
         focusPage()
     }
@@ -469,12 +528,19 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         pageViews = []
     }
 
-    /// 페이지 컨테이너 한 장의 크기. 페이지 경계는 오직 이 크기에서 나온다
-    /// (창 폭은 배치에만 쓰인다 — 그래서 가로 리사이즈는 재분할을 부르지 않는다).
+    /// 페이지 한 장의 크기(치수자가 보여주는 폭 × 페이지 높이). 배치의 기준이다.
     private func pageBoxSize() -> NSSize {
         guard let host = pagedHost else { return .zero }
         return NSSize(width: columnWidthForCurrentSettings(),
                       height: max(1, host.bounds.height - 2 * pageVMargin))
+    }
+
+    /// 페이지 컨테이너 한 장의 크기 = 페이지에서 좌·우 여백을 뺀 글 영역.
+    /// 페이지 경계는 오직 이 크기에서 나온다 (창 폭은 배치에만 쓰인다 — 그래서 가로
+    /// 리사이즈는 재분할을 부르지 않는다).
+    private func textBoxSize() -> NSSize {
+        guard pagedHost != nil else { return .zero }
+        return NSSize(width: textWidthForCurrentSettings(), height: pageBoxSize().height)
     }
 
     /// 표시 설정이 바뀔 때만 조판 네트워크를 교체한다. 타이핑은 기존 네트워크를 쓴다.
@@ -491,14 +557,14 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         tearDownPageViews()
         pagedStorage?.delegate = nil
         let storage = NSTextStorage(attributedString: styledContent())
-        paginator = IncrementalPaginator(storage: storage, pageSize: pageBoxSize())
+        paginator = IncrementalPaginator(storage: storage, pageSize: textBoxSize())
         let targetOffset = hadFocus ? (selection?.location ?? anchorOffset) : anchorOffset
         paginator?.ensureCharacter(targetOffset)
         currentPage = pageIndex(containing: targetOffset)
         updateSpreadState()
         ensureVisiblePages()
         storage.delegate = self
-        lastPageBoxSize = pageBoxSize()
+        lastTextBoxSize = textBoxSize()
         needsAnchorApply = false
         showCurrentSpread(restoringFocus: hadFocus)
         if let selection = selection, NSMaxRange(selection) <= storage.length, hadFocus {
@@ -595,17 +661,24 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         }
         let retained = pageViews.filter { tv in desired.contains { $0 === tv.textContainer } }
         let box = pageBoxSize()
+        let textBox = textBoxSize()
+        let margins = pageMargins()
         let totalW = CGFloat(indices.count) * box.width + CGFloat(indices.count - 1) * ReaderMetrics.spreadGutter
         var x = max(0, (host.bounds.width - totalW) / 2)
+        var pageXs: [CGFloat] = []
         pageViews = indices.map { index in
             let container = pageContainers[index]
             let tv = retained.first { $0.textContainer === container }
                 ?? makePageTextView(container: container)
-            tv.frame = NSRect(x: x, y: pageVMargin, width: box.width, height: box.height)
+            // 페이지는 x 에서 시작하고, 글은 왼쪽 여백만큼 들어간 자리에서 시작한다.
+            tv.frame = NSRect(x: x + margins.left, y: pageVMargin,
+                              width: textBox.width, height: textBox.height)
             if tv.superview == nil { host.addSubview(tv, positioned: .below, relativeTo: pageIndicator) }
+            pageXs.append(x)
             x += box.width + ReaderMetrics.spreadGutter
             return tv
         }
+        layoutRulers(pageXs: pageXs, pageWidth: box.width, margins: margins, in: host)
         if hadFocus, !pageViews.contains(where: { $0 === view.window?.firstResponder }) {
             if let selection = oldSelection, rangeIsVisible(selection) {
                 selectInVisiblePage(selection)
@@ -619,8 +692,36 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         NotificationCenter.default.post(name: .readerPageChanged, object: self)
     }
 
+    /// 페이지 수만큼 치수자를 맞춰 두고 각 페이지 위에 얹는다. 치수자끼리는 같은 여백을
+    /// 보여주며, 한쪽을 끌면 나머지도 따라 움직인다(펼침면은 한 장의 책이다).
+    private func layoutRulers(pageXs: [CGFloat], pageWidth: CGFloat,
+                              margins: (left: CGFloat, right: CGFloat), in host: NSView) {
+        while rulerViews.count > pageXs.count {
+            rulerViews.removeLast().removeFromSuperview()
+        }
+        while rulerViews.count < pageXs.count {
+            let ruler = PageRulerView(frame: .zero)
+            ruler.onMarginsChanging = { [weak self, weak ruler] l, r in
+                self?.rulerViews.filter { $0 !== ruler }.forEach { $0.setMargins(left: l, right: r) }
+            }
+            ruler.onCommitted = { [weak self] w, l, r in
+                self?.setPageLayout(pageWidth: w, left: l, right: r)
+            }
+            ruler.onReset = { [weak self] in self?.resetPageLayout() }
+            host.addSubview(ruler, positioned: .below, relativeTo: pageIndicator)
+            rulerViews.append(ruler)
+        }
+        let maxWidth = ReaderMetrics.maxPageWidth(hostWidth: host.bounds.width, spread: pageXs.count == 2)
+        for (ruler, px) in zip(rulerViews, pageXs) {
+            ruler.frame = NSRect(x: px, y: rulerTop, width: pageWidth, height: PageRulerView.height)
+            ruler.canGrowPage = widthMode == .book
+            ruler.maxPageWidth = maxWidth
+            ruler.setMargins(left: margins.left, right: margins.right)
+        }
+    }
+
     private func makePageTextView(container: NSTextContainer) -> PageTextView {
-        let tv = PageTextView(frame: NSRect(origin: .zero, size: pageBoxSize()), textContainer: container)
+        let tv = PageTextView(frame: NSRect(origin: .zero, size: textBoxSize()), textContainer: container)
         tv.isEditable = true
         tv.isSelectable = true
         tv.isRichText = true
@@ -746,7 +847,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         sourceContent.replaceCharacters(in: range, with: replacement)
         let styled = ReaderMetrics.styled(replacement, scale: scale, font: fontFamily,
                                          lineHeightMultiple: lineSpacing, weight: fontWeight,
-                                         maxImageWidth: columnWidthForCurrentSettings())
+                                         maxImageWidth: textWidthForCurrentSettings())
         isApplyingContent = true
         storage.replaceCharacters(in: range, with: styled)
         isApplyingContent = false
@@ -900,7 +1001,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         host.frame = scrollView.bounds
         // 페이지 경계는 컨테이너 크기(컬럼 폭 × 페이지 높이)에만 의존한다. 창 폭만 바뀐
         // 리사이즈는 배치·펼침면 판정만 다시 하면 되므로 재분할(비용 큼)을 건너뛴다.
-        if pageBoxSize() != lastPageBoxSize {
+        if textBoxSize() != lastTextBoxSize {
             rebuildPages()
         } else if needsAnchorApply {
             applyAnchor()

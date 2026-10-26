@@ -8,6 +8,8 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
     weak var hostWindowController: EditorWindowController?
     var textView: EditorTextView!
     private var scrollView: NSScrollView!
+    /// 스크롤 보기의 치수자. 스크롤과 무관하게 단 위에 고정돼 있다(워드처럼).
+    private(set) var ruler: PageRulerView!
 
     var document: MarkdownDocument? {
         return (hostWindowController?.document ?? view.window?.windowController?.document) as? MarkdownDocument
@@ -51,6 +53,12 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
 
         scrollView.documentView = textView
         view = scrollView
+
+        ruler = PageRulerView(frame: .zero)
+        ruler.isHidden = true
+        ruler.onCommitted = { [weak self] w, l, r in self?.setPageLayout(pageWidth: w, left: l, right: r) }
+        ruler.onReset = { [weak self] in self?.resetPageLayout() }
+        scrollView.addSubview(ruler)
 
         // 읽기 조판에서 읽던 자리를 따라가기 위한 관측 (ADR-0008)
         scrollView.contentView.postsBoundsChangedNotifications = true
@@ -169,10 +177,41 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         textView.typingAttributes = attrs
     }
 
+    /// 치수자로 정한 페이지 좌·우 여백을 저장하고 단을 다시 잡는다. 조판(폰트·행간)은
+    /// 그대로라 다시 칠하지 않고, 폭에 매인 이미지만 다시 잰다.
+    func setPageMargins(left: CGFloat, right: CGFloat) {
+        setPageLayout(pageWidth: ReaderMetrics.columnWidth(mode: readingWidthMode), left: left, right: right)
+    }
+
+    /// 페이지 폭(책 모드에서만 저장)과 여백을 함께 적용한다.
+    func setPageLayout(pageWidth: CGFloat, left: CGFloat, right: CGFloat) {
+        let s = SettingsManager.shared
+        if readingWidthMode == .book, abs(pageWidth - ReaderMetrics.columnWidth(mode: .book)) > 0.5 {
+            s.readingPageWidth = pageWidth
+        }
+        s.readingPageMarginLeft = max(0, left)
+        s.readingPageMarginRight = max(0, right)
+        updateColumnInset()
+        textView.relayoutImageAttachments()
+    }
+
+    /// 치수자 더블클릭 — 폭·여백을 기본으로.
+    func resetPageLayout() {
+        let s = SettingsManager.shared
+        s.readingPageWidth = 0
+        s.readingPageMarginLeft = 0
+        s.readingPageMarginRight = 0
+        updateColumnInset()
+        textView.relayoutImageAttachments()
+    }
+
     /// 조판이 켜져 있으면 본문 단을 가운데로 좁히고, 꺼져 있으면 기본 여백으로 되돌린다.
+    /// 단 = 페이지 폭에서 치수자 여백을 뺀 글 영역. 글 영역을 가운데 두고, 치수자는
+    /// 그 글 영역이 자기 여백 안쪽에 오도록 페이지 폭으로 위에 얹는다.
     private func updateColumnInset() {
         let base = EditorTextView.defaultContainerInset
         guard isReadingLayout else {
+            ruler.isHidden = true
             if abs(textView.textContainerInset.width - base.width) > 0.5 {
                 textView.textContainerInset = base
             }
@@ -180,11 +219,20 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         }
         let available = scrollView.contentView.bounds.width
         guard available > 0 else { return }
-        let column = ReaderMetrics.columnWidth(mode: readingWidthMode)
+        let page = ReaderMetrics.columnWidth(mode: readingWidthMode)
+        let margins = ReaderMetrics.storedMargins(pageWidth: page)
+        let column = ReaderMetrics.textWidth(pageWidth: page, left: margins.left, right: margins.right)
         let side = max(base.width, (available - column) / 2)
         if abs(textView.textContainerInset.width - side) > 0.5 {
             textView.textContainerInset = NSSize(width: side, height: base.height)
         }
+        let top: CGFloat = 8
+        let y = scrollView.isFlipped ? top : scrollView.bounds.height - PageRulerView.height - top
+        ruler.frame = NSRect(x: side - margins.left, y: y, width: page, height: PageRulerView.height)
+        ruler.canGrowPage = readingWidthMode == .book
+        ruler.maxPageWidth = max(ReaderMetrics.minimumTextWidth, available - 2 * base.width)
+        ruler.setMargins(left: margins.left, right: margins.right)
+        ruler.isHidden = false
     }
 
     override func viewDidLayout() {

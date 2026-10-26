@@ -1,9 +1,9 @@
 APP_NAME    = JenaNote
-VERSION     = 1.6.0
+VERSION     = 1.6.1
 BUILD_DIR   = .build
 BUNDLE      = $(BUILD_DIR)/$(APP_NAME).app
 BINARY      = $(BUNDLE)/Contents/MacOS/$(APP_NAME)
-DMG         = $(BUILD_DIR)/$(APP_NAME)-$(VERSION).dmg
+DMG         = $(BUILD_DIR)/$(APP_NAME).dmg
 PKG         = $(BUILD_DIR)/$(APP_NAME)-$(VERSION).pkg
 
 .PHONY: build run install dmg pkg clean test
