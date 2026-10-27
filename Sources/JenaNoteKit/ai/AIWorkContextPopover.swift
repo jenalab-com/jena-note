@@ -13,18 +13,6 @@ import AppKit
 /// Every toggle is saved to `context.json` immediately and then reported through `onChange`; the
 /// parent re-resolves the work and hands the fresh result back through `reload(_:)`.
 final class AIWorkContextPopoverController: NSViewController {
-    struct SettingRow: Equatable {
-        let file: AIWorkFile
-        var included: Bool
-        var summarized: Bool
-        let unreadable: Bool
-    }
-
-    struct EpisodeRow: Equatable {
-        let file: AIWorkFile
-        let state: AISummaryState
-    }
-
     /// Called after `context.json` was saved → parent refreshes and reloads.
     var onChange: (() -> Void)?
     var onOpenSheet: (() -> Void)?
@@ -43,8 +31,8 @@ final class AIWorkContextPopoverController: NSViewController {
     private let store: AIEpisodeSummaryStore
 
     private let stack = NSStackView()
-    private var settingRowsShown: [SettingRow] = []
-    private var episodeRowsShown: [EpisodeRow] = []
+    private var settingRowsShown: [AIWorkContextModel.SettingRow] = []
+    private var episodeRowsShown: [AIWorkContextModel.EpisodeRow] = []
     /// Last save/open error; survives rebuilds until the next action.
     private var errorMessage: String?
 
@@ -80,72 +68,6 @@ final class AIWorkContextPopoverController: NSViewController {
     func reload(_ resolved: AIResolvedWorkContext) {
         self.resolved = resolved
         if isViewLoaded { rebuild() }
-    }
-
-    // MARK: - Pure logic
-
-    /// Every settings file the sources yield — included, excluded and unreadable — in natural path order.
-    static func settingRows(_ resolved: AIResolvedWorkContext) -> [SettingRow] {
-        let config = resolved.context.config
-        let excluded = Set(config.excludedSettings)
-        let summarized = Set(config.summarizedSettings)
-        let unreadable = Set(resolved.unreadable.map(\.relativePath))
-        let all = AIWorkContextResolver.naturalSort(resolved.settings + resolved.unreadable + resolved.excludedSettings)
-        return all.map { file in
-            SettingRow(file: file, included: !excluded.contains(file.relativePath),
-                       summarized: summarized.contains(file.relativePath),
-                       unreadable: unreadable.contains(file.relativePath))
-        }
-    }
-
-    /// Settings files above this size get a warning (spec §6.6); they stay includable.
-    static let largeFileThreshold = 200_000
-
-    static func isLarge(_ file: AIWorkFile) -> Bool { file.byteCount > largeFileThreshold }
-
-    /// Warning line for `context.json` paths that were ignored (outside the root etc., spec §6.7).
-    static func invalidPathsText(_ context: AIWorkContext) -> String? {
-        guard !context.invalidPaths.isEmpty else { return nil }
-        return String(format: L10n.tr("ai.work.invalidPaths"), context.invalidPaths.joined(separator: ", "))
-    }
-
-    static func episodeRows(_ resolved: AIResolvedWorkContext, store: AIEpisodeSummaryStore) -> [EpisodeRow] {
-        let index = store.snapshotIndex()
-        return resolved.previousEpisodes.map { EpisodeRow(file: $0, state: store.state(of: $0, isSetting: false, index: index)) }
-    }
-
-    static func stateText(_ state: AISummaryState) -> String {
-        switch state {
-        case .ready: return L10n.tr("ai.work.stateReady")
-        case .missing: return L10n.tr("ai.work.stateMissing")
-        case .stale: return L10n.tr("ai.work.stateStale")
-        case .manuallyEdited(let sourceChanged):
-            return L10n.tr(sourceChanged ? "ai.work.stateManualSourceChanged" : "ai.work.stateManual")
-        }
-    }
-
-    /// Unchecking a settings file adds it to `excludedSettings`; checking it again removes it.
-    static func toggleIncluded(_ config: inout AIWorkContextConfig, path: String) {
-        if let index = config.excludedSettings.firstIndex(of: path) {
-            config.excludedSettings.remove(at: index)
-        } else {
-            config.excludedSettings.append(path)
-        }
-    }
-
-    static func toggleSummarized(_ config: inout AIWorkContextConfig, path: String) {
-        if let index = config.summarizedSettings.firstIndex(of: path) {
-            config.summarizedSettings.remove(at: index)
-        } else {
-            config.summarizedSettings.append(path)
-        }
-    }
-
-    /// UTF-8 bytes per budget segment; the three add up to `payload.contextByteCount`.
-    static func budgetSegments(_ payload: AIWorkPayload) -> (settings: Int, summaries: Int, previous: Int) {
-        (payload.settings.reduce(0) { $0 + $1.text.utf8.count },
-         payload.previousSummaries.reduce(0) { $0 + $1.summary.utf8.count },
-         payload.previousEpisode?.text.utf8.count ?? 0)
     }
 
     // MARK: - Actions
@@ -189,7 +111,7 @@ final class AIWorkContextPopoverController: NSViewController {
 
     @objc private func enabledToggled(_ sender: NSSwitch) {
         let on = sender.state == .on
-        mutateConfig { $0.enabled = on }
+        mutateConfig { $0.enabled = on; $0.disabledByUser = !on }
     }
 
     @objc private func previousToggled(_ sender: NSSwitch) {
@@ -200,13 +122,13 @@ final class AIWorkContextPopoverController: NSViewController {
     @objc private func includeToggled(_ sender: NSButton) {
         guard settingRowsShown.indices.contains(sender.tag) else { return }
         let path = settingRowsShown[sender.tag].file.relativePath
-        mutateConfig { Self.toggleIncluded(&$0, path: path) }
+        mutateConfig { AIWorkContextModel.toggleIncluded(&$0, path: path) }
     }
 
     @objc private func summarizeToggled(_ sender: NSSwitch) {
         guard settingRowsShown.indices.contains(sender.tag) else { return }
         let path = settingRowsShown[sender.tag].file.relativePath
-        mutateConfig { Self.toggleSummarized(&$0, path: path) }
+        mutateConfig { AIWorkContextModel.toggleSummarized(&$0, path: path) }
     }
 
     @objc private func changeSettingsClicked(_ sender: Any?) { onOpenSheet?() }
@@ -259,18 +181,16 @@ final class AIWorkContextPopoverController: NSViewController {
         add(row([title, spacer(), change]), width: contentWidth)
         add(switchRow(L10n.tr("ai.work.include"), on: config.enabled, action: #selector(enabledToggled(_:))),
             width: contentWidth)
-        if let invalid = Self.invalidPathsText(resolved.context) {
+        if let invalid = AIWorkContextModel.invalidPathsText(resolved.context) {
             add(warningLine(invalid, width: contentWidth), width: contentWidth)
         }
 
         // 2. Budget
         let payload = AIWorkContextAssembler(resolved: resolved, store: store)
             .payload(currentFile: resolved.context.rootURL).payload
-        let segments = Self.budgetSegments(payload)
+        let segments = AIWorkContextModel.budgetSegments(payload)
         let bar = AIWorkBudgetBarView(segments: segments, maximum: AIPrompt.maximumBytes)
-        let budget = small(String(format: L10n.tr("ai.work.budget"),
-                                  AIWorkContextBar.formatBytes(payload.contextByteCount),
-                                  AIWorkContextBar.formatBytes(AIPrompt.maximumBytes)))
+        let budget = small(AIWorkContextModel.budgetFactLine(payload))
         budget.setContentCompressionResistancePriority(.required, for: .horizontal)
         add(row([bar, budget]), width: contentWidth)
 
@@ -286,12 +206,12 @@ final class AIWorkContextPopoverController: NSViewController {
 
         // 3. Settings files
         add(section(L10n.tr("ai.work.settingsSection")), width: contentWidth)
-        settingRowsShown = Self.settingRows(resolved)
+        settingRowsShown = AIWorkContextModel.settingRows(resolved)
         let settingViews = settingRowsShown.enumerated().map { settingRowView($1, tag: $0, enabled: !generating) }
         if !settingViews.isEmpty { add(list(settingViews), width: contentWidth) }
 
         // 4. Earlier episode summaries
-        episodeRowsShown = Self.episodeRows(resolved, store: store)
+        episodeRowsShown = AIWorkContextModel.episodeRows(resolved, store: store)
         let refresh = NSButton(title: L10n.tr("ai.work.refreshAll"), target: self,
                                action: #selector(refreshAllClicked(_:)))
         refresh.bezelStyle = .rounded
@@ -328,7 +248,7 @@ final class AIWorkContextPopoverController: NSViewController {
         preferredContentSize = NSSize(width: preferredWidth, height: stack.fittingSize.height)
     }
 
-    private func settingRowView(_ item: SettingRow, tag: Int, enabled: Bool) -> NSView {
+    private func settingRowView(_ item: AIWorkContextModel.SettingRow, tag: Int, enabled: Bool) -> NSView {
         let check = NSButton(checkboxWithTitle: "", target: self, action: #selector(includeToggled(_:)))
         check.tag = tag
         check.state = item.included ? .on : .off
@@ -343,7 +263,7 @@ final class AIWorkContextPopoverController: NSViewController {
             icon.toolTip = L10n.tr("ai.work.unreadable")
             views.append(icon)
         }
-        if Self.isLarge(item.file), let image = NSImage(systemSymbolName: "exclamationmark.triangle",
+        if AIWorkContextModel.isLarge(item.file), let image = NSImage(systemSymbolName: "exclamationmark.triangle",
                                                         accessibilityDescription: L10n.tr("ai.work.largeFile")) {
             let icon = NSImageView(image: image)
             icon.contentTintColor = .systemOrange
@@ -373,8 +293,8 @@ final class AIWorkContextPopoverController: NSViewController {
         return row
     }
 
-    private func episodeRowView(_ item: EpisodeRow, tag: Int, enabled: Bool) -> NSView {
-        let state = small(Self.stateText(item.state))
+    private func episodeRowView(_ item: AIWorkContextModel.EpisodeRow, tag: Int, enabled: Bool) -> NSView {
+        let state = small(AIWorkContextModel.stateText(item.state))
         switch item.state {
         case .missing, .stale: state.textColor = .systemOrange
         case .ready, .manuallyEdited: break

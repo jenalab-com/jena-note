@@ -9,9 +9,38 @@ struct AIWorkContextConfig: Codable, Equatable {
     var writingFolder: String              // relative to the work root
     var includePreviousEpisode: Bool = true
     var enabled: Bool = true
+    /// True when the user switched the context off by hand (as opposed to "off because there are
+    /// no sources"); keeps `normalizeEnabled` from re-enabling it when a source is added.
+    var disabledByUser: Bool = false
+
+    init(title: String, settingsSources: [String], excludedSettings: [String] = [],
+         summarizedSettings: [String] = [], writingFolder: String, includePreviousEpisode: Bool = true,
+         enabled: Bool = true, disabledByUser: Bool = false) {
+        self.title = title
+        self.settingsSources = settingsSources
+        self.excludedSettings = excludedSettings
+        self.summarizedSettings = summarizedSettings
+        self.writingFolder = writingFolder
+        self.includePreviousEpisode = includePreviousEpisode
+        self.enabled = enabled
+        self.disabledByUser = disabledByUser
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        title = try c.decode(String.self, forKey: .title)
+        settingsSources = try c.decode([String].self, forKey: .settingsSources)
+        excludedSettings = try c.decodeIfPresent([String].self, forKey: .excludedSettings) ?? []
+        summarizedSettings = try c.decodeIfPresent([String].self, forKey: .summarizedSettings) ?? []
+        writingFolder = try c.decode(String.self, forKey: .writingFolder)
+        includePreviousEpisode = try c.decodeIfPresent(Bool.self, forKey: .includePreviousEpisode) ?? true
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        disabledByUser = try c.decodeIfPresent(Bool.self, forKey: .disabledByUser) ?? false
+    }
 }
 
-enum AIWorkContextValidationError: Equatable {
+enum AIWorkContextValidationError: Error, Equatable {
     case noSettingsSources, settingsOutsideRoot(String), settingsIsRoot, writingFolderOutsideRoot
 }
 
