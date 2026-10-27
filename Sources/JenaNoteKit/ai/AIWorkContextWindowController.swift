@@ -96,6 +96,8 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
     var onRegenerate: ((AIWorkFile, Bool) -> Void)?
     var onRefreshAll: (() -> Void)?
     var onCancelRefresh: (() -> Void)?
+    /// The chat panel that set the hooks above, so a closing panel clears only hooks it still owns.
+    var hooksOwner: ObjectIdentifier?
     /// Summary maintenance progress, pushed in by the chat panel.
     var maintenanceProgress: (done: Int, total: Int)? { didSet { renderTabs() } }
 

@@ -25,6 +25,8 @@ final class AIChatViewController: NSViewController {
     }
     /// The window that last received this panel's maintenance progress (cleared when it ends).
     private weak var progressWindow: AIWorkContextWindowController?
+    /// The window whose hooks this panel set last (cleared in `deinit` if it still owns them).
+    private weak var hookedWindow: AIWorkContextWindowController?
     /// Refreshes the row when the shown document gets a file URL (Save As on an untitled document).
     private var fileURLObservation: NSKeyValueObservation?
     /// Summary run started from the work context window ("다시 만들기" / "요약 전부 새로 만들기"). It
@@ -124,6 +126,15 @@ final class AIChatViewController: NSViewController {
     }
 
     deinit {
+        // A window this panel fed must not stay stuck on "갱신 취소 N/M" with dead hooks.
+        progressWindow?.maintenanceProgress = nil
+        if let window = hookedWindow, window.hooksOwner == ObjectIdentifier(self) {
+            window.onRegenerate = nil
+            window.onRefreshAll = nil
+            window.onCancelRefresh = nil
+            window.onChange = nil
+            window.hooksOwner = nil
+        }
         request?.cancel()
         summaryRequest?.cancel()
         maintenanceRequest?.cancel()
@@ -180,13 +191,19 @@ final class AIChatViewController: NSViewController {
         selectionChanged()
         fileURLObservation = document.observe(\.fileURL, options: [.new]) { [weak self] _, _ in
             if Thread.isMainThread {
-                self?.refreshWorkContext()
+                self?.documentLocationChanged()
             } else {
-                DispatchQueue.main.async { self?.refreshWorkContext() }
+                DispatchQueue.main.async { self?.documentLocationChanged() }
             }
         }
+        documentLocationChanged()
+    }
+
+    /// The shown document changed or got a new file URL (Save As): refresh the row and point an
+    /// open work context window for its root at the new file.
+    private func documentLocationChanged() {
         refreshWorkContext()
-        if let url = document.fileURL, let root = resolvedWork?.context.rootURL,
+        if let url = currentDocument?()?.fileURL, let root = resolvedWork?.context.rootURL,
            let window = AIWorkContextWindowController.existing(for: root) {
             window.currentFile = url
             window.reload()
@@ -196,30 +213,38 @@ final class AIChatViewController: NSViewController {
     // MARK: - Work context
 
     /// Re-locates and re-resolves the work for the current document and updates the bar.
+    /// While this panel's send flow is generating summaries (`summaryRequest`), the row keeps its
+    /// "요약 만드는 중 N/M" state; only the send flow itself moves it on.
     func refreshWorkContext() {
         _ = view
-        guard let url = currentDocument?()?.fileURL else {
+        let status: AIWorkContextStatus
+        if let url = currentDocument?()?.fileURL {
+            switch AIWorkContext.locateResult(from: url) {
+            case .failure:
+                resolvedWork = nil
+                summaryStore = nil
+                status = .corrupt
+            case .success(nil):
+                resolvedWork = nil
+                summaryStore = nil
+                status = .unavailable(reason: .notInWork)
+            case .success(let context?):
+                let resolved = AIWorkContextResolver.resolve(context, currentFile: url)
+                let store = AIEpisodeSummaryStore.shared(for: context.rootURL)
+                resolvedWork = resolved
+                summaryStore = store
+                status = AIWorkContextAssembler(resolved: resolved, store: store)
+                    .status(isGenerating: ownMaintenanceProgress.map { ($0.done, $0.total) })
+            }
+        } else {
             resolvedWork = nil
             summaryStore = nil
-            workBar.update(.unavailable(reason: .unsavedDocument))
-            return
+            status = .unavailable(reason: .unsavedDocument)
         }
-        switch AIWorkContext.locateResult(from: url) {
-        case .failure:
-            resolvedWork = nil
-            summaryStore = nil
-            workBar.update(.corrupt)
-        case .success(nil):
-            resolvedWork = nil
-            summaryStore = nil
-            workBar.update(.unavailable(reason: .notInWork))
-        case .success(let context?):
-            let resolved = AIWorkContextResolver.resolve(context, currentFile: url)
-            let store = AIEpisodeSummaryStore.shared(for: context.rootURL)
-            resolvedWork = resolved
-            summaryStore = store
-            workBar.update(AIWorkContextAssembler(resolved: resolved, store: store)
-                .status(isGenerating: ownMaintenanceProgress.map { ($0.done, $0.total) }))
+        if summaryRequest != nil, case .generating = workBar.status {
+            // keep the send flow's progress
+        } else {
+            workBar.update(status)
         }
         pushMaintenanceProgress()
     }
@@ -245,6 +270,15 @@ final class AIChatViewController: NSViewController {
     /// Row action (spec §5.1, §7.1): routes by the row's current status to the work context window
     /// or, for "켜기", turns the work back on without opening anything.
     func openWorkWindow() {
+        if case .generating = workBar.status {
+            // The row's button is "취소" (spec §5.2): stop this panel's run, never open the window.
+            if summaryRequest != nil {
+                cancel()
+            } else if maintenanceRequest != nil {
+                cancelMaintenance()
+            }
+            return
+        }
         guard let url = currentDocument?()?.fileURL else { return }
         switch workBar.status {
         case .unavailable(reason: .unsavedDocument):
@@ -252,7 +286,8 @@ final class AIChatViewController: NSViewController {
         case .unavailable(reason: .notInWork):
             presentFirstSetup(fileURL: url)
         case .corrupt:
-            setCorruptContextAside(fileURL: url)
+            // Never let first setup overwrite an unreadable file that could not be backed up.
+            guard setCorruptContextAside(fileURL: url) else { return }
             presentFirstSetup(fileURL: url)
         case .disabled:
             guard let root = resolvedWork?.context.rootURL else { return }
@@ -267,7 +302,9 @@ final class AIChatViewController: NSViewController {
                 config.enabled = !config.settingsSources.isEmpty
             }
             refreshWorkContext()
-        case .active, .generating:
+        case .generating:
+            return // handled above
+        case .active:
             guard let root = resolvedWork?.context.rootURL else { return }
             let controller = AIWorkContextWindowController.shared(for: root, store: AIEpisodeSummaryStore.shared(for: root))
             controller.currentFile = url
@@ -283,20 +320,29 @@ final class AIChatViewController: NSViewController {
     }
 
     /// Renames an unreadable `context.json` to `context.json.bak` (replacing an older backup) so first
-    /// setup starts clean and never overwrites it. Only inside the work's own `.jenanote`.
-    private func setCorruptContextAside(fileURL: URL) {
-        guard let root = AIWorkContext.locateRoot(from: fileURL) else { return }
+    /// setup starts clean and never overwrites it. Only inside the work's own `.jenanote`; only an
+    /// older backup that is a regular file is replaced. Returns false (with a status line) when the
+    /// file could not be set aside, in which case first setup must not start.
+    private func setCorruptContextAside(fileURL: URL) -> Bool {
+        guard let root = AIWorkContext.locateRoot(from: fileURL) else { return true } // already gone
         let folder = root.appendingPathComponent(AIWorkContext.folderName)
         let config = folder.appendingPathComponent(AIWorkContext.fileName)
         let backup = folder.appendingPathComponent(AIWorkContext.fileName + ".bak")
-        guard AIWorkContext.isSafeInsideRoot(config, root: root),
-              AIWorkContext.isSafeInsideRoot(backup, root: root) else { return }
         let fm = FileManager.default
-        if fm.fileExists(atPath: backup.path) { try? fm.removeItem(at: backup) }
         do {
+            guard AIWorkContext.isSafeInsideRoot(config, root: root),
+                  AIWorkContext.isSafeInsideRoot(backup, root: root) else {
+                throw AIError(message: String(format: L10n.tr("ai.work.errorOutsideRoot"), config.path))
+            }
+            if let type = (try? fm.attributesOfItem(atPath: backup.path))?[.type] as? FileAttributeType,
+               type == .typeRegular {
+                try fm.removeItem(at: backup)
+            }
             try fm.moveItem(at: config, to: backup)
+            return true
         } catch {
             render(status: String(format: L10n.tr("ai.work.saveFailed"), error.localizedDescription))
+            return false
         }
     }
 
@@ -307,6 +353,8 @@ final class AIChatViewController: NSViewController {
         controller.onRegenerate = { [weak self] file, isSetting in self?.regenerateSummary(file, isSetting: isSetting) }
         controller.onRefreshAll = { [weak self] in self?.refreshAllSummaries() }
         controller.onCancelRefresh = { [weak self] in self?.cancelMaintenance() }
+        controller.hooksOwner = ObjectIdentifier(self)
+        hookedWindow = controller
         pushMaintenanceProgress()
         if let window = controller.window, window.isVisible {
             window.makeKeyAndOrderFront(nil)

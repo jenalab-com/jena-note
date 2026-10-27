@@ -2,6 +2,17 @@ import AppKit
 import XCTest
 @testable import JenaNoteKit
 
+/// Holds every completion so a summary run stays in progress until the test is done.
+private final class HoldingGenerator: AISummaryGenerating {
+    var tokenUsage: Int?
+    var pending: [(Result<String, Error>) -> Void] = []
+    func summarize(prompt: String, provider: AIProvider, model: String?,
+                   completion: @escaping (Result<String, Error>) -> Void) {
+        pending.append(completion)
+    }
+    func cancel() {}
+}
+
 final class AIWorkContextBarTests: XCTestCase {
     private var originalLanguage: SettingsManager.Language!
 
@@ -138,6 +149,114 @@ final class AIWorkContextBarTests: XCTestCase {
         XCTAssertTrue(presented.last === shared)
         XCTAssertEqual(shared.selectedTab, .sources)
         XCTAssertFalse(shared.isProvisional)
+    }
+
+    /// A work with 01~03화 whose shared store never finishes a summary; returns (root, 03화).
+    private func makeGeneratingWork(_ name: String) throws -> (root: URL, file: URL, store: AIEpisodeSummaryStore) {
+        let work = try makeWork(name)
+        try "둘째 화".write(to: work.root.appendingPathComponent("집필/02화.md"), atomically: true, encoding: .utf8)
+        let third = work.root.appendingPathComponent("집필/03화.md")
+        try "셋째 화".write(to: third, atomically: true, encoding: .utf8)
+        try save(AIWorkContextConfig(title: name, settingsSources: ["설정"], writingFolder: "집필"), at: work.root)
+        let fake = HoldingGenerator()
+        let store = AIEpisodeSummaryStore(rootURL: work.root, makeGenerator: { fake })
+        AIEpisodeSummaryStore.installSharedForTesting(store)
+        addTeardownBlock { AIEpisodeSummaryStore.removeSharedForTesting(store) }
+        return (work.root, third, store)
+    }
+
+    func testGeneratingRowActionCancelsInsteadOfOpening() throws {
+        let work = try makeGeneratingWork("생성중")
+        let previousProvider = AISettings.provider
+        let previousPath = AISettings.customPath(for: .claude)
+        let fixture = work.root.deletingLastPathComponent().appendingPathComponent("claude")
+        try "#!/bin/sh\nexit 0\n".write(to: fixture, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: fixture.path)
+        AISettings.provider = .claude
+        AISettings.setPath(fixture.path, for: .claude)
+        defer {
+            AISettings.setPath(previousPath, for: .claude)
+            AISettings.provider = previousProvider
+        }
+        let doc = document(at: work.file)
+        doc.content = NSMutableAttributedString(attributedString: MarkdownSerializer.parse("셋째 화"))
+        var presented = 0
+        let chat = makeChat(showing: doc, presented: { _ in presented += 1 })
+        func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
+        let input = try XCTUnwrap(descendants(chat.view).compactMap { $0 as? NSTextView }.first { $0.isEditable })
+        input.string = "하연의 반응 봐줘"
+        chat.send()
+        guard case .generating = chat.workBar.status else {
+            return XCTFail("send should be generating summaries, got \(chat.workBar.status)")
+        }
+        XCTAssertTrue(chat.isAwaitingResponse)
+        // Minor 4: a refresh (KVO / viewWillAppear / onChange) keeps the send flow's row.
+        chat.refreshWorkContext()
+        guard case .generating = chat.workBar.status else {
+            return XCTFail("refresh must not wipe the generating row, got \(chat.workBar.status)")
+        }
+
+        chat.workBar.onPrimaryAction?()
+        XCTAssertEqual(presented, 0, "취소 must never open the window")
+        XCTAssertFalse(chat.isAwaitingResponse, "the request (and its summary run) is cancelled")
+        XCTAssertEqual(input.string, "하연의 반응 봐줘", "the unsent question goes back to the input")
+        if case .generating = chat.workBar.status { XCTFail("row should leave the generating state") }
+    }
+
+    func testCorruptBackupFailureDoesNotOpenFirstSetup() throws {
+        let broken = try makeWork("백업실패")
+        let jenanote = broken.root.appendingPathComponent(AIWorkContext.folderName)
+        let config = jenanote.appendingPathComponent(AIWorkContext.fileName)
+        try FileManager.default.createDirectory(at: jenanote, withIntermediateDirectories: true)
+        try "{ not json".write(to: config, atomically: true, encoding: .utf8)
+        // A directory squatting on the backup path makes the rename fail; it must not be deleted.
+        let squatter = jenanote.appendingPathComponent(AIWorkContext.fileName + ".bak")
+        try FileManager.default.createDirectory(at: squatter, withIntermediateDirectories: true)
+        try "keep".write(to: squatter.appendingPathComponent("note.txt"), atomically: true, encoding: .utf8)
+        var presented = 0
+        let chat = makeChat(showing: document(at: broken.file), presented: { _ in presented += 1 })
+        XCTAssertEqual(chat.workBar.status, .corrupt)
+        chat.openWorkWindow()
+        XCTAssertEqual(presented, 0)
+        XCTAssertEqual(try String(contentsOf: config, encoding: .utf8), "{ not json")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: squatter.appendingPathComponent("note.txt").path))
+        XCTAssertNil(AIWorkContextWindowController.existing(for: broken.root))
+        XCTAssertEqual(chat.workBar.status, .corrupt)
+    }
+
+    func testPanelDeinitClearsWindowProgress() throws {
+        let work = try makeGeneratingWork("패널닫기")
+        let doc = document(at: work.file)
+        var window: AIWorkContextWindowController?
+        weak var weakChat: AIChatViewController?
+        autoreleasepool {
+            let chat = makeChat(showing: doc, presented: { window = $0 })
+            chat.openWorkWindow()
+            window?.onRefreshAll?()
+            weakChat = chat
+        }
+        let controller = try XCTUnwrap(window)
+        XCTAssertNil(weakChat, "the panel should be released")
+        XCTAssertNil(controller.maintenanceProgress, "a closed panel must not leave the window on 갱신 취소 N/M")
+        XCTAssertNil(controller.onCancelRefresh)
+        XCTAssertNil(controller.onRefreshAll)
+        XCTAssertNil(controller.onRegenerate)
+        XCTAssertNil(controller.onChange)
+    }
+
+    func testPanelProgressReachesWindowWhileAlive() throws {
+        let work = try makeGeneratingWork("진행")
+        var window: AIWorkContextWindowController?
+        let chat = makeChat(showing: document(at: work.file), presented: { window = $0 })
+        chat.openWorkWindow()
+        let controller = try XCTUnwrap(window)
+        controller.onRefreshAll?()
+        XCTAssertNotNil(controller.maintenanceProgress)
+        guard case .generating = chat.workBar.status else {
+            return XCTFail("maintenance should show on the row, got \(chat.workBar.status)")
+        }
+        chat.workBar.onPrimaryAction?()   // 취소 → cancelMaintenance
+        XCTAssertNil(controller.maintenanceProgress)
     }
 
     func testSavingUntitledDocumentIntoWorkRefreshesRow() throws {

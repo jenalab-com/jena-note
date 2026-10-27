@@ -78,6 +78,15 @@ final class AIEpisodeSummaryStore {
         return store
     }
 
+    /// Registers `store` as the shared store for its root (tests inject a fake generator this way).
+    static func installSharedForTesting(_ store: AIEpisodeSummaryStore) {
+        registry[store.rootURL.standardizedFileURL.resolvingSymlinksInPath().path] = store
+    }
+
+    static func removeSharedForTesting(_ store: AIEpisodeSummaryStore) {
+        registry[store.rootURL.standardizedFileURL.resolvingSymlinksInPath().path] = nil
+    }
+
     /// Reuses the resolver's injectable hook; there is a single source of open documents.
     static var openDocuments: () -> [MarkdownDocument] {
         get { AIWorkContextResolver.openDocuments }
