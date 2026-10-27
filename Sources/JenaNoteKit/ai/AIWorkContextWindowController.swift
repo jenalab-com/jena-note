@@ -97,7 +97,7 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
         return AIWorkContextAssembler(resolved: resolved, store: store).payload(currentFile: currentFile).payload
     }
 
-    /// Tab slots. Tasks 4/5 replace the placeholders with views conforming to `AIWorkContextRenderable`.
+    /// Tab slots, re-rendered through `AIWorkContextRenderable` after every reload. Task 5 replaces the episodes placeholder.
     var sourcesView: NSView? { didSet { if selectedTab == .sources { select(.sources) }; renderTabs() } }
     var episodesView: NSView? { didSet { if selectedTab == .episodes { select(.episodes) }; renderTabs() } }
     private(set) var foldersView: AIWorkContextFoldersView!
@@ -115,7 +115,7 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
         window.minSize = NSSize(width: 560, height: 360)
         super.init(window: window)
         window.delegate = self
-        sourcesView = Self.placeholder("참고 자료 (Task 4)")
+        sourcesView = AIWorkContextSourcesView(controller: self)
         episodesView = Self.placeholder("지난 화 (Task 5)")
         foldersView = AIWorkContextFoldersView(controller: self)
         buildUI()
