@@ -18,10 +18,15 @@ struct AIWorkContextAssembler {
         return build(currentEpisode: current)
     }
 
-    func status(isGenerating: (Int, Int)?) -> AIWorkContextStatus {
+    /// Row status (spec §7.1). No sources → `.unavailable(.noSources)` ("사용 안 함 · 설정…", never
+    /// "꺼짐 · 켜기": there is nothing to turn on). `baseBytes` feeds the §6.4 trim preview
+    /// (`AIPrompt.estimatedBaseBytes`); 0 previews the work part alone.
+    func status(isGenerating: (Int, Int)?, baseBytes: Int = 0) -> AIWorkContextStatus {
         if let (done, total) = isGenerating { return .generating(done: done, total: total) }
+        guard !resolved.context.config.settingsSources.isEmpty else { return .unavailable(reason: .noSources) }
         guard resolved.context.config.enabled else { return .disabled }
-        let bytes = build(currentEpisode: "").payload.contextByteCount
+        let payload = build(currentEpisode: "").payload
+        let bytes = payload.contextByteCount
         let index = store.snapshotIndex()
         let ready = resolved.previousEpisodes.filter {
             switch store.state(of: $0, isSetting: false, index: index) {
@@ -32,7 +37,7 @@ struct AIWorkContextAssembler {
         return .active(settingsCount: resolved.settings.count,
                        summariesReady: ready, summariesTotal: resolved.previousEpisodes.count,
                        outsideWriting: resolved.isOutsideWritingFolder,
-                       contextBytes: bytes, budget: AIPrompt.budget(for: bytes))
+                       contextBytes: bytes, budget: AIPrompt.budget(for: payload, baseBytes: baseBytes))
     }
 
     /// Settings files whose summary is sent instead of their text.

@@ -8,7 +8,8 @@ enum AIWorkContextStatus: Equatable {
                 outsideWriting: Bool, contextBytes: Int, budget: AIPromptBudget)
     case generating(done: Int, total: Int)
 
-    enum UnavailableReason: Equatable { case notInWork, unsavedDocument }
+    /// `noSources`: a saved work with no settings source yet (routes to the sources tab).
+    enum UnavailableReason: Equatable { case notInWork, unsavedDocument, noSources }
 }
 
 /// Everything the row shows for one status (spec §7.1), kept pure so it can be tested without a view.
@@ -132,7 +133,7 @@ final class AIWorkContextBar: NSView {
     static func appearance(for status: AIWorkContextStatus) -> AIWorkContextBarAppearance {
         let settingsButton = L10n.tr("ai.work.row.settingsButton")
         switch status {
-        case .unavailable(.notInWork):
+        case .unavailable(.notInWork), .unavailable(.noSources):
             return AIWorkContextBarAppearance(dotColor: .systemGray, text: L10n.tr("ai.work.row.off"), detail: nil,
                                               buttonTitle: settingsButton, buttonEnabled: true,
                                               background: nil, tooltip: nil)
@@ -160,6 +161,13 @@ final class AIWorkContextBar: NSView {
             case .over:
                 return AIWorkContextBarAppearance(
                     dotColor: .systemOrange, text: L10n.tr("ai.work.row.overLimit"),
+                    detail: String(format: L10n.tr("ai.work.budget"), used, limit),
+                    buttonTitle: settingsButton, buttonEnabled: true, background: pale, tooltip: nil)
+            case let .willTrim(_, dropsPrevious):
+                // Over the limit but §6.4 trimming makes it fit: say what gets left out, not "over".
+                return AIWorkContextBarAppearance(
+                    dotColor: .systemOrange,
+                    text: L10n.tr(dropsPrevious ? "ai.work.row.willTrimAll" : "ai.work.row.willTrim"),
                     detail: String(format: L10n.tr("ai.work.budget"), used, limit),
                     buttonTitle: settingsButton, buttonEnabled: true, background: pale, tooltip: nil)
             case .warning:

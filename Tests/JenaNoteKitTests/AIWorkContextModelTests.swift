@@ -133,13 +133,13 @@ final class AIWorkContextModelTests: XCTestCase {
         XCTAssertEqual(config, original)
     }
 
-    func testStateTextForManualWithSourceChange() {
-        XCTAssertEqual(AIWorkContextModel.stateText(.manuallyEdited(sourceChanged: true)),
-                       "직접 수정됨 · 원본 변경 있음")
-        XCTAssertEqual(AIWorkContextModel.stateText(.manuallyEdited(sourceChanged: false)), "직접 수정됨")
-        XCTAssertEqual(AIWorkContextModel.stateText(.ready), "준비됨")
-        XCTAssertEqual(AIWorkContextModel.stateText(.missing), "없음")
-        XCTAssertEqual(AIWorkContextModel.stateText(.stale), "오래됨")
+    func testEpisodeStateLabelWording() {
+        XCTAssertEqual(AIWorkContextModel.episodeStateLabel(.manuallyEdited(sourceChanged: true)).text,
+                       "직접 고침 · 원문이 바뀌었어요")
+        XCTAssertEqual(AIWorkContextModel.episodeStateLabel(.manuallyEdited(sourceChanged: false)).text, "직접 고침")
+        XCTAssertEqual(AIWorkContextModel.episodeStateLabel(.ready).text, "준비됨")
+        XCTAssertEqual(AIWorkContextModel.episodeStateLabel(.missing).text, "아직 없음 · 다음 요청 때 만들어요")
+        XCTAssertEqual(AIWorkContextModel.episodeStateLabel(.stale).text, "원문이 바뀌어 다시 만들 예정")
     }
 
     func testLargeFileThresholdAndInvalidPathsLine() {
@@ -239,6 +239,20 @@ final class AIWorkContextModelTests: XCTestCase {
                        "설정 180KB + 지난 화 요약 40KB + 앞 화 30KB = 250KB / 500KB")
         XCTAssertEqual(AIWorkContextModel.budgetFactLine(payload(settings: 600_000)),
                        "설정 600KB + 지난 화 요약 40KB + 앞 화 30KB = 670KB. 한도는 500KB예요. 170KB를 줄여야 보낼 수 있어요.")
+    }
+
+    /// Settings fit, but settings + previous episode do not and there is no summary to drop:
+    /// §6.4 drops the previous episode, and the fact line says so (not "reduce by N").
+    func testBudgetFactLineWhenTrimmingDropsPreviousEpisode() throws {
+        let payload = AIWorkPayload(
+            title: "t", currentEpisode: "",
+            settings: [AIWorkSetting(name: "s", text: String(repeating: "a", count: 480_000), summarized: false)],
+            previousSummaries: [],
+            previousEpisode: AIWorkEpisodeText(name: "p", text: String(repeating: "c", count: 30_000)))
+        XCTAssertEqual(AIPrompt.budget(for: payload), .willTrim(omitted: 0, dropsPrevious: true))
+        XCTAssertEqual(AIWorkContextModel.budgetFactLine(payload),
+                       "설정 480KB + 지난 화 요약 0KB + 앞 화 30KB = 510KB. 한도는 500KB예요. 지난 화 요약과 앞 화 전문이 모두 이번 요청에서 빠져요.")
+        XCTAssertNil(try AIPrompt.fit(payload, base: [:]).previousEpisode)
     }
 
     func testAddingSourceRejectsOutsideRootAndRoot() throws {

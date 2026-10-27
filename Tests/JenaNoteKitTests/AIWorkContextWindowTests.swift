@@ -110,6 +110,94 @@ final class AIWorkContextWindowTests: XCTestCase {
         XCTAssertTrue(try diskConfig(root).enabled)
     }
 
+    /// C1: the suggestion is already right, the writer just closes the window → it is saved (spec §5.1 step 5).
+    func testClosingFirstSetupWithValidSuggestionSaves() throws {
+        let root = try makeWork()
+        let file = root.appendingPathComponent("집필/01화.md")
+        let controller = AIWorkContextWindowController.forFirstSetup(
+            fileURL: file, store: AIEpisodeSummaryStore(rootURL: root))
+        XCTAssertTrue(controller.isProvisional)
+        var changes = 0
+        controller.onChange = { changes += 1 }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: configURL(root).path))
+
+        controller.close()
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: configURL(root).path))
+        let disk = try diskConfig(root)
+        XCTAssertTrue(disk.enabled)
+        XCTAssertEqual(disk.settingsSources, ["설정"])
+        XCTAssertEqual(disk.writingFolder, "집필")
+        XCTAssertFalse(controller.isProvisional)
+        XCTAssertEqual(changes, 1)
+    }
+
+    /// C1: no source → closing saves nothing (the row stays "사용 안 함").
+    func testClosingFirstSetupWithoutSourcesSavesNothing() throws {
+        // No 설정/settings folder anywhere: the suggestion has no source.
+        let work = tmp.appendingPathComponent("메모")
+        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        let file = work.appendingPathComponent("01화.md")
+        try "본문".write(to: file, atomically: true, encoding: .utf8)
+        let controller = AIWorkContextWindowController.forFirstSetup(
+            fileURL: file, store: AIEpisodeSummaryStore(rootURL: work))
+        XCTAssertTrue(controller.context.config.settingsSources.isEmpty)
+        var changes = 0
+        controller.onChange = { changes += 1 }
+
+        controller.close()
+
+        let jenanote = controller.context.rootURL.appendingPathComponent(AIWorkContext.folderName)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: jenanote.path))
+        XCTAssertTrue(controller.isProvisional)
+        XCTAssertEqual(changes, 0)
+    }
+
+    /// C1: a title still being typed is committed when the window closes.
+    func testClosingCommitsPendingTitleEdit() throws {
+        let root = try makeWork()
+        try saveContext(at: root)
+        let controller = AIWorkContextWindowController.shared(for: root, store: AIEpisodeSummaryStore(rootURL: root))
+        controller.select(.folders)
+        let window = try XCTUnwrap(controller.window)
+        let field = controller.foldersView.titleField
+        XCTAssertTrue(window.makeFirstResponder(field))
+        guard field.currentEditor() != nil else { throw XCTSkip("field editor unavailable without a visible window") }
+        field.currentEditor()?.string = "닫으며 바꾼 제목"
+        controller.close()
+        XCTAssertEqual(try diskConfig(root).title, "닫으며 바꾼 제목")
+    }
+
+    /// C2: while first setup is provisional (nothing saved), summary actions are off.
+    func testEpisodesActionsDisabledWhileProvisional() throws {
+        let root = try makeWork()
+        for name in ["02화", "03화"] {
+            try name.write(to: root.appendingPathComponent("집필/\(name).md"), atomically: true, encoding: .utf8)
+        }
+        let controller = AIWorkContextWindowController.forFirstSetup(
+            fileURL: root.appendingPathComponent("집필/03화.md"), store: AIEpisodeSummaryStore(rootURL: root))
+        XCTAssertTrue(controller.isProvisional)
+        let episodes = try XCTUnwrap(controller.episodesView as? AIWorkContextEpisodesView)
+        XCTAssertEqual(episodes.shownRows.count, 2)
+        XCTAssertFalse(episodes.refreshButton.isEnabled)
+        XCTAssertEqual(episodes.remakeButtons.map(\.isEnabled), [false, false])
+
+        var refreshCalls = 0
+        var regenerateCalls = 0
+        controller.onRefreshAll = { refreshCalls += 1 }
+        controller.onRegenerate = { _, _ in regenerateCalls += 1 }
+        episodes.refreshOrCancel()
+        episodes.remake(row: 0)
+        XCTAssertEqual(refreshCalls, 0)
+        XCTAssertEqual(regenerateCalls, 0)
+
+        // Once saved (a valid change), the actions come back.
+        controller.mutate { $0.title = "달빛도시" }
+        XCTAssertFalse(controller.isProvisional)
+        XCTAssertTrue(episodes.refreshButton.isEnabled)
+        XCTAssertEqual(episodes.remakeButtons.map(\.isEnabled), [true, true])
+    }
+
     func testFoldersTabRejectsWritingFolderOutsideRoot() throws {
         let root = try makeWork()
         try saveContext(at: root)

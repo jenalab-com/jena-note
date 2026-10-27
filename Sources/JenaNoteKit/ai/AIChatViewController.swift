@@ -34,8 +34,16 @@ final class AIChatViewController: NSViewController {
     /// it running; only the window's cancel button and `deinit` stop it. Separate from `summaryRequest`.
     private var maintenanceRequest: AISummaryRequest?
     private var maintenanceStore: AIEpisodeSummaryStore?
+    /// The window whose button started the maintenance run; its progress goes there (never to the
+    /// window of whatever work the panel shows now).
+    private weak var maintenanceWindow: AIWorkContextWindowController?
     private var maintenanceProgress: (done: Int, total: Int)?
     private var maintenanceCancelled = false
+    /// The send flow's summary preparation (`summaryRequest`): its store and progress, mirrored into
+    /// that work's window as `sendProgress` (spec §5.2) so the episodes tab can name it.
+    private var preparingStore: AIEpisodeSummaryStore?
+    private var preparingProgress: (done: Int, total: Int)?
+    private weak var sendProgressWindow: AIWorkContextWindowController?
     private var resolvedWork: AIResolvedWorkContext?
     private var summaryStore: AIEpisodeSummaryStore?
     /// This controller's own summary `prepare` request. Only it is cancelled by `cancel()`: the store
@@ -128,6 +136,7 @@ final class AIChatViewController: NSViewController {
     deinit {
         // A window this panel fed must not stay stuck on "갱신 취소 N/M" with dead hooks.
         progressWindow?.maintenanceProgress = nil
+        sendProgressWindow?.sendProgress = nil
         if let window = hookedWindow, window.hooksOwner == ObjectIdentifier(self) {
             window.onRegenerate = nil
             window.onRefreshAll = nil
@@ -234,7 +243,8 @@ final class AIChatViewController: NSViewController {
                 resolvedWork = resolved
                 summaryStore = store
                 status = AIWorkContextAssembler(resolved: resolved, store: store)
-                    .status(isGenerating: ownMaintenanceProgress.map { ($0.done, $0.total) })
+                    .status(isGenerating: ownMaintenanceProgress.map { ($0.done, $0.total) },
+                            baseBytes: currentDocument?()?.content.string.utf8.count ?? 0)
             }
         } else {
             resolvedWork = nil
@@ -255,16 +265,36 @@ final class AIChatViewController: NSViewController {
         return maintenanceProgress
     }
 
-    /// Mirrors this panel's maintenance progress into the work context window of the work being
-    /// maintained (nil once the run ends).
+    /// Mirrors this panel's maintenance progress into the window that started the run (nil once the
+    /// run ends).
     private func pushMaintenanceProgress() {
-        let target = maintenanceStore.flatMap { AIWorkContextWindowController.existing(for: $0.rootURL) }
+        let target = maintenanceRequest == nil ? nil : maintenanceWindow
         if let previous = progressWindow, previous !== target { previous.maintenanceProgress = nil }
         if let target = target, target.maintenanceProgress?.done != maintenanceProgress?.done
             || target.maintenanceProgress?.total != maintenanceProgress?.total {
             target.maintenanceProgress = maintenanceProgress
         }
         progressWindow = target
+    }
+
+    /// Mirrors the send flow's summary progress into the window of the work being prepared (nil
+    /// once preparation ends); a window opened mid-run picks it up through `presentWorkWindow`.
+    private func pushSendProgress() {
+        let target = preparingProgress == nil ? nil
+            : preparingStore.flatMap { AIWorkContextWindowController.existing(for: $0.rootURL) }
+        if let previous = sendProgressWindow, previous !== target { previous.sendProgress = nil }
+        if let target = target, target.sendProgress?.done != preparingProgress?.done
+            || target.sendProgress?.total != preparingProgress?.total {
+            target.sendProgress = preparingProgress
+        }
+        sendProgressWindow = target
+    }
+
+    /// The send flow's preparation ended (sent, failed or cancelled).
+    private func endPreparing() {
+        preparingStore = nil
+        preparingProgress = nil
+        pushSendProgress()
     }
 
     /// Row action (spec §5.1, §7.1): routes by the row's current status to the work context window
@@ -285,6 +315,13 @@ final class AIChatViewController: NSViewController {
             return
         case .unavailable(reason: .notInWork):
             presentFirstSetup(fileURL: url)
+        case .unavailable(reason: .noSources):
+            // Saved work without sources: nothing to turn on; the window opens where sources are added.
+            guard let root = resolvedWork?.context.rootURL else { return }
+            let controller = AIWorkContextWindowController.shared(for: root, store: AIEpisodeSummaryStore.shared(for: root))
+            controller.currentFile = url
+            controller.reload()
+            presentWorkWindow(controller, tab: .sources)
         case .corrupt:
             // Never let first setup overwrite an unreadable file that could not be backed up.
             guard setCorruptContextAside(fileURL: url) else { return }
@@ -308,6 +345,7 @@ final class AIChatViewController: NSViewController {
             guard let root = resolvedWork?.context.rootURL else { return }
             let controller = AIWorkContextWindowController.shared(for: root, store: AIEpisodeSummaryStore.shared(for: root))
             controller.currentFile = url
+            controller.reload()   // a reused window may hold a config edited elsewhere since
             presentWorkWindow(controller, tab: .sources)
         }
     }
@@ -339,6 +377,13 @@ final class AIChatViewController: NSViewController {
                 try fm.removeItem(at: backup)
             }
             try fm.moveItem(at: config, to: backup)
+            let moved = L10n.tr("ai.work.corruptMoved")
+            if let conversation = conversation {
+                conversation.messages.append(AIChatMessage(role: "status", text: moved))
+                render()
+            } else {
+                render(status: moved)
+            }
             return true
         } catch {
             render(status: String(format: L10n.tr("ai.work.saveFailed"), error.localizedDescription))
@@ -350,12 +395,21 @@ final class AIChatViewController: NSViewController {
     /// window is only brought to the front, keeping the tab the user is on.
     private func presentWorkWindow(_ controller: AIWorkContextWindowController, tab: AIWorkContextWindowController.Tab) {
         controller.onChange = { [weak self] in self?.refreshWorkContext() }
-        controller.onRegenerate = { [weak self] file, isSetting in self?.regenerateSummary(file, isSetting: isSetting) }
-        controller.onRefreshAll = { [weak self] in self?.refreshAllSummaries() }
+        // Summary hooks act on THIS window's work (its store and resolved context), never on the
+        // work the panel shows now: the window outlives document switches.
+        controller.onRegenerate = { [weak self, weak controller] file, isSetting in
+            guard let self = self, let controller = controller else { return }
+            self.regenerateSummary(file, isSetting: isSetting, in: controller)
+        }
+        controller.onRefreshAll = { [weak self, weak controller] in
+            guard let self = self, let controller = controller else { return }
+            self.refreshAllSummaries(in: controller)
+        }
         controller.onCancelRefresh = { [weak self] in self?.cancelMaintenance() }
         controller.hooksOwner = ObjectIdentifier(self)
         hookedWindow = controller
         pushMaintenanceProgress()
+        pushSendProgress()
         if let window = controller.window, window.isVisible {
             window.makeKeyAndOrderFront(nil)
             return
@@ -366,27 +420,32 @@ final class AIChatViewController: NSViewController {
 
     // MARK: - Summary maintenance (work context window)
 
-    private func regenerateSummary(_ file: AIWorkFile, isSetting: Bool) {
-        guard let store = summaryStore else { return }
+    /// "다시 만들기" in `window`: regenerates into that window's store. Refused while the window's
+    /// context is provisional (nothing saved yet).
+    private func regenerateSummary(_ file: AIWorkFile, isSetting: Bool, in window: AIWorkContextWindowController) {
+        guard !window.isProvisional else { return }
+        let store = window.store
         let provider = AISettings.provider
         let model = options.selectedModel
-        runMaintenance(store: store, total: 1, name: file.relativePath) { _, completion in
+        runMaintenance(store: store, window: window, total: 1, name: file.relativePath) { _, completion in
             store.regenerate(file, isSetting: isSetting, provider: provider, model: model, completion: completion)
         }
     }
 
     /// "모두 갱신" regenerates only missing/stale summaries (spec §7.2, §6.3): `prepare` skips ready and
     /// manually edited ones, so hand-edited summaries are never overwritten here — "다시 생성" on a row
-    /// is the explicit way to replace one. Summarized settings are included.
-    private func refreshAllSummaries() {
-        guard let resolved = resolvedWork, let store = summaryStore else { return }
+    /// is the explicit way to replace one. Summarized settings are included. Works on `window`'s
+    /// store and resolved context (its current file), not on the panel's current work.
+    private func refreshAllSummaries(in window: AIWorkContextWindowController) {
+        guard !window.isProvisional, let resolved = window.resolved else { return }
+        let store = window.store
         let summarized = AIWorkContextAssembler(resolved: resolved, store: store).summarizedSettings
         let index = store.snapshotIndex()
         let total = store.pending(resolved.previousEpisodes, isSetting: false, index: index).count
             + store.pending(summarized, isSetting: true, index: index).count
         let provider = AISettings.provider
         let model = options.selectedModel
-        runMaintenance(store: store, total: total, name: nil) { progress, completion in
+        runMaintenance(store: store, window: window, total: total, name: nil) { progress, completion in
             store.prepare(episodes: resolved.previousEpisodes, settings: summarized, provider: provider, model: model,
                           progress: progress, completion: completion)
         }
@@ -399,8 +458,10 @@ final class AIChatViewController: NSViewController {
     }
 
     /// Starts a summary run owned by this controller: progress drives the bar and the open work
-    /// context window; on completion every spent token is counted (spec §6.3) and failures become a status line.
-    private func runMaintenance(store: AIEpisodeSummaryStore, total: Int, name: String?,
+    /// context window that started it (`window`); on completion every spent token is counted (spec
+    /// §6.3) and failures become a status line.
+    private func runMaintenance(store: AIEpisodeSummaryStore, window: AIWorkContextWindowController,
+                                total: Int, name: String?,
                                 start: (_ progress: @escaping (Int, Int) -> Void,
                                         _ completion: @escaping (Result<Int, Error>) -> Void) -> AISummaryRequest) {
         guard maintenanceRequest == nil else { return }
@@ -422,6 +483,7 @@ final class AIChatViewController: NSViewController {
             let cancelled = self.maintenanceCancelled
             self.maintenanceRequest = nil
             self.maintenanceStore = nil
+            self.maintenanceWindow = nil
             self.maintenanceProgress = nil
             self.maintenanceCancelled = false
             if case .failure(let error) = result {
@@ -441,12 +503,15 @@ final class AIChatViewController: NSViewController {
             if self.isViewLoaded {
                 self.render()
                 self.refreshWorkContext()
+            } else {
+                self.pushMaintenanceProgress()
             }
         })
         handle = request
         guard !finished else { return }
         maintenanceRequest = request
         maintenanceStore = store
+        maintenanceWindow = window
         maintenanceProgress = (0, total)
         refreshWorkContext()
     }
@@ -534,6 +599,7 @@ final class AIChatViewController: NSViewController {
         let token = UUID()
         generation = token
         setBusy(true)
+        preparingStore = store
         showGenerating(done: 0, total: jobs.count)
         render()
         abortPreparation = { [weak self] tokensUsed in
@@ -557,6 +623,7 @@ final class AIChatViewController: NSViewController {
             if spent > 0 { conversation.tokenUsage[provider, default: 0] += spent }
             self.summaryRequest = nil
             self.abortPreparation = nil
+            self.endPreparing()
             switch result {
             case .success:
                 guard let document = document, self.currentDocument?() === document else {
@@ -591,7 +658,7 @@ final class AIChatViewController: NSViewController {
             }
         })
         // The store may complete synchronously (e.g. an unreadable first file); keep no stale handle.
-        if !finished { summaryRequest = handle } else { abortPreparation = nil }
+        if !finished { summaryRequest = handle } else { abortPreparation = nil; endPreparing() }
     }
 
     /// Takes a question that was never sent back out of the conversation (with its snapshot note)
@@ -637,9 +704,13 @@ final class AIChatViewController: NSViewController {
         conversation.messages.append(AIChatMessage(role: "status", text: L10n.tr("ai.work.unreadable") + ": " + names))
     }
 
+    /// Send-flow summary progress: the waiting row uses the same words as the work context row, and
+    /// the work's window (if open) shows it in its episodes tab.
     private func showGenerating(done: Int, total: Int) {
-        waitingLabel.stringValue = String(format: L10n.tr("ai.work.generating"), done, total)
+        waitingLabel.stringValue = String(format: L10n.tr("ai.work.row.generating"), done, total)
         workBar.update(.generating(done: done, total: total))
+        preparingProgress = (done, total)
+        pushSendProgress()
     }
 
     /// Failure before the main request was sent: keep the question so nothing is lost.
@@ -713,6 +784,7 @@ final class AIChatViewController: NSViewController {
             abortPreparation?(pending.tokensUsed)
         }
         abortPreparation = nil
+        if preparingStore != nil || preparingProgress != nil { endPreparing() }
         if wasRequesting || wasPreparing {
             conversation?.messages.append(AIChatMessage(role: "status", text: L10n.tr("ai.cancelled")))
         }
