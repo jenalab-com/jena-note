@@ -130,18 +130,23 @@ struct AIWorkContext: Equatable {
     /// (`AIWorkContextError.corrupt`) instead of treating it as "no work". `.success(nil)` means
     /// no `context.json` was found within range. Used by the AI panel's work context bar.
     static func locateResult(from fileURL: URL) -> Result<AIWorkContext?, Error> {
+        guard let root = locateRoot(from: fileURL) else { return .success(nil) }
+        do { return .success(try load(rootURL: root)) } catch { return .failure(error) }
+    }
+
+    /// The nearest ancestor that has a `.jenanote/context.json` (whether or not it loads), within
+    /// the same range as `locate`. Used to set a corrupt file aside before first setup.
+    static func locateRoot(from fileURL: URL) -> URL? {
         let file = norm(fileURL)
-        if file.pathComponents.contains(folderName) { return .success(nil) }
+        if file.pathComponents.contains(folderName) { return nil }
         var dir = file.deletingLastPathComponent()
         for _ in 0...maxAncestorLevels {
-            if isBoundary(dir) { return .success(nil) }
+            if isBoundary(dir) { return nil }
             let candidate = dir.appendingPathComponent(folderName).appendingPathComponent(fileName)
-            if FileManager.default.fileExists(atPath: candidate.path) {
-                do { return .success(try load(rootURL: dir)) } catch { return .failure(error) }
-            }
+            if FileManager.default.fileExists(atPath: candidate.path) { return dir }
             dir = dir.deletingLastPathComponent()
         }
-        return .success(nil)
+        return nil
     }
 
     /// A `context.json` reached through a symlink (`.jenanote` or the file itself) or resolving outside

@@ -177,6 +177,20 @@ final class AIWorkContextWindowTests: XCTestCase {
         XCTAssertTrue(AIWorkContextWindowController.shared(for: tmp, store: AIEpisodeSummaryStore(rootURL: tmp)) === controller)
     }
 
+    /// Ported from the v1 sheet's `draft(existing: nil)` case: a stale row that offers first setup
+    /// while a `context.json` already exists at the suggested root opens the saved work instead.
+    func testFirstSetupUsesExistingContextAtSuggestedRoot() throws {
+        let root = try makeWork()
+        var saved = AIWorkContextConfig(title: "저장된 제목", settingsSources: ["설정"], writingFolder: "집필")
+        saved.excludedSettings = ["설정/인물.md"]
+        saved.includePreviousEpisode = false
+        try AIWorkContext(rootURL: root, config: saved, invalidPaths: []).save()
+        let controller = AIWorkContextWindowController.forFirstSetup(
+            fileURL: root.appendingPathComponent("집필/01화.md"), store: AIEpisodeSummaryStore(rootURL: root))
+        XCTAssertFalse(controller.isProvisional)
+        XCTAssertEqual(controller.context.config, saved)
+    }
+
     func testEnableSwitchCannotEnableWithoutSources() throws {
         let root = try makeWork()
         let config = AIWorkContextConfig(title: "달빛도시", settingsSources: [], writingFolder: "집필", enabled: false)
