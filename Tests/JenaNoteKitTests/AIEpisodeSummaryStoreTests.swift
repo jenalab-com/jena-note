@@ -109,8 +109,14 @@ final class AIEpisodeSummaryStoreTests: XCTestCase {
     }
 
     private func errorMessage(_ result: Result<Int, Error>) -> String? {
-        guard case .failure(let error) = result else { return nil }
+        guard case .failure(var error) = result else { return nil }
+        if let failure = error as? AISummaryGenerationError { error = failure.underlying }
         return (error as? AIError)?.message ?? error.localizedDescription
+    }
+
+    private func failedFile(_ result: Result<Int, Error>) -> String? {
+        guard case .failure(let error) = result else { return nil }
+        return (error as? AISummaryGenerationError)?.file.relativePath
     }
 
     // MARK: - Tests
@@ -185,6 +191,8 @@ final class AIEpisodeSummaryStoreTests: XCTestCase {
         fake.responses = [.success("1 요약"), .failure(AIError(message: "boom")), .success("3 요약")]
         let result = prepare(episodes)
         XCTAssertEqual(errorMessage(result), "boom")
+        XCTAssertEqual(failedFile(result), "02화.md")
+        if case .failure(let error) = result { XCTAssertEqual(error.localizedDescription, "02화.md: boom") }
         XCTAssertEqual(store.state(of: episode("01화.md"), isSetting: false), .ready)
         XCTAssertEqual(store.state(of: episode("02화.md"), isSetting: false), .missing)
         XCTAssertEqual(store.state(of: episode("03화.md"), isSetting: false), .missing)
@@ -304,6 +312,93 @@ final class AIEpisodeSummaryStoreTests: XCTestCase {
         XCTAssertNotNil(index.settings["설정/세계관.md"])
         XCTAssertNil(index.entries["설정/세계관.md"])
         XCTAssertEqual(store.state(of: file, isSetting: true), .ready)
+        XCTAssertEqual(store.state(of: file, isSetting: false), .missing)
+    }
+
+    func testSecondPrepareQueuesBehindAndSameEpisodeSummarizedOnce() throws {
+        fake.responses = [.success("1 요약"), .success("2 요약"), .success("3 요약")]
+        let first = expectation(description: "first")
+        let second = expectation(description: "second")
+        var firstResult: Result<Int, Error>?
+        var secondResult: Result<Int, Error>?
+        var secondProgress: [Int] = []
+        store.prepare(episodes: [episode("01화.md"), episode("02화.md")], settings: [], provider: .claude, model: nil,
+                      progress: { _, _ in }, completion: { result in
+            firstResult = result
+            first.fulfill()
+        })
+        store.prepare(episodes: [episode("02화.md"), episode("03화.md")], settings: [], provider: .claude, model: nil,
+                      progress: { done, _ in secondProgress.append(done) }, completion: { result in
+            secondResult = result
+            second.fulfill()
+        })
+        XCTAssertTrue(store.isGenerating)
+        wait(for: [first, second], timeout: 5, enforceOrder: true)
+        XCTAssertNoThrow(try XCTUnwrap(firstResult).get())
+        XCTAssertNoThrow(try XCTUnwrap(secondResult).get())
+        XCTAssertEqual(fake.calls, [
+            try AIPrompt.makeSummary(episodeName: "01화.md", text: "첫 화 본문"),
+            try AIPrompt.makeSummary(episodeName: "02화.md", text: "둘째 화 본문"),
+            try AIPrompt.makeSummary(episodeName: "03화.md", text: "셋째 화 본문"),
+        ])
+        XCTAssertEqual(secondProgress, [1]) // 02화 was already done when the second caller started
+        XCTAssertFalse(store.isGenerating)
+        for name in ["01화.md", "02화.md", "03화.md"] {
+            XCTAssertEqual(store.state(of: episode(name), isSetting: false), .ready)
+        }
+    }
+
+    func testCancellingOneCallerDoesNotCancelOther() throws {
+        fake.deferCompletion = true
+        var results: [String: Result<Int, Error>] = [:]
+        func track(_ name: String) -> (Result<Int, Error>) -> Void { { results[name] = $0 } }
+        let a = store.prepare(episodes: [episode("01화.md")], settings: [], provider: .claude, model: nil,
+                              progress: { _, _ in }, completion: track("A"))
+        _ = store.prepare(episodes: [episode("02화.md")], settings: [], provider: .claude, model: nil,
+                          progress: { _, _ in }, completion: track("B"))
+        let c = store.prepare(episodes: [episode("03화.md")], settings: [], provider: .claude, model: nil,
+                              progress: { _, _ in }, completion: track("C"))
+        XCTAssertEqual(fake.calls.count, 1)
+
+        // Cancelling a queued caller drops only that caller.
+        c.cancel()
+        XCTAssertEqual(errorMessage(try XCTUnwrap(results["C"])), L10n.tr("ai.cancelled"))
+        XCTAssertNil(results["A"])
+        XCTAssertEqual(fake.cancelCount, 0)
+
+        // Cancelling the active caller stops its generator and lets B start.
+        a.cancel()
+        XCTAssertEqual(errorMessage(try XCTUnwrap(results["A"])), L10n.tr("ai.cancelled"))
+        XCTAssertEqual(fake.cancelCount, 1)
+        XCTAssertNil(results["B"])
+        XCTAssertEqual(fake.calls.count, 2)
+        XCTAssertEqual(fake.calls.last, try AIPrompt.makeSummary(episodeName: "02화.md", text: "둘째 화 본문"))
+        XCTAssertTrue(store.isGenerating)
+
+        // A's late response is ignored; B's response completes B.
+        fake.pending[0](.success("늦은 1 요약"))
+        XCTAssertNil(results["B"])
+        fake.pending[1](.success("2 요약"))
+        XCTAssertNoThrow(try XCTUnwrap(results["B"]).get())
+        XCTAssertFalse(store.isGenerating)
+        XCTAssertEqual(store.state(of: episode("01화.md"), isSetting: false), .missing)
+        XCTAssertEqual(store.state(of: episode("02화.md"), isSetting: false), .ready)
+        XCTAssertEqual(store.state(of: episode("03화.md"), isSetting: false), .missing)
+        XCTAssertEqual(fake.calls.count, 2)
+    }
+
+    func testInterruptedRewriteReadsAsMissingNotManual() throws {
+        fake.responses = [.success("AI 요약")]
+        XCTAssertNoThrow(try prepare([episode("01화.md")]).get())
+        let file = episode("01화.md")
+        // Regeneration fails at the .txt write (target replaced by a directory) after the old record was dropped.
+        let url = store.summaryURL(for: file, isSetting: false)
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.createDirectory(at: url.appendingPathComponent("block"), withIntermediateDirectories: true)
+        fake.responses = [.success("새 요약")]
+        let result = regenerate(file)
+        XCTAssertEqual(failedFile(result), "01화.md")
+        XCTAssertNil(try readIndex().entries["01화.md"])
         XCTAssertEqual(store.state(of: file, isSetting: false), .missing)
     }
 }

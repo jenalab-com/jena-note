@@ -24,9 +24,9 @@ final class AIChatViewController: NSViewController {
     var presentPopover: (() -> Void)?
     private var resolvedWork: AIResolvedWorkContext?
     private var summaryStore: AIEpisodeSummaryStore?
-    /// The store this controller is currently running `prepare` on. Only that run is cancelled by
-    /// `cancel()`: the store is shared per work root, so another window's run must not be stopped.
-    private var preparingStore: AIEpisodeSummaryStore?
+    /// This controller's own summary `prepare` request. Only it is cancelled by `cancel()`: the store
+    /// is shared per work root, so another window's request must not be stopped.
+    private var summaryRequest: AISummaryRequest?
     private var waitingLabel: NSTextField!
     private let selectionLabel = NSTextField(wrappingLabelWithString: "")
     private let providerLabel = NSTextField(labelWithString: "")
@@ -108,7 +108,7 @@ final class AIChatViewController: NSViewController {
                                                 name: NSTextView.didChangeSelectionNotification, object: nil)
     }
 
-    deinit { request?.cancel(); preparingStore?.cancel(); NotificationCenter.default.removeObserver(self) }
+    deinit { request?.cancel(); summaryRequest?.cancel(); NotificationCenter.default.removeObserver(self) }
 
     private func makeScroll(textView: NSTextView, editable: Bool) -> NSScrollView {
         let scroll = NSScrollView()
@@ -225,7 +225,7 @@ final class AIChatViewController: NSViewController {
     /// Order (spec §6.8): fix the question → generate missing summaries → snapshot → prompt → send.
     /// When no summary is needed (the usual case) the snapshot is taken at click time, as before.
     @objc func send() {
-        guard request == nil, preparingStore == nil, let document = currentDocument?() else { return }
+        guard request == nil, summaryRequest == nil, let document = currentDocument?() else { return }
         let conversation = AIConversationStore.shared.conversation(for: document)
         self.conversation = conversation
         documentLabel.stringValue = document.displayName
@@ -264,20 +264,21 @@ final class AIChatViewController: NSViewController {
         }
         let token = UUID()
         generation = token
-        preparingStore = store
         setBusy(true)
         showGenerating(done: 0, total: jobs.count)
         render()
         var completed = 0
-        store.prepare(episodes: episodes, settings: summarized, provider: provider, model: options.selectedModel,
+        var finished = false
+        let handle = store.prepare(episodes: episodes, settings: summarized, provider: provider, model: options.selectedModel,
                       progress: { [weak self] done, total in
                           completed = done
                           guard let self = self, self.generation == token else { return }
                           self.showGenerating(done: done, total: total)
                       },
                       completion: { [weak self, weak document] result in
+            finished = true
             guard let self = self, self.generation == token else { return }
-            self.preparingStore = nil
+            self.summaryRequest = nil
             switch result {
             case .success(let tokens):
                 if tokens > 0 { conversation.tokenUsage[provider, default: 0] += tokens }
@@ -295,11 +296,21 @@ final class AIChatViewController: NSViewController {
                     self.failRequest(error.localizedDescription, question: question, conversation: conversation)
                 }
             case .failure(let error):
-                let name = completed < jobs.count ? jobs[completed].relativePath : ""
-                self.failRequest(String(format: L10n.tr("ai.work.summaryFailed"), name, error.localizedDescription),
+                let name: String
+                let reason: String
+                if let failure = error as? AISummaryGenerationError {
+                    name = failure.file.relativePath
+                    reason = failure.underlying.localizedDescription
+                } else {
+                    name = completed < jobs.count ? jobs[completed].relativePath : ""
+                    reason = error.localizedDescription
+                }
+                self.failRequest(String(format: L10n.tr("ai.work.summaryFailed"), name, reason),
                                  question: question, conversation: conversation)
             }
         })
+        // The store may complete synchronously (e.g. an unreadable first file); keep no stale handle.
+        if !finished { summaryRequest = handle }
     }
 
     private func makePrompt(document: MarkdownDocument, history: [AIChatMessage], question: String, mode: AIChatMode,
@@ -392,7 +403,7 @@ final class AIChatViewController: NSViewController {
     }
 
     @objc func cancel() {
-        let wasPreparing = preparingStore != nil
+        let wasPreparing = summaryRequest != nil
         if request != nil || wasPreparing {
             conversation?.messages.append(AIChatMessage(role: "status", text: L10n.tr("ai.cancelled")))
         }
@@ -400,9 +411,9 @@ final class AIChatViewController: NSViewController {
         request?.cancel()
         request = nil
         // Only this controller's own summary run; already generated summaries stay cached.
-        if let store = preparingStore {
-            preparingStore = nil
-            store.cancel()
+        if let pending = summaryRequest {
+            summaryRequest = nil
+            pending.cancel()
         }
         if isViewLoaded {
             setBusy(false)
