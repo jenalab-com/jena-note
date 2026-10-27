@@ -196,4 +196,106 @@ final class AIWorkContextEpisodesViewTests: XCTestCase {
         XCTAssertFalse(view.errorLabel.isHidden)
         XCTAssertFalse(view.errorLabel.stringValue.isEmpty)
     }
+
+    // MARK: - Fix round 1
+
+    /// Rows: 01화 manually edited, 02화 stale.
+    private func openWithManualAndStale() throws -> (AIWorkContextWindowController, AIWorkContextEpisodesView) {
+        try writeSummary("01화.md", summary: "요약 1", source: "첫 화")
+        try writeSummary("02화.md", summary: "요약 2", source: "둘째 화")
+        let (controller, view) = open()
+        try "고친 요약 1".write(to: store.summaryURL(for: view.shownRows[0].file, isSetting: false),
+                             atomically: true, encoding: .utf8)
+        try write("집필/02화.md", "둘째 화 고침")
+        controller.reload()
+        XCTAssertEqual(view.shownRows.map(\.state), [.manuallyEdited(sourceChanged: false), .stale])
+        return (controller, view)
+    }
+
+    func testRemakeManualAsksThenRegenerates() throws {
+        let (controller, view) = try openWithManualAndStale()
+        var asked: [String] = []
+        var regenerated: [String] = []
+        view.confirmRegenerate = { file, completion in
+            asked.append(file.relativePath)
+            completion(true)
+        }
+        controller.onRegenerate = { file, isSetting in
+            XCTAssertFalse(isSetting)
+            regenerated.append(file.relativePath)
+        }
+        view.remake(row: 0)
+        XCTAssertEqual(asked, ["01화.md"])
+        XCTAssertEqual(regenerated, ["01화.md"])
+    }
+
+    func testRemakeManualCancelledDoesNothing() throws {
+        let (controller, view) = try openWithManualAndStale()
+        var asked = 0
+        var regenerated = 0
+        view.confirmRegenerate = { _, completion in
+            asked += 1
+            completion(false)
+        }
+        controller.onRegenerate = { _, _ in regenerated += 1 }
+        view.remake(row: 0)
+        XCTAssertEqual(asked, 1)
+        XCTAssertEqual(regenerated, 0)
+    }
+
+    func testRemakeStaleRegeneratesWithoutConfirm() throws {
+        let (controller, view) = try openWithManualAndStale()
+        var asked = 0
+        var regenerated: [String] = []
+        view.confirmRegenerate = { _, completion in
+            asked += 1
+            completion(true)
+        }
+        controller.onRegenerate = { file, _ in regenerated.append(file.relativePath) }
+        view.remake(row: 1)
+        XCTAssertEqual(asked, 0)
+        XCTAssertEqual(regenerated, ["02화.md"])
+    }
+
+    func testWindowRerendersWhenStoreGenerates() throws {
+        let (_, view) = open()
+        XCTAssertTrue(view.otherGeneratingLabel.isHidden)
+
+        // Another request starts generating: no mutate/reload on the controller.
+        store.prepare(episodes: view.shownRows.map(\.file), settings: [], provider: .claude, model: nil,
+                      progress: { _, _ in }, completion: { _ in })
+        XCTAssertFalse(view.otherGeneratingLabel.isHidden)
+        XCTAssertFalse(view.tableView.isEnabled)
+
+        // Release every held completion; each stored summary starts the next file.
+        var released = 0
+        while !fake.pending.isEmpty, released < 10 {
+            fake.pending.removeFirst()(.success("요약 \(released)"))
+            released += 1
+        }
+        XCTAssertEqual(released, 2)
+        XCTAssertFalse(store.isGenerating)
+        XCTAssertTrue(view.otherGeneratingLabel.isHidden)
+        XCTAssertTrue(view.tableView.isEnabled)
+        XCTAssertEqual(view.stateLabels.map(\.stringValue),
+                       [L10n.tr("ai.work.episodes.ready"), L10n.tr("ai.work.episodes.ready")])
+    }
+
+    func testHintWithoutPreviousEpisodeAndOpenErrorClearedByNextAction() throws {
+        let (_, view) = open()
+        view.setIncludePrevious(false)
+        XCTAssertEqual(view.hintLabel.stringValue, String(format: L10n.tr("ai.work.episodes.hintNoPrevious"), 3, 2))
+
+        let outside = tmp.appendingPathComponent("outside.txt")
+        try "밖".write(to: outside, atomically: true, encoding: .utf8)
+        let file = view.shownRows[0].file
+        let summary = store.summaryURL(for: file, isSetting: false)
+        try FileManager.default.createDirectory(at: summary.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: summary, withDestinationURL: outside)
+        view.openDocumentHandler = { _ in }
+        view.openSummary(file, store: store)
+        XCTAssertFalse(view.errorLabel.isHidden)
+        view.refreshOrCancel()
+        XCTAssertTrue(view.errorLabel.isHidden)
+    }
 }

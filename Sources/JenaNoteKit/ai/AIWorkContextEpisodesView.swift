@@ -10,6 +10,9 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
 
     /// Opens a summary file as a document; replaced in tests.
     var openDocumentHandler: ((URL) -> Void)?
+    /// Asks before replacing a summary the author edited; `completion(true)` regenerates. Replaced in
+    /// tests. Default: `ai.work.regenerateConfirm` as a sheet on this view's window (no window → no-op).
+    var confirmRegenerate: ((_ file: AIWorkFile, _ completion: @escaping (Bool) -> Void) -> Void)?
 
     // Test visibility
     /// Episode rows in display order (episode order).
@@ -142,8 +145,13 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
                 otherGenerating: Bool, lastRefresh: Date?) {
         let previous = resolved.previousEpisodes
         if let current = resolved.currentIndex, !previous.isEmpty {
-            hintLabel.stringValue = String(format: L10n.tr("ai.work.episodes.hint"),
-                                           current + 1, previous.count, previous.count)
+            if resolved.context.config.includePreviousEpisode {
+                hintLabel.stringValue = String(format: L10n.tr("ai.work.episodes.hint"),
+                                               current + 1, previous.count, previous.count)
+            } else {
+                hintLabel.stringValue = String(format: L10n.tr("ai.work.episodes.hintNoPrevious"),
+                                               current + 1, previous.count)
+            }
         } else {
             hintLabel.stringValue = L10n.tr("ai.work.episodes.hintNone")
         }
@@ -275,6 +283,14 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
         openSummary(shownRows[row].file, store: store)
     }
 
+    /// Every user action starts by dropping the last "열기" error (re-rendered by the action itself
+    /// or here when it doesn't re-render).
+    private func clearOpenError() {
+        guard openError != nil else { return }
+        openError = nil
+        rerender()
+    }
+
     /// Opens the summary in its own window (spec §5.3, §13). Refuses a summary path that leaves the
     /// root or goes through a symlink (any component, including the leaf) — red label, nothing opened.
     /// An already open document for that file is brought to the front instead of opened twice.
@@ -285,9 +301,7 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
             rerender()
             return
         }
-        let hadError = openError != nil
-        openError = nil
-        defer { if hadError { rerender() } }
+        clearOpenError()
         let target = url.standardizedFileURL
         let open = NSDocumentController.shared.documents.compactMap { $0 as? MarkdownDocument }.first {
             $0.fileURL?.standardizedFileURL == target
@@ -310,30 +324,35 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
 
     /// "다시 만들기"/"지금 만들기" on row `row`. A summary the author edited asks first (sheet).
     func remake(row: Int) {
+        clearOpenError()
         guard row < shownRows.count, let controller = controller, !controller.store.isGenerating else { return }
         let entry = shownRows[row]
         guard case .manuallyEdited = entry.state else {
             controller.onRegenerate?(entry.file, false)
             return
         }
-        let alert = NSAlert()
-        alert.messageText = L10n.tr("ai.work.regenerateConfirm")
-        alert.addButton(withTitle: L10n.tr("ai.work.episodes.remake"))
-        alert.addButton(withTitle: L10n.tr("ai.work.cancel"))
         let file = entry.file
-        let confirm: (NSApplication.ModalResponse) -> Void = { [weak controller] response in
-            guard response == .alertFirstButtonReturn else { return }
+        let ask = confirmRegenerate ?? { [weak self] file, completion in self?.presentRegenerateSheet(for: file, completion) }
+        ask(file) { [weak controller] confirmed in
+            guard confirmed else { return }
             controller?.onRegenerate?(file, false)
         }
-        if let window = window ?? controller.window, window.isVisible {
-            alert.beginSheetModal(for: window, completionHandler: confirm)
-        } else {
-            confirm(alert.runModal())
-        }
+    }
+
+    /// Sheet on this view's window; without a window nothing is asked and nothing happens (never `runModal`).
+    private func presentRegenerateSheet(for file: AIWorkFile, _ completion: @escaping (Bool) -> Void) {
+        guard let window = window else { return }
+        let alert = NSAlert()
+        alert.messageText = L10n.tr("ai.work.regenerateConfirm")
+        alert.informativeText = file.relativePath
+        alert.addButton(withTitle: L10n.tr("ai.work.episodes.remake"))
+        alert.addButton(withTitle: L10n.tr("ai.work.cancel"))
+        alert.beginSheetModal(for: window) { completion($0 == .alertFirstButtonReturn) }
     }
 
     /// The tool button: "요약 전부 새로 만들기" when idle, "갱신 취소" while this window's run is active.
     func refreshOrCancel() {
+        clearOpenError()
         guard let controller = controller else { return }
         if isRefreshing {
             controller.onCancelRefresh?()
@@ -343,6 +362,7 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
     }
 
     func setIncludePrevious(_ on: Bool) {
+        clearOpenError()
         guard let controller = controller, controller.context.config.includePreviousEpisode != on else { return }
         controller.mutate { $0.includePreviousEpisode = on }
     }

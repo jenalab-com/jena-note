@@ -476,4 +476,24 @@ final class AIEpisodeSummaryStoreTests: XCTestCase {
         XCTAssertEqual(pending, store.pending(files, isSetting: false))
         XCTAssertEqual(pending.map(\.relativePath), ["02화.md", "03화.md"])
     }
+
+    func testGenerationObserverFiresOnStartStoreAndFinish() throws {
+        fake.responses = [.success("요약")]
+        var fired = 0
+        var generatingSeen: [Bool] = []
+        let token = store.addGenerationObserver { [unowned self] in
+            fired += 1
+            generatingSeen.append(self.store.isGenerating)
+        }
+        XCTAssertNoThrow(try prepare([episode("01화.md")]).get())
+        XCTAssertGreaterThanOrEqual(fired, 3)   // start, stored, finished
+        XCTAssertEqual(generatingSeen.first, true)
+        XCTAssertEqual(generatingSeen.last, false)
+
+        store.removeObserver(token)
+        let before = fired
+        fake.responses = [.success("새 요약")]
+        XCTAssertNoThrow(try regenerate(episode("01화.md")).get())
+        XCTAssertEqual(fired, before)
+    }
 }
