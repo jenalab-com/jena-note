@@ -6,7 +6,8 @@ protocol AIWorkContextRenderable: AnyObject {
 }
 
 /// The work context window (spec §7.2): one per work root, left sidebar with three tabs, every
-/// change saved to `context.json` immediately through `mutate`. Closing the window keeps the
+/// change saved to `context.json` immediately through `mutate`. Closing the window commits a
+/// pending title edit and saves a valid first-setup context (spec §5.1 step 5), and keeps the
 /// instance in the registry so the next open reuses it.
 final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate {
     enum Tab: Int, CaseIterable { case sources, episodes, folders }
@@ -35,7 +36,8 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
     }
 
     /// First setup (no `context.json` yet): opens with a provisional context built from the
-    /// suggestion. Nothing is written until the first `mutate` that yields a valid config.
+    /// suggestion. Nothing is written until the first `mutate` that yields a valid config, or until
+    /// the window closes with the suggestion already valid (`windowWillClose`).
     static func forFirstSetup(fileURL: URL, store: AIEpisodeSummaryStore) -> AIWorkContextWindowController {
         dispatchPrecondition(condition: .onQueue(.main))
         let suggestion = AIWorkContextSuggestion.make(for: fileURL)
@@ -83,7 +85,8 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
     private(set) var store: AIEpisodeSummaryStore { didSet { observeStore() } }
     /// Re-renders the tabs when any request (this window's or another's) changes the store's generation state.
     private var storeObserver: AIStoreObserverToken?
-    /// True while the context only lives in memory (first setup, nothing saved yet).
+    /// True while the context only lives in memory (first setup, nothing saved yet). Summary
+    /// actions (episodes tab) are disabled meanwhile.
     private(set) var isProvisional: Bool
     /// Last save failure, shown in the folders tab until the next successful save.
     private(set) var lastSaveError: String?
@@ -100,6 +103,9 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
     var hooksOwner: ObjectIdentifier?
     /// Summary maintenance progress, pushed in by the chat panel.
     var maintenanceProgress: (done: Int, total: Int)? { didSet { renderTabs() } }
+    /// Progress of a chat panel's send flow preparing summaries for this work (spec §5.2), so the
+    /// episodes tab shows it as such instead of "another request is generating".
+    var sendProgress: (done: Int, total: Int)? { didSet { renderTabs() } }
 
     var payload: AIWorkPayload? {
         guard let currentFile = currentFile, let resolved = resolved else { return nil }
@@ -200,6 +206,20 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
     }
 
     @objc private func closeWindow() { window?.performClose(nil) }
+
+    func windowWillClose(_ notification: Notification) {
+        commitPendingChanges()
+    }
+
+    /// Runs when the window closes (spec §5.1 step 5 "창을 닫으면 … 저장"): ends a pending title edit
+    /// (saved through `mutate`), then saves a provisional context that is already valid (≥1 source,
+    /// writing folder inside the root) — e.g. first setup where the suggestion needed no change.
+    /// An invalid provisional context stays unsaved.
+    func commitPendingChanges() {
+        foldersView?.commitPendingTitle()
+        window?.makeFirstResponder(nil)
+        if isProvisional { commit(context) }
+    }
 
     private func view(for tab: Tab) -> NSView? {
         switch tab {

@@ -45,20 +45,10 @@ enum AIWorkContextModel {
         return resolved.previousEpisodes.map { EpisodeRow(file: $0, state: store.state(of: $0, isSetting: false, index: index)) }
     }
 
-    static func stateText(_ state: AISummaryState) -> String {
-        switch state {
-        case .ready: return L10n.tr("ai.work.stateReady")
-        case .missing: return L10n.tr("ai.work.stateMissing")
-        case .stale: return L10n.tr("ai.work.stateStale")
-        case .manuallyEdited(let sourceChanged):
-            return L10n.tr(sourceChanged ? "ai.work.stateManualSourceChanged" : "ai.work.stateManual")
-        }
-    }
-
     enum EpisodeTone: Equatable { case ready, manual, stale, missing }
 
     /// v2 wording for the episodes tab (spec §7.2 ②): plain-language state, whether it gets the 🔒,
-    /// and the tone the view maps to a dot color. `stateText` keeps the v1 wording.
+    /// and the tone the view maps to a dot color.
     static func episodeStateLabel(_ state: AISummaryState) -> (text: String, isManual: Bool, tone: EpisodeTone) {
         switch state {
         case .ready: return (L10n.tr("ai.work.episodes.ready"), false, .ready)
@@ -141,14 +131,28 @@ enum AIWorkContextModel {
         }
     }
 
-    /// One fact line: room left → "Settings 180KB + summaries 40KB = 220KB / 500KB"; over the limit
-    /// → the same sum plus the limit and how much to cut.
-    static func budgetFactLine(_ payload: AIWorkPayload) -> String {
+    /// One fact line describing what will actually happen (spec §5.4, §7.2 ①). The sum has two
+    /// terms ("설정 180KB + 지난 화 요약 40KB = 220KB / 500KB") or, when the previous episode is sent in
+    /// full, three ("… + 앞 화 30KB = 250KB / 500KB").
+    /// - Over the limit but trimmable (`AIPrompt.budget` → `.willTrim`): always the three-term sum, the
+    ///   limit and what §6.4 leaves out of this request ("오래된 요약 N개가 …빠져요", or summaries and
+    ///   the previous episode).
+    /// - Settings over the limit / not trimmable (`.over`): the sum, the limit and how much to cut.
+    static func budgetFactLine(_ payload: AIWorkPayload, baseBytes: Int = 0) -> String {
         let segments = budgetSegments(payload)
         let total = segments.settings + segments.summaries + segments.previous
         let format = AIWorkContextBar.formatBytes
         let limit = AIPrompt.maximumBytes
-        let over = total > limit
+        let budget = AIPrompt.budget(for: payload, baseBytes: baseBytes)
+        if case let .willTrim(omitted, dropsPrevious) = budget {
+            let sums: [CVarArg] = [format(segments.settings), format(segments.summaries),
+                                   format(segments.previous), format(total), format(limit)]
+            if dropsPrevious {
+                return String(format: L10n.tr("ai.work.budget.willTrimAll"), arguments: sums)
+            }
+            return String(format: L10n.tr("ai.work.budget.willTrim"), arguments: sums + [omitted])
+        }
+        let over = budget == .over
         var args: [String] = [format(segments.settings), format(segments.summaries)]
         if segments.previous > 0 { args.append(format(segments.previous)) }
         args.append(format(total))

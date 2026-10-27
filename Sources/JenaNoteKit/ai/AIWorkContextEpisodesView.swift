@@ -30,6 +30,8 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
     let progressLabel = NSTextField(labelWithString: "")
     let lastRefreshLabel = NSTextField(labelWithString: "")
     let otherGeneratingLabel = NSTextField(labelWithString: L10n.tr("ai.work.episodes.otherGenerating"))
+    /// The chat panel's own send flow preparing summaries ("지난 화 요약 만드는 중 N/M", same as the row).
+    let sendProgressLabel = NSTextField(labelWithString: "")
     let errorLabel = NSTextField(wrappingLabelWithString: "")
     let includePreviousCheckbox = NSButton(checkboxWithTitle: L10n.tr("ai.work.episodes.includePrevious"),
                                            target: nil, action: nil)
@@ -78,6 +80,9 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
         otherGeneratingLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         otherGeneratingLabel.textColor = .systemOrange
         otherGeneratingLabel.isHidden = true
+        sendProgressLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        sendProgressLabel.textColor = .systemBlue
+        sendProgressLabel.isHidden = true
 
         errorLabel.textColor = .systemRed
         errorLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
@@ -88,8 +93,8 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
 
         buildTable()
 
-        let stack = NSStackView(views: [header, hintLabel, toolRow, otherGeneratingLabel, errorLabel,
-                                        scrollView, includePreviousCheckbox])
+        let stack = NSStackView(views: [header, hintLabel, toolRow, otherGeneratingLabel, sendProgressLabel,
+                                        errorLabel, scrollView, includePreviousCheckbox])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 6
@@ -108,6 +113,15 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
             stack.topAnchor.constraint(equalTo: topAnchor, constant: 16),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
         ])
+    }
+
+    /// Wrapping labels get the content width (stack insets: 20 on each side) so they wrap, not clip.
+    override func layout() {
+        super.layout()
+        let width = max(0, bounds.width - 40)
+        for label in [hintLabel, errorLabel] where label.preferredMaxLayoutWidth != width {
+            label.preferredMaxLayoutWidth = width
+        }
     }
 
     private func buildTable() {
@@ -136,13 +150,18 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
     func render(controller: AIWorkContextWindowController) {
         guard let resolved = controller.resolved else { return }
         let progress = controller.maintenanceProgress.map { ($0.done, $0.total) }
-        let otherGenerating = controller.store.isGenerating && progress == nil
+        let send = controller.sendProgress.map { ($0.done, $0.total) }
+        // "Another request" only when neither this window's maintenance nor a panel's send owns the run.
+        let otherGenerating = controller.store.isGenerating && progress == nil && send == nil
         render(resolved, store: controller.store, progress: progress, otherGenerating: otherGenerating,
-               lastRefresh: AIWorkContextModel.lastRefresh(controller.store.snapshotIndex()))
+               lastRefresh: AIWorkContextModel.lastRefresh(controller.store.snapshotIndex()), sendProgress: send)
     }
 
+    /// `sendProgress`: a chat panel's send flow preparing summaries (spec §5.2). While the window's
+    /// context is provisional (first setup, nothing saved) every summary action is disabled.
     func render(_ resolved: AIResolvedWorkContext, store: AIEpisodeSummaryStore, progress: (Int, Int)?,
-                otherGenerating: Bool, lastRefresh: Date?) {
+                otherGenerating: Bool, lastRefresh: Date?, sendProgress: (Int, Int)? = nil) {
+        let provisional = controller?.isProvisional ?? false
         let previous = resolved.previousEpisodes
         if let current = resolved.currentIndex, !previous.isEmpty {
             if resolved.context.config.includePreviousEpisode {
@@ -166,7 +185,8 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
             refreshButton.title = L10n.tr("ai.work.episodes.refreshAll")
             progressLabel.isHidden = true
         }
-        refreshButton.isEnabled = isRefreshing || (!otherGenerating && !previous.isEmpty)
+        refreshButton.isEnabled = isRefreshing
+            || (!otherGenerating && !store.isGenerating && !previous.isEmpty && !provisional)
         if let lastRefresh = lastRefresh {
             let formatted = DateFormatter.localizedString(from: lastRefresh, dateStyle: .short, timeStyle: .short)
             lastRefreshLabel.stringValue = String(format: L10n.tr("ai.work.episodes.lastRefresh"), formatted)
@@ -175,6 +195,12 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
             lastRefreshLabel.isHidden = true
         }
         otherGeneratingLabel.isHidden = !otherGenerating
+        if let send = sendProgress {
+            sendProgressLabel.stringValue = String(format: L10n.tr("ai.work.row.generating"), send.0, send.1)
+            sendProgressLabel.isHidden = false
+        } else {
+            sendProgressLabel.isHidden = true
+        }
 
         let messages = [openError, controller?.lastSaveError].compactMap { $0 }
         errorLabel.stringValue = messages.joined(separator: "\n")
@@ -185,7 +211,7 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
         previousEpisodePath = resolved.previousEpisode?.relativePath
         shownRows = AIWorkContextModel.episodeRows(resolved, store: store)
         cells = shownRows.enumerated().map { index, row in
-            makeCells(row, index: index, store: store, busy: busy)
+            makeCells(row, index: index, store: store, busy: busy || provisional)
         }
         stateLabels = cells.compactMap { ($0[1] as? NSStackView)?.arrangedSubviews.last as? NSTextField }
         previousTags = cells.map { $0[2] as? NSTextField }
@@ -325,7 +351,8 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
     /// "다시 만들기"/"지금 만들기" on row `row`. A summary the author edited asks first (sheet).
     func remake(row: Int) {
         clearOpenError()
-        guard row < shownRows.count, let controller = controller, !controller.store.isGenerating else { return }
+        guard row < shownRows.count, let controller = controller, !controller.isProvisional,
+              !controller.store.isGenerating else { return }
         let entry = shownRows[row]
         guard case .manuallyEdited = entry.state else {
             controller.onRegenerate?(entry.file, false)
@@ -356,7 +383,7 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
         guard let controller = controller else { return }
         if isRefreshing {
             controller.onCancelRefresh?()
-        } else if !controller.store.isGenerating {
+        } else if !controller.isProvisional, !controller.store.isGenerating {
             controller.onRefreshAll?()
         }
     }

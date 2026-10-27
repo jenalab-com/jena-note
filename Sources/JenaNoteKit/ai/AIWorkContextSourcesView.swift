@@ -29,6 +29,7 @@ final class AIWorkContextSourcesView: NSView, AIWorkContextRenderable, NSTableVi
     let tableView = NSTableView()
     let sourcesStack = NSStackView()
 
+    private let hint = NSTextField(wrappingLabelWithString: "")
     private let scrollView = NSScrollView()
     private var cells: [[NSView]] = []
     private var shownSources: [AIWorkContextModel.SourceRow] = []
@@ -50,7 +51,9 @@ final class AIWorkContextSourcesView: NSView, AIWorkContextRenderable, NSTableVi
     private func build() {
         let header = NSTextField(labelWithString: L10n.tr("ai.work.sources.header"))
         header.font = .boldSystemFont(ofSize: 13)
-        let hint = AIWorkContextSourceRowViews.small(L10n.tr("ai.work.sources.hint"))
+        hint.stringValue = L10n.tr("ai.work.sources.hint")
+        hint.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        hint.textColor = .secondaryLabelColor
         hint.lineBreakMode = .byWordWrapping
         hint.maximumNumberOfLines = 0
 
@@ -121,6 +124,17 @@ final class AIWorkContextSourcesView: NSView, AIWorkContextRenderable, NSTableVi
         ])
     }
 
+    /// Wrapping labels get the content width so a long fact line wraps instead of clipping at the
+    /// window's minimum width (stack insets: 20 on each side).
+    override func layout() {
+        super.layout()
+        let width = max(0, bounds.width - 40)
+        for label in [hint, emptyLabel, errorLabel, factLabel, invalidPathsLabel]
+        where label.preferredMaxLayoutWidth != width {
+            label.preferredMaxLayoutWidth = width
+        }
+    }
+
     private func buildTable() {
         let widths: [Column: CGFloat] = [.include: 24, .path: 220, .size: 64, .mode: 110]
         for column in Column.allCases {
@@ -149,10 +163,13 @@ final class AIWorkContextSourcesView: NSView, AIWorkContextRenderable, NSTableVi
         let payload = controller.payload
             ?? AIWorkContextAssembler(resolved: resolved, store: controller.store)
                 .payload(currentFile: resolved.context.rootURL).payload
-        render(resolved, payload: payload, store: controller.store, enabled: controller.context.config.enabled)
+        render(resolved, payload: payload, store: controller.store, enabled: controller.context.config.enabled,
+               baseBytes: AIPrompt.estimatedBaseBytes(for: controller.currentFile))
     }
 
-    func render(_ resolved: AIResolvedWorkContext, payload: AIWorkPayload, store: AIEpisodeSummaryStore, enabled: Bool) {
+    /// `baseBytes` feeds the §6.4 trim preview behind the fact line (same estimate as the panel row).
+    func render(_ resolved: AIResolvedWorkContext, payload: AIWorkPayload, store: AIEpisodeSummaryStore, enabled: Bool,
+                baseBytes: Int = 0) {
         // Sources
         shownSources = AIWorkContextModel.sourceRows(resolved)
         sourceRowViews.forEach { $0.removeFromSuperview() }
@@ -176,8 +193,12 @@ final class AIWorkContextSourcesView: NSView, AIWorkContextRenderable, NSTableVi
         let segments = AIWorkContextModel.budgetSegments(payload)
         budgetBar.update(settings: segments.settings, summaries: segments.summaries,
                          previous: segments.previous, limit: AIPrompt.maximumBytes)
-        factLabel.stringValue = AIWorkContextModel.budgetFactLine(payload)
-        factLabel.textColor = payload.contextByteCount > AIPrompt.maximumBytes ? .systemRed : .secondaryLabelColor
+        factLabel.stringValue = AIWorkContextModel.budgetFactLine(payload, baseBytes: baseBytes)
+        switch AIPrompt.budget(for: payload, baseBytes: baseBytes) {
+        case .over: factLabel.textColor = .systemRed
+        case .willTrim: factLabel.textColor = .systemOrange
+        case .ok, .warning: factLabel.textColor = .secondaryLabelColor
+        }
         budgetBar.alphaValue = enabled ? 1 : 0.5
 
         // Files

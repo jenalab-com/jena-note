@@ -13,6 +13,8 @@ final class AIWorkContextFoldersView: NSView, NSTextFieldDelegate {
     let titleField = NSTextField(string: "")
     let errorLabel = NSTextField(wrappingLabelWithString: "")
     let enableSwitch = NSSwitch()
+    /// Visible next to the switch while there are no sources ("참고 자료를 먼저 추가하세요").
+    let needsSourcesLabel = NSTextField(labelWithString: L10n.tr("ai.work.folders.needsSources"))
 
     /// Error from the last rejected choice; cleared by the next accepted change.
     private var rejection: [AIWorkContextValidationError] = []
@@ -52,8 +54,12 @@ final class AIWorkContextFoldersView: NSView, NSTextFieldDelegate {
         for button in [rootChange, writingChange] { button.bezelStyle = .rounded }
 
         let enableLabel = NSTextField(labelWithString: L10n.tr("ai.work.folders.enable"))
-        let enableRow = NSStackView(views: [enableSwitch, enableLabel])
+        needsSourcesLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        needsSourcesLabel.textColor = .secondaryLabelColor
+        needsSourcesLabel.isHidden = true
+        let enableRow = NSStackView(views: [enableSwitch, enableLabel, needsSourcesLabel])
         enableRow.spacing = 8
+        enableRow.alignment = .centerY
 
         let stack = NSStackView(views: [
             row(L10n.tr("ai.work.folders.root"), rootPathLabel, rootChange),
@@ -127,12 +133,25 @@ final class AIWorkContextFoldersView: NSView, NSTextFieldDelegate {
         let hasSources = !(controller?.context.config.settingsSources.isEmpty ?? true)
         enableSwitch.isEnabled = hasSources
         enableSwitch.toolTip = hasSources ? nil : L10n.tr("ai.work.folders.needsSources")
+        needsSourcesLabel.isHidden = hasSources
     }
 
-    private static func previewText(_ url: URL) -> String {
-        let names = AIWorkContextModel.folderPreview(url)
+    /// Error text wraps at the content width instead of clipping at the window's minimum width.
+    override func layout() {
+        super.layout()
+        let width = max(0, bounds.width - 40)
+        if errorLabel.preferredMaxLayoutWidth != width { errorLabel.preferredMaxLayoutWidth = width }
+    }
+
+    private static let previewLimit = 5
+
+    /// "안에: a, b, c" — "…" only when the folder holds more than `previewLimit` entries.
+    static func previewText(_ url: URL) -> String {
+        let names = AIWorkContextModel.folderPreview(url, limit: previewLimit + 1)
         guard !names.isEmpty else { return "" }
-        return String(format: L10n.tr("ai.work.folders.preview"), names.joined(separator: ", ") + "…")
+        let more = names.count > previewLimit
+        let shown = names.prefix(previewLimit).joined(separator: ", ") + (more ? "…" : "")
+        return String(format: L10n.tr("ai.work.folders.preview"), shown)
     }
 
     private static func message(for error: AIWorkContextValidationError, draft: AIWorkContextModel.FoldersDraft) -> String {
@@ -167,6 +186,12 @@ final class AIWorkContextFoldersView: NSView, NSTextFieldDelegate {
         clearRejection()
         let relative = AIWorkContext.relativePath(of: url, to: current.rootURL) ?? ""
         controller.mutate { $0.writingFolder = relative }
+    }
+
+    /// Commits the title field's text while it is still being edited (window closing).
+    func commitPendingTitle() {
+        guard titleField.currentEditor() != nil else { return }
+        commitTitle(titleField.stringValue)
     }
 
     func commitTitle(_ text: String) {
