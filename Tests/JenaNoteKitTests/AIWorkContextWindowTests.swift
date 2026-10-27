@@ -126,4 +126,68 @@ final class AIWorkContextWindowTests: XCTestCase {
         XCTAssertEqual(try diskConfig(root).writingFolder, "집필")
         XCTAssertEqual(controller.context.config.writingFolder, "집필")
     }
+
+    private func configURL(_ root: URL) -> URL {
+        root.appendingPathComponent(AIWorkContext.folderName).appendingPathComponent(AIWorkContext.fileName)
+    }
+
+    func testChangeRootRefusesWhenTargetHasContext() throws {
+        let root = try makeWork()
+        try saveContext(at: root)
+        // The parent folder already is a work of its own.
+        let parentConfig = AIWorkContextConfig(title: "상위", settingsSources: ["달빛도시/설정"],
+                                               writingFolder: "달빛도시/집필")
+        try AIWorkContext(rootURL: tmp, config: parentConfig, invalidPaths: []).save()
+        let targetBytes = try Data(contentsOf: configURL(tmp))
+        let oldBytes = try Data(contentsOf: configURL(root))
+
+        let controller = AIWorkContextWindowController.shared(for: root, store: AIEpisodeSummaryStore(rootURL: root))
+        var changes = 0
+        controller.onChange = { changes += 1 }
+        controller.foldersView.chooseRoot(tmp)
+
+        XCTAssertEqual(try Data(contentsOf: configURL(tmp)), targetBytes)
+        XCTAssertEqual(try Data(contentsOf: configURL(root)), oldBytes)
+        XCTAssertTrue(controller.foldersView.errorLabel.stringValue
+            .contains(L10n.tr("ai.work.folders.errorRootHasContext")))
+        XCTAssertEqual(changes, 0)
+        XCTAssertEqual(controller.context.config.title, "달빛도시")
+        XCTAssertTrue(AIWorkContextWindowController.shared(for: root, store: AIEpisodeSummaryStore(rootURL: root)) === controller)
+        XCTAssertFalse(controller.changeRoot(to: tmp))
+    }
+
+    func testChangeRootReloadsDiskBeforeMoving() throws {
+        let root = try makeWork()
+        try saveContext(at: root)
+        let controller = AIWorkContextWindowController.shared(for: root, store: AIEpisodeSummaryStore(rootURL: root))
+        var external = try AIWorkContext.load(rootURL: root)
+        external.config.excludedSettings = ["설정/인물.md"]
+        try external.save()
+        var changes = 0
+        controller.onChange = { changes += 1 }
+
+        controller.foldersView.chooseRoot(tmp)
+
+        let moved = try diskConfig(tmp)
+        XCTAssertEqual(moved.excludedSettings, ["달빛도시/설정/인물.md"])
+        XCTAssertEqual(moved.settingsSources, ["달빛도시/설정"])
+        XCTAssertEqual(moved.writingFolder, "달빛도시/집필")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: configURL(root).path))
+        XCTAssertEqual(changes, 1)
+        XCTAssertTrue(AIWorkContextWindowController.shared(for: tmp, store: AIEpisodeSummaryStore(rootURL: tmp)) === controller)
+    }
+
+    func testEnableSwitchCannotEnableWithoutSources() throws {
+        let root = try makeWork()
+        let config = AIWorkContextConfig(title: "달빛도시", settingsSources: [], writingFolder: "집필", enabled: false)
+        try AIWorkContext(rootURL: root, config: config, invalidPaths: []).save()
+        let controller = AIWorkContextWindowController.shared(for: root, store: AIEpisodeSummaryStore(rootURL: root))
+        XCTAssertFalse(controller.foldersView.enableSwitch.isEnabled)
+        XCTAssertEqual(controller.foldersView.enableSwitch.toolTip, L10n.tr("ai.work.folders.needsSources"))
+
+        controller.foldersView.setEnabled(true)
+        XCTAssertFalse(try diskConfig(root).enabled)
+        XCTAssertFalse(controller.context.config.enabled)
+        XCTAssertEqual(controller.foldersView.enableSwitch.state, .off)
+    }
 }

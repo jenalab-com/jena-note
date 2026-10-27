@@ -116,7 +116,7 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
         super.init(window: window)
         window.delegate = self
         sourcesView = AIWorkContextSourcesView(controller: self)
-        episodesView = Self.placeholder("지난 화 (Task 5)")
+        episodesView = Self.placeholder(L10n.tr("ai.work.tab.episodes"))
         foldersView = AIWorkContextFoldersView(controller: self)
         buildUI()
         window.center()
@@ -254,39 +254,72 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
         commit(updated)
     }
 
-    /// Changing the root re-bases every relative path onto the new root. Entries that end up
-    /// outside it are kept as absolute paths, which `load` reports in `invalidPaths`.
-    /// Returns false (nothing saved) when the writing folder would fall outside the new root.
+    /// True when `newRoot` is a different root that already has a work context of its own
+    /// (a `context.json` on disk or another registered window). `changeRoot` refuses such roots.
+    func rootHasOtherContext(_ newRoot: URL) -> Bool {
+        let newKey = Self.key(for: newRoot)
+        guard newKey != Self.key(for: context.rootURL) else { return false }
+        if let other = Self.controllers[newKey], other !== self { return true }
+        let url = newRoot.appendingPathComponent(AIWorkContext.folderName)
+            .appendingPathComponent(AIWorkContext.fileName)
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
+    /// Moves the work to `newRoot`. Refuses (returns false, nothing touched) when the new root
+    /// already has a work context of its own or the writing folder would fall outside it.
+    /// Otherwise the current config is re-loaded from disk (corrupt → in-memory), every relative
+    /// path is re-based onto the new root (entries that end up outside it are kept as absolute
+    /// paths, which `load` reports in `invalidPaths`), saved there, the registry/store move, and
+    /// the old root's `context.json` is removed so `locate` (nearest wins) stops finding it.
     @discardableResult
     func changeRoot(to newRoot: URL) -> Bool {
+        guard !rootHasOtherContext(newRoot) else { return false }
         let oldRoot = context.rootURL
-        let writing = context.writingFolderURL ?? oldRoot
-        guard AIWorkContext.relativePath(of: writing, to: newRoot) != nil else { return false }
-        var config = context.config
+        var base = context
+        if !isProvisional, FileManager.default.fileExists(atPath: context.configURL.path),
+           let disk = try? AIWorkContext.load(rootURL: oldRoot) {
+            base = disk
+        }
+        let writing = base.writingFolderURL ?? oldRoot
+        guard let writingRelative = AIWorkContext.relativePath(of: writing, to: newRoot) else { return false }
+        var config = base.config
         config.settingsSources = config.settingsSources.map { Self.rebase($0, from: oldRoot, to: newRoot) }
         config.excludedSettings = config.excludedSettings.map { Self.rebase($0, from: oldRoot, to: newRoot) }
         config.summarizedSettings = config.summarizedSettings.map { Self.rebase($0, from: oldRoot, to: newRoot) }
-        config.writingFolder = AIWorkContext.relativePath(of: writing, to: newRoot) ?? ""
-        let oldKey = Self.key(for: oldRoot)
-        let wasSaved = !isProvisional
+        config.writingFolder = writingRelative
         let updated = Self.withInvalidPaths(AIWorkContext(rootURL: newRoot, config: config, invalidPaths: []))
+        let wasSaved = !isProvisional
+        if wasSaved {
+            do {
+                try updated.save()
+                lastSaveError = nil
+            } catch {
+                lastSaveError = String(format: L10n.tr("ai.work.saveFailed"), error.localizedDescription)
+                renderTabs()
+                return false
+            }
+        }
+        let oldKey = Self.key(for: oldRoot)
         let newKey = Self.key(for: newRoot)
         if oldKey != newKey {
-            if let other = Self.controllers[newKey], other !== self { other.close() }
             Self.controllers[oldKey] = nil
             Self.controllers[newKey] = self
             store = AIEpisodeSummaryStore.shared(for: newRoot)
         }
-        // A context.json already present at the new root is replaced by this one.
-        commit(updated)
-        // Remove the old root's context.json so `locate` (nearest wins) does not keep finding it.
-        if wasSaved, oldKey != newKey, !isProvisional, lastSaveError == nil {
+        guard wasSaved else {
+            commit(updated)   // provisional: written only once valid
+            return true
+        }
+        context = updated
+        if oldKey != newKey {
             let oldURL = oldRoot.appendingPathComponent(AIWorkContext.folderName)
                 .appendingPathComponent(AIWorkContext.fileName)
             if AIWorkContext.isSafeInsideRoot(oldURL, root: oldRoot) {
                 try? FileManager.default.removeItem(at: oldURL)
             }
         }
+        reload()
+        onChange?()
         return true
     }
 

@@ -16,6 +16,7 @@ final class AIWorkContextFoldersView: NSView, NSTextFieldDelegate {
 
     /// Error from the last rejected choice; cleared by the next accepted change.
     private var rejection: [AIWorkContextValidationError] = []
+    private var rejectionMessages: [String] = []
     private var rejectedDraft: AIWorkContextModel.FoldersDraft?
 
     init(controller: AIWorkContextWindowController) {
@@ -117,11 +118,15 @@ final class AIWorkContextFoldersView: NSView, NSTextFieldDelegate {
         if titleField.currentEditor() == nil, titleField.stringValue != draft.title {
             titleField.stringValue = draft.title
         }
-        var messages = (draft.errors + rejection).map { Self.message(for: $0, draft: shown) }
+        var messages = (draft.errors + rejection).map { Self.message(for: $0, draft: shown) } + rejectionMessages
         if let saveError = controller?.lastSaveError { messages.append(saveError) }
         errorLabel.stringValue = messages.joined(separator: "\n")
         errorLabel.isHidden = messages.isEmpty
         enableSwitch.state = enabled ? .on : .off
+        // No sources → the context cannot be on (`normalizeEnabled` invariant).
+        let hasSources = !(controller?.context.config.settingsSources.isEmpty ?? true)
+        enableSwitch.isEnabled = hasSources
+        enableSwitch.toolTip = hasSources ? nil : L10n.tr("ai.work.folders.needsSources")
     }
 
     private static func previewText(_ url: URL) -> String {
@@ -147,6 +152,9 @@ final class AIWorkContextFoldersView: NSView, NSTextFieldDelegate {
         let current = AIWorkContextModel.foldersDraft(from: controller.context)
         let draft = AIWorkContextModel.FoldersDraft(rootURL: url, writingFolder: current.writingFolder, title: current.title)
         guard draft.errors.isEmpty else { return reject(draft) }
+        guard !controller.rootHasOtherContext(url) else {
+            return reject(draft, messages: [L10n.tr("ai.work.folders.errorRootHasContext")])
+        }
         clearRejection()
         controller.changeRoot(to: url)
     }
@@ -173,12 +181,16 @@ final class AIWorkContextFoldersView: NSView, NSTextFieldDelegate {
     }
 
     func setEnabled(_ on: Bool) {
-        controller?.mutate { $0.enabled = on; $0.disabledByUser = !on }
+        controller?.mutate { config in
+            config.disabledByUser = !on
+            config.enabled = on && !config.settingsSources.isEmpty
+        }
     }
 
-    private func reject(_ draft: AIWorkContextModel.FoldersDraft) {
+    private func reject(_ draft: AIWorkContextModel.FoldersDraft, messages: [String] = []) {
         rejectedDraft = draft
         rejection = draft.errors
+        rejectionMessages = messages
         guard let controller = controller else { return }
         render(AIWorkContextModel.foldersDraft(from: controller.context), enabled: controller.context.config.enabled)
     }
@@ -186,6 +198,7 @@ final class AIWorkContextFoldersView: NSView, NSTextFieldDelegate {
     private func clearRejection() {
         rejectedDraft = nil
         rejection = []
+        rejectionMessages = []
     }
 
     // MARK: - Actions
