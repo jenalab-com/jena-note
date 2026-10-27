@@ -119,6 +119,31 @@ final class AIWorkContextTests: XCTestCase {
         XCTAssertTrue(errors.contains(.writingFolderOutsideRoot))
     }
 
+    func testContainsRejectsDotDotThroughSymlink() throws {
+        let root = try makeWork(at: tmp)
+        let outsideSub = tmp.appendingPathComponent("outside/sub")
+        try FileManager.default.createDirectory(at: outsideSub, withIntermediateDirectories: true)
+        let link = root.appendingPathComponent("링크")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: outsideSub)
+        let ctx = AIWorkContext(rootURL: root, config: config(), invalidPaths: [])
+        // root/링크/../설정 is /outside/설정 for the OS, not root/설정.
+        let sneaky = URL(fileURLWithPath: root.path + "/링크/../설정")
+        XCTAssertFalse(ctx.contains(sneaky))
+        XCTAssertNil(AIWorkContext.relativePath(of: sneaky, to: root))
+    }
+
+    func testSuggestionResolvesSymlinkedParentForNewFile() throws {
+        let real = tmp.appendingPathComponent("real")
+        try FileManager.default.createDirectory(at: real.appendingPathComponent("설정"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: real.appendingPathComponent("집필"), withIntermediateDirectories: true)
+        let link = tmp.appendingPathComponent("link")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+        let s = AIWorkContextSuggestion.make(for: link.appendingPathComponent("집필/새글.md"))
+        let ctx = AIWorkContext(rootURL: s.rootURL, config: config(), invalidPaths: [])
+        XCTAssertEqual(s.rootURL.pathComponents.last, "real")
+        XCTAssertTrue(ctx.contains(link.appendingPathComponent("집필/새글.md")))
+    }
+
     func testContainsRejectsSymlinkEscape() throws {
         let root = try makeWork(at: tmp)
         let outside = tmp.appendingPathComponent("outside")

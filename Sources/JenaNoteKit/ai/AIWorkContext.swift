@@ -52,7 +52,7 @@ struct AIWorkContext: Equatable {
     /// Standardizes and resolves symlinks through the deepest existing ancestor,
     /// then re-appends the non-existent trailing components. (`resolvingSymlinksInPath`
     /// alone leaves the whole path untouched when the leaf does not exist.)
-    private static func norm(_ url: URL) -> URL {
+    fileprivate static func norm(_ url: URL) -> URL {
         let standardized = url.standardizedFileURL
         var existing = standardized
         var rest: [String] = []
@@ -133,6 +133,9 @@ struct AIWorkContext: Equatable {
     }
 
     static func relativePath(of url: URL, to root: URL) -> String? {
+        // A raw ".." would be collapsed lexically before symlinks are resolved
+        // (root/link/../x -> root/x) while the OS follows the link first. Reject.
+        if url.pathComponents.contains("..") || root.pathComponents.contains("..") { return nil }
         let target = norm(url).pathComponents
         let base = norm(root).pathComponents
         guard target.count >= base.count, Array(target.prefix(base.count)) == base else { return nil }
@@ -159,7 +162,7 @@ struct AIWorkContextSuggestion: Equatable {
     private static let settingsNames: Set<String> = ["설정", "settings"]
 
     static func make(for fileURL: URL) -> AIWorkContextSuggestion {
-        let folder = fileURL.standardizedFileURL.resolvingSymlinksInPath().deletingLastPathComponent()
+        let folder = AIWorkContext.norm(fileURL).deletingLastPathComponent()
         var dir = folder
         for _ in 0...AIWorkContext.maxAncestorLevels {
             if AIWorkContext.isBoundary(dir) { break }
