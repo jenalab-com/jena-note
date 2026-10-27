@@ -49,7 +49,22 @@ struct AIWorkContext: Equatable {
 
     // MARK: Normalization
 
-    private static func norm(_ url: URL) -> URL { url.standardizedFileURL.resolvingSymlinksInPath() }
+    /// Standardizes and resolves symlinks through the deepest existing ancestor,
+    /// then re-appends the non-existent trailing components. (`resolvingSymlinksInPath`
+    /// alone leaves the whole path untouched when the leaf does not exist.)
+    private static func norm(_ url: URL) -> URL {
+        let standardized = url.standardizedFileURL
+        var existing = standardized
+        var rest: [String] = []
+        while !FileManager.default.fileExists(atPath: existing.path),
+              (try? FileManager.default.destinationOfSymbolicLink(atPath: existing.path)) == nil {
+            let parent = existing.deletingLastPathComponent()
+            if parent == existing { break }
+            rest.insert(existing.lastPathComponent, at: 0)
+            existing = parent
+        }
+        return rest.reduce(existing.resolvingSymlinksInPath()) { $0.appendingPathComponent($1) }
+    }
 
     private static func isSafeRelative(_ path: String) -> Bool {
         if path.isEmpty || path.hasPrefix("/") || path.hasPrefix("~") { return false }
