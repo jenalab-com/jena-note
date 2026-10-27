@@ -33,10 +33,14 @@ struct AIWorkContext: Equatable {
         rootURL.appendingPathComponent(Self.folderName).appendingPathComponent(Self.fileName)
     }
 
-    var writingFolderURL: URL {
-        guard Self.isSafeRelative(config.writingFolder) else { return rootURL }
+    /// The writing folder, the root itself for `""`/`"."` (flat layout), or nil when the entry is
+    /// invalid (absolute, `..`, outside the root): an invalid entry is ignored (spec §6.6) and the
+    /// work behaves as "settings only" — it is never silently widened to the whole root.
+    var writingFolderURL: URL? {
+        if Self.isRootPath(config.writingFolder) { return rootURL }
+        guard Self.isSafeRelative(config.writingFolder) else { return nil }
         let url = Self.resolve(config.writingFolder, in: rootURL)
-        return contains(url) ? url : rootURL
+        return contains(url) ? url : nil
     }
 
     var settingsSourceURLs: [URL] {
@@ -65,6 +69,9 @@ struct AIWorkContext: Equatable {
         }
         return rest.reduce(existing.resolvingSymlinksInPath()) { $0.appendingPathComponent($1) }
     }
+
+    /// `""` and `"."` name the work root itself (writing folder == root).
+    private static func isRootPath(_ path: String) -> Bool { path.isEmpty || path == "." }
 
     private static func isSafeRelative(_ path: String) -> Bool {
         if path.isEmpty || path.hasPrefix("/") || path.hasPrefix("~") { return false }
@@ -108,9 +115,12 @@ struct AIWorkContext: Equatable {
         return .success(nil)
     }
 
+    /// A `context.json` reached through a symlink (`.jenanote` or the file itself) or resolving outside
+    /// the root is treated as missing (`notFound`); `locateResult` surfaces that as a failure.
     static func load(rootURL: URL) throws -> AIWorkContext {
         let url = rootURL.appendingPathComponent(folderName).appendingPathComponent(fileName)
         guard FileManager.default.fileExists(atPath: url.path) else { throw AIWorkContextError.notFound }
+        guard isSafeInsideRoot(url, root: rootURL) else { throw AIWorkContextError.notFound }
         guard let data = try? Data(contentsOf: url),
               let config = try? JSONDecoder().decode(AIWorkContextConfig.self, from: data)
         else { throw AIWorkContextError.corrupt }
@@ -120,17 +130,52 @@ struct AIWorkContext: Equatable {
             if !isSafeRelative(path) || !context.contains(resolve(path, in: rootURL)) { invalid.append(path) }
         }
         let writing = config.writingFolder
-        if !isSafeRelative(writing) || !context.contains(resolve(writing, in: rootURL)) { invalid.append(writing) }
+        if !isRootPath(writing), !isSafeRelative(writing) || !context.contains(resolve(writing, in: rootURL)) {
+            invalid.append(writing)
+        }
         context.invalidPaths = invalid
         return context
     }
 
+    /// Refuses (throws) to write through a symlinked `.jenanote` / `context.json` or outside the root.
     func save() throws {
         let dir = rootURL.appendingPathComponent(Self.folderName)
+        try Self.ensureSafeInsideRoot(dir, root: rootURL)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Self.ensureSafeInsideRoot(configURL, root: rootURL)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(config).write(to: configURL, options: .atomic)
+    }
+
+    // MARK: Containment for app-owned files (.jenanote/...)
+
+    /// True when `url` resolves under `root` AND no existing path component between the root and the
+    /// leaf (e.g. `.jenanote`, `summaries`, sub-folders, the leaf itself) is a symbolic link.
+    /// `url` must be built from `root` (same lexical prefix); anything else is rejected.
+    /// Spec §3 / ADR-0014: reads stay under the root and never follow symlinks.
+    static func isSafeInsideRoot(_ url: URL, root: URL) -> Bool {
+        guard relativePath(of: url, to: root) != nil else { return false }
+        let base = root.standardizedFileURL.pathComponents
+        let target = url.standardizedFileURL.pathComponents
+        guard target.count >= base.count, Array(target.prefix(base.count)) == base else { return false }
+        var current = root.standardizedFileURL
+        for component in target.dropFirst(base.count) {
+            current.appendPathComponent(component)
+            // attributesOfItem does not follow a symlink at the leaf (lstat semantics).
+            guard let attributes = try? FileManager.default.attributesOfItem(atPath: current.path) else {
+                break // nothing exists from here on, so nothing below can be a link
+            }
+            if attributes[.type] as? FileAttributeType == .typeSymbolicLink { return false }
+        }
+        return true
+    }
+
+    /// Throwing form of `isSafeInsideRoot` for writes.
+    static func ensureSafeInsideRoot(_ url: URL, root: URL) throws {
+        guard isSafeInsideRoot(url, root: root) else {
+            throw AIError(message: String(format: L10n.tr("ai.work.errorOutsideRoot"), url.path))
+        }
     }
 
     /// True when url resolves (symlinks followed) to a location under rootURL.

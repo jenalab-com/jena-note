@@ -84,4 +84,23 @@ final class AIWorkContextSheetTests: XCTestCase {
         XCTAssertEqual(draft.errors, [.settingsIsRoot])
         XCTAssertFalse(draft.canSave)
     }
+
+    func testDraftUsesExistingContextAtSuggestedRoot() throws {
+        let (root, file) = try makeWork(withSettings: true)
+        var saved = AIWorkContextConfig(title: "저장된 제목", settingsSources: ["설정"], writingFolder: "집필")
+        saved.excludedSettings = ["설정/제외.md"]
+        saved.summarizedSettings = ["설정/요약.md"]
+        saved.includePreviousEpisode = false
+        try AIWorkContext(rootURL: root, config: saved, invalidPaths: []).save()
+
+        // Stale bar: the sheet is opened with no existing context.
+        let draft = AIWorkContextSheetController.draft(fileURL: file, existing: nil)
+        XCTAssertEqual(norm(draft.rootURL), norm(root))
+        XCTAssertEqual(draft.title, "저장된 제목")
+        XCTAssertEqual(draft.base, saved)
+        let config = draft.makeConfig()
+        XCTAssertEqual(config.excludedSettings, ["설정/제외.md"])
+        XCTAssertEqual(config.summarizedSettings, ["설정/요약.md"])
+        XCTAssertFalse(config.includePreviousEpisode)
+    }
 }

@@ -22,8 +22,9 @@ struct AIWorkContextAssembler {
         if let (done, total) = isGenerating { return .generating(done: done, total: total) }
         guard resolved.context.config.enabled else { return .disabled }
         let bytes = build(currentEpisode: "").payload.contextByteCount
+        let index = store.snapshotIndex()
         let ready = resolved.previousEpisodes.filter {
-            switch store.state(of: $0, isSetting: false) {
+            switch store.state(of: $0, isSetting: false, index: index) {
             case .ready, .manuallyEdited: return true
             case .missing, .stale: return false
             }

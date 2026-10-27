@@ -110,7 +110,8 @@ final class AIWorkContextPopoverController: NSViewController {
     }
 
     static func episodeRows(_ resolved: AIResolvedWorkContext, store: AIEpisodeSummaryStore) -> [EpisodeRow] {
-        resolved.previousEpisodes.map { EpisodeRow(file: $0, state: store.state(of: $0, isSetting: false)) }
+        let index = store.snapshotIndex()
+        return resolved.previousEpisodes.map { EpisodeRow(file: $0, state: store.state(of: $0, isSetting: false, index: index)) }
     }
 
     static func stateText(_ state: AISummaryState) -> String {

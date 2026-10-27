@@ -70,7 +70,16 @@ enum AIWorkContextResolver {
             }
         }
 
-        let episodes = naturalSort(files(under: context.writingFolderURL, recursive: true))
+        // Invalid writing folder → no episodes ("settings only", spec §6.6). When the writing folder
+        // contains settings sources (e.g. writing folder == root), files under them are not episodes.
+        var episodes: [AIWorkFile] = []
+        if let writingFolder = context.writingFolderURL {
+            let sources = context.settingsSourceURLs.map { $0.standardizedFileURL.pathComponents }
+            episodes = naturalSort(files(under: writingFolder, recursive: true).filter { file in
+                let comps = file.url.standardizedFileURL.pathComponents
+                return !sources.contains { comps.count >= $0.count && Array(comps.prefix($0.count)) == $0 }
+            })
+        }
         var currentIndex: Int?
         if let currentRel = AIWorkContext.relativePath(of: currentFile, to: context.rootURL) {
             currentIndex = episodes.firstIndex {

@@ -27,16 +27,23 @@ final class AIWorkContextSheetController: NSWindowController {
         }
     }
 
+    /// With `existing == nil`, a loadable `context.json` already at the suggested root is used as the
+    /// base, so saving never drops its excluded/summarized settings, toggles or title (e.g. the bar was
+    /// stale after an untitled document was saved into a work). A corrupt one is overwritten.
     static func draft(fileURL: URL, existing: AIWorkContext?) -> Draft {
-        if let existing = existing {
-            return Draft(rootURL: existing.rootURL, settingsSources: existing.settingsSourceURLs,
-                         writingFolder: existing.writingFolderURL, title: existing.config.title,
-                         base: existing.config)
-        }
+        if let existing = existing { return draft(from: existing) }
         let suggestion = AIWorkContextSuggestion.make(for: fileURL)
+        if let saved = try? AIWorkContext.load(rootURL: suggestion.rootURL) { return draft(from: saved) }
         return Draft(rootURL: suggestion.rootURL,
                      settingsSources: suggestion.settingsSourceURL.map { [$0] } ?? [],
                      writingFolder: suggestion.writingFolderURL, title: suggestion.title, base: nil)
+    }
+
+    private static func draft(from existing: AIWorkContext) -> Draft {
+        // An ignored (invalid) writing folder entry is shown as the root until the user picks one.
+        Draft(rootURL: existing.rootURL, settingsSources: existing.settingsSourceURLs,
+              writingFolder: existing.writingFolderURL ?? existing.rootURL, title: existing.config.title,
+              base: existing.config)
     }
 
     var onSave: ((AIWorkContext) -> Void)?
@@ -231,8 +238,13 @@ final class AIWorkContextSheetController: NSWindowController {
         draft.title = titleField.stringValue
         guard draft.canSave else { return }
         let context = AIWorkContext(rootURL: draft.rootURL, config: draft.makeConfig(), invalidPaths: [])
-        endSheet()
-        onSave?(context)
+        // `endSheet()` may run the sheet completion synchronously; its `onClose` drops the owner's
+        // reference to this controller. Keep self alive and capture the callback before ending.
+        let onSave = self.onSave
+        withExtendedLifetime(self) {
+            endSheet()
+            onSave?(context)
+        }
     }
 
     private func endSheet() {

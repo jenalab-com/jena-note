@@ -218,6 +218,9 @@ final class AIChatViewController: NSViewController {
     }
 
     private func workBarClicked() {
+        // The bar can be stale (e.g. an untitled document was just saved into a work); re-locate first
+        // so a click never opens a fresh setup sheet over an existing context.json.
+        refreshWorkContext()
         switch workBar.status {
         case .none, .corrupt:
             if let presentSetup = presentSetup { presentSetup() } else { presentWorkSetupSheet() }
@@ -265,8 +268,9 @@ final class AIChatViewController: NSViewController {
     private func refreshAllSummaries() {
         guard let resolved = resolvedWork, let store = summaryStore else { return }
         let summarized = AIWorkContextAssembler(resolved: resolved, store: store).summarizedSettings
-        let total = store.pending(resolved.previousEpisodes, isSetting: false).count
-            + store.pending(summarized, isSetting: true).count
+        let index = store.snapshotIndex()
+        let total = store.pending(resolved.previousEpisodes, isSetting: false, index: index).count
+            + store.pending(summarized, isSetting: true, index: index).count
         let provider = AISettings.provider
         let model = options.selectedModel
         runMaintenance(store: store, total: total, name: nil) { progress, completion in
@@ -399,7 +403,11 @@ final class AIChatViewController: NSViewController {
         let work = requestWork()
         let episodes = work?.resolved.previousEpisodes ?? []
         let summarized = work?.summarizedSettings ?? []
-        let jobs = work.map { $0.store.pending(episodes, isSetting: false) + $0.store.pending(summarized, isSetting: true) } ?? []
+        let jobs = work.map { work -> [AIWorkFile] in
+            let index = work.store.snapshotIndex()
+            return work.store.pending(episodes, isSetting: false, index: index)
+                + work.store.pending(summarized, isSetting: true, index: index)
+        } ?? []
 
         guard let assembler = work, !jobs.isEmpty else {
             do {

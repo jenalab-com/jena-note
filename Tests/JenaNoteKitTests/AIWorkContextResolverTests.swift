@@ -117,4 +117,29 @@ final class AIWorkContextResolverTests: XCTestCase {
         let f = AIWorkFile(relativePath: "설정/세계관.md", url: file("설정/세계관.md"), byteCount: 6)
         XCTAssertEqual(try AIWorkContextResolver.readSettingText(f), "메모리")
     }
+
+    func testEpisodesExcludeFilesUnderSettingsSources() throws {
+        // Flat layout: writing folder == root, settings live inside it (a folder and a single file).
+        try write("프롤로그.md", "0")
+        let cfg = AIWorkContextConfig(title: "작품", settingsSources: ["설정", "집필/메모.txt"], writingFolder: "")
+        let ctx = AIWorkContext(rootURL: root, config: cfg, invalidPaths: [])
+        let r = AIWorkContextResolver.resolve(ctx, currentFile: file("집필/2부/01화.md"))
+        XCTAssertEqual(paths(r.episodes), ["집필/1부/01화.md", "집필/1부/02화.md", "집필/1부/10화.md",
+                                           "집필/2부/01화.md", "프롤로그.md"])
+        XCTAssertEqual(paths(r.previousEpisodes), ["집필/1부/01화.md", "집필/1부/02화.md", "집필/1부/10화.md"])
+        XCTAssertEqual(paths(r.settings), ["설정/세계관.md", "설정/인물/하연.md", "집필/메모.txt"])
+    }
+
+    func testInvalidWritingFolderYieldsSettingsOnly() {
+        for writing in ["../밖", "/etc", "집필/../../밖"] {
+            let cfg = AIWorkContextConfig(title: "작품", settingsSources: ["설정"], writingFolder: writing)
+            let ctx = AIWorkContext(rootURL: root, config: cfg, invalidPaths: [])
+            let r = AIWorkContextResolver.resolve(ctx, currentFile: file("집필/1부/02화.md"))
+            XCTAssertEqual(r.episodes, [], writing)
+            XCTAssertTrue(r.isOutsideWritingFolder, writing)
+            XCTAssertEqual(r.previousEpisodes, [], writing)
+            XCTAssertNil(r.previousEpisode, writing)
+            XCTAssertEqual(paths(r.settings), ["설정/세계관.md", "설정/인물/하연.md"], writing)
+        }
+    }
 }
