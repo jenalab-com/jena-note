@@ -71,7 +71,7 @@ L10n(ko/en): `ai.work.row.off`("작품 문맥 사용 안 함"), `ai.work.row.dis
 - [ ] **Step 1: Write the failing tests**
 
 ```swift
-func testAppearanceForEachStatusMatchesTable()   // 11행: 점 색·문구·버튼 제목·바탕(nil/연노랑)·버튼 활성
+func testAppearanceForEachStatusMatchesTable()   // 표 전 행(작성 당시 10행; 최종 리뷰 후 "요약이 빠짐" 행 추가로 11행): 점 색·문구·버튼 제목·바탕(nil/연노랑)·버튼 활성
 func testUnsavedDocumentDisablesSetupButton()    // Review Focus 5: .unavailable(.unsavedDocument) → buttonEnabled false, tooltip "먼저 저장하세요"
 func testDetailCarriesNumbersNotSentence()       // .active(settings 6, 12/12) → text "작품 문맥 사용 중", detail "설정 6개 · 지난 화 12화"
 func testRowClickAndButtonClickFireSameAction()  // onPrimaryAction 호출 1회씩
@@ -295,7 +295,7 @@ func testOpenSummaryRefusesSymlinkedLeaf()     // 1차 보류 항목 해소
 
 ### Task 7: 문서 갱신 (spec.md, ADR-0014 보완)
 
-- [ ] `docs/spec.md` 작품 문맥 소절을 §5/§7 v2로 교체(줄 상태표 11행, 창 3탭, AC 4·4-1).
+- [ ] `docs/spec.md` 작품 문맥 소절을 §5/§7 v2로 교체(줄 상태표 — 작성 당시 10행, 최종 리뷰 후 11행 —, 창 3탭, AC 4·4-1).
 - [ ] `docs/architecture.md` ADR-0014에 "UX v2(2026-10-27): 텍스트 줄·팝오버·시트 → 눌리는 줄 + 별도 3탭 창; 앱은 해결안을 제시하지 않음; 창은 루트별 1개, 변경 즉시 저장" 보완 항목 추가, 파일 표 갱신.
 - [ ] Commit `docs: work context UX v2 in spec and ADR-0014`
 
@@ -303,6 +303,6 @@ func testOpenSummaryRefusesSymlinkedLeaf()     // 1차 보류 항목 해소
 
 ## Self-Review 기록
 
-- **Spec coverage:** §5.1(T3·T4·T6) · §5.2 줄 문구(T1) · §5.3(T5) · §5.4(T4, 해결안 없음) · §5.5(T1·T6) · §7.1 표 11행(T1) · §7.2 ①(T4) ②(T5) ③(T3) 창 규칙(T3) · §7.3 제거(T6) · §13 UX 개정 5항(T1·T3·T4·T6) · AC 4/4-1(T1·T4).
+- **Spec coverage:** §5.1(T3·T4·T6) · §5.2 줄 문구(T1) · §5.3(T5) · §5.4(T4, 해결안 없음) · §5.5(T1·T6) · §7.1 표(작성 당시 10행, 최종 리뷰 후 11행)(T1) · §7.2 ①(T4) ②(T5) ③(T3) 창 규칙(T3) · §7.3 제거(T6) · §13 UX 개정 5항(T1·T3·T4·T6) · AC 4/4-1(T1·T4).
 - **Type consistency:** `AIWorkContextStatus` 새 정의(T1)를 T6 라우팅이 사용; `AIWorkContextModel` 시그니처(T2)를 T4·T5가 사용; `mutate` 단일 경로(T3)를 T4·T5가 사용.
 - **Proportion:** 시그니처·테스트명·L10n 키만; 본문 없음.
