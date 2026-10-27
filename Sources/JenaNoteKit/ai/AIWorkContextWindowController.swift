@@ -66,6 +66,11 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
         return controller
     }
 
+    /// The registered controller for `rootURL`, if any; never creates one.
+    static func existing(for rootURL: URL) -> AIWorkContextWindowController? {
+        controllers[key(for: rootURL)]
+    }
+
     static func resetRegistryForTesting() {
         for controller in controllers.values { controller.window?.orderOut(nil) }
         controllers.removeAll()

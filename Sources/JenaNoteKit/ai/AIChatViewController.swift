@@ -18,11 +18,18 @@ final class AIChatViewController: NSViewController {
     // Internal (not private) so layout tests can locate them in the panel stack.
     let documentLabel = NSTextField(labelWithString: "")
     let workBar = AIWorkContextBar()
-    private var workSheet: AIWorkContextSheetController?
-    private var workPopover: NSPopover?
-    /// Summary run started from the popover ("다시 생성" / "모두 갱신"). It belongs to the work, not to a
-    /// chat request: `cancel()`, `switchDocument()` and `suspend()` leave it running; only the popover's
-    /// cancel button and `deinit` stop it. Separate from the send flow's `summaryRequest`.
+    /// Shows the work context window. Injectable so tests can intercept presenting.
+    var windowPresenter: (NSWindowController) -> Void = {
+        $0.showWindow(nil)
+        $0.window?.makeKeyAndOrderFront(nil)
+    }
+    /// The window that last received this panel's maintenance progress (cleared when it ends).
+    private weak var progressWindow: AIWorkContextWindowController?
+    /// Refreshes the row when the shown document gets a file URL (Save As on an untitled document).
+    private var fileURLObservation: NSKeyValueObservation?
+    /// Summary run started from the work context window ("다시 만들기" / "요약 전부 새로 만들기"). It
+    /// belongs to the work, not to a chat request: `cancel()`, `switchDocument()` and `suspend()` leave
+    /// it running; only the window's cancel button and `deinit` stop it. Separate from `summaryRequest`.
     private var maintenanceRequest: AISummaryRequest?
     private var maintenanceStore: AIEpisodeSummaryStore?
     private var maintenanceProgress: (done: Int, total: Int)?
@@ -120,7 +127,13 @@ final class AIChatViewController: NSViewController {
         request?.cancel()
         summaryRequest?.cancel()
         maintenanceRequest?.cancel()
+        fileURLObservation?.invalidate()
         NotificationCenter.default.removeObserver(self)
+    }
+
+    override func viewWillAppear() {
+        super.viewWillAppear()
+        refreshWorkContext()
     }
 
     private func makeScroll(textView: NSTextView, editable: Bool) -> NSScrollView {
@@ -146,6 +159,8 @@ final class AIChatViewController: NSViewController {
         _ = view
         conversation?.draft = input.string
         cancel()
+        fileURLObservation?.invalidate()
+        fileURLObservation = nil
         guard let document = currentDocument?() else {
             conversation = nil
             documentLabel.stringValue = L10n.tr("ai.noDocument")
@@ -163,7 +178,19 @@ final class AIChatViewController: NSViewController {
         sendButton.isEnabled = true
         render()
         selectionChanged()
+        fileURLObservation = document.observe(\.fileURL, options: [.new]) { [weak self] _, _ in
+            if Thread.isMainThread {
+                self?.refreshWorkContext()
+            } else {
+                DispatchQueue.main.async { self?.refreshWorkContext() }
+            }
+        }
         refreshWorkContext()
+        if let url = document.fileURL, let root = resolvedWork?.context.rootURL,
+           let window = AIWorkContextWindowController.existing(for: root) {
+            window.currentFile = url
+            window.reload()
+        }
     }
 
     // MARK: - Work context
@@ -194,7 +221,7 @@ final class AIChatViewController: NSViewController {
             workBar.update(AIWorkContextAssembler(resolved: resolved, store: store)
                 .status(isGenerating: ownMaintenanceProgress.map { ($0.done, $0.total) }))
         }
-        syncWorkPopover()
+        pushMaintenanceProgress()
     }
 
     /// This window's maintenance progress, only while the shown work is the one being maintained.
@@ -203,44 +230,93 @@ final class AIChatViewController: NSViewController {
         return maintenanceProgress
     }
 
-    /// Keeps an open popover in step with the bar: reloads it with the fresh resolution, or closes it
-    /// when the document is no longer part of a (valid) work.
-    private func syncWorkPopover() {
-        guard let popover = workPopover, popover.isShown,
-              let controller = popover.contentViewController as? AIWorkContextPopoverController else { return }
-        guard let resolved = resolvedWork else { return popover.close() }
-        controller.progress = ownMaintenanceProgress
-        controller.reload(resolved)
+    /// Mirrors this panel's maintenance progress into the work context window of the work being
+    /// maintained (nil once the run ends).
+    private func pushMaintenanceProgress() {
+        let target = maintenanceStore.flatMap { AIWorkContextWindowController.existing(for: $0.rootURL) }
+        if let previous = progressWindow, previous !== target { previous.maintenanceProgress = nil }
+        if let target = target, target.maintenanceProgress?.done != maintenanceProgress?.done
+            || target.maintenanceProgress?.total != maintenanceProgress?.total {
+            target.maintenanceProgress = maintenanceProgress
+        }
+        progressWindow = target
     }
 
-    /// Opens the single work context window.
-    private func openWorkWindow() {
-        // TODO(Task 6)
+    /// Row action (spec §5.1, §7.1): routes by the row's current status to the work context window
+    /// or, for "켜기", turns the work back on without opening anything.
+    func openWorkWindow() {
+        guard let url = currentDocument?()?.fileURL else { return }
+        switch workBar.status {
+        case .unavailable(reason: .unsavedDocument):
+            return
+        case .unavailable(reason: .notInWork):
+            presentFirstSetup(fileURL: url)
+        case .corrupt:
+            setCorruptContextAside(fileURL: url)
+            presentFirstSetup(fileURL: url)
+        case .disabled:
+            guard let root = resolvedWork?.context.rootURL else { return }
+            let controller = AIWorkContextWindowController.shared(for: root, store: AIEpisodeSummaryStore.shared(for: root))
+            controller.currentFile = url
+            controller.reload()
+            guard !controller.context.config.settingsSources.isEmpty else {
+                return presentWorkWindow(controller, tab: .sources)
+            }
+            controller.mutate { config in
+                config.disabledByUser = false
+                config.enabled = !config.settingsSources.isEmpty
+            }
+            refreshWorkContext()
+        case .active, .generating:
+            guard let root = resolvedWork?.context.rootURL else { return }
+            let controller = AIWorkContextWindowController.shared(for: root, store: AIEpisodeSummaryStore.shared(for: root))
+            controller.currentFile = url
+            presentWorkWindow(controller, tab: .sources)
+        }
     }
 
-    private func presentWorkPopover() {
-        guard let resolved = resolvedWork, let store = summaryStore else { return }
-        let controller = AIWorkContextPopoverController(resolved: resolved, store: store)
-        controller.preferredWidth = max(view.bounds.width, Self.minimumPanelWidth)
-        controller.progress = ownMaintenanceProgress
+    private func presentFirstSetup(fileURL: URL) {
+        let root = AIWorkContextSuggestion.make(for: fileURL).rootURL
+        let controller = AIWorkContextWindowController.forFirstSetup(
+            fileURL: fileURL, store: AIEpisodeSummaryStore.shared(for: root))
+        presentWorkWindow(controller, tab: .folders)
+    }
+
+    /// Renames an unreadable `context.json` to `context.json.bak` (replacing an older backup) so first
+    /// setup starts clean and never overwrites it. Only inside the work's own `.jenanote`.
+    private func setCorruptContextAside(fileURL: URL) {
+        guard let root = AIWorkContext.locateRoot(from: fileURL) else { return }
+        let folder = root.appendingPathComponent(AIWorkContext.folderName)
+        let config = folder.appendingPathComponent(AIWorkContext.fileName)
+        let backup = folder.appendingPathComponent(AIWorkContext.fileName + ".bak")
+        guard AIWorkContext.isSafeInsideRoot(config, root: root),
+              AIWorkContext.isSafeInsideRoot(backup, root: root) else { return }
+        let fm = FileManager.default
+        if fm.fileExists(atPath: backup.path) { try? fm.removeItem(at: backup) }
+        do {
+            try fm.moveItem(at: config, to: backup)
+        } catch {
+            render(status: String(format: L10n.tr("ai.work.saveFailed"), error.localizedDescription))
+        }
+    }
+
+    /// Hands the window to this panel (hooks, progress) and shows it on `tab`; an already visible
+    /// window is only brought to the front, keeping the tab the user is on.
+    private func presentWorkWindow(_ controller: AIWorkContextWindowController, tab: AIWorkContextWindowController.Tab) {
+        controller.onChange = { [weak self] in self?.refreshWorkContext() }
         controller.onRegenerate = { [weak self] file, isSetting in self?.regenerateSummary(file, isSetting: isSetting) }
         controller.onRefreshAll = { [weak self] in self?.refreshAllSummaries() }
         controller.onCancelRefresh = { [weak self] in self?.cancelMaintenance() }
-        // The popover saves context.json itself; re-resolve so the bar and the popover show the result.
-        controller.onChange = { [weak self] in self?.refreshWorkContext() }
-        controller.onOpenSheet = { [weak self] in
-            guard let self = self else { return }
-            self.workPopover?.close()
-            self.presentWorkSetupSheet(existing: self.resolvedWork?.context)
+        pushMaintenanceProgress()
+        if let window = controller.window, window.isVisible {
+            window.makeKeyAndOrderFront(nil)
+            return
         }
-        let popover = NSPopover()
-        popover.behavior = .transient
-        popover.contentViewController = controller
-        workPopover = popover
-        popover.show(relativeTo: workBar.bounds, of: workBar, preferredEdge: .maxY)
+        controller.select(tab)
+        windowPresenter(controller)
     }
 
-    // MARK: - Summary maintenance (popover)
+    // MARK: - Summary maintenance (work context window)
 
     private func regenerateSummary(_ file: AIWorkFile, isSetting: Bool) {
         guard let store = summaryStore else { return }
@@ -274,8 +350,8 @@ final class AIChatViewController: NSViewController {
         handle.cancel() // completion runs synchronously; already generated summaries stay cached
     }
 
-    /// Starts a popover summary run owned by this controller: progress drives the bar and an open
-    /// popover; on completion every spent token is counted (spec §6.3) and failures become a status line.
+    /// Starts a summary run owned by this controller: progress drives the bar and the open work
+    /// context window; on completion every spent token is counted (spec §6.3) and failures become a status line.
     private func runMaintenance(store: AIEpisodeSummaryStore, total: Int, name: String?,
                                 start: (_ progress: @escaping (Int, Int) -> Void,
                                         _ completion: @escaping (Result<Int, Error>) -> Void) -> AISummaryRequest) {
@@ -325,22 +401,6 @@ final class AIChatViewController: NSViewController {
         maintenanceStore = store
         maintenanceProgress = (0, total)
         refreshWorkContext()
-    }
-
-    private func presentWorkSetupSheet(existing: AIWorkContext? = nil) {
-        guard let url = currentDocument?()?.fileURL, let window = view.window else { return }
-        let sheet = AIWorkContextSheetController(fileURL: url, existing: existing)
-        workSheet = sheet
-        sheet.onSave = { [weak self] context in
-            do {
-                try context.save()
-                self?.refreshWorkContext()
-            } catch {
-                self?.render(status: String(format: L10n.tr("ai.work.saveFailed"), error.localizedDescription))
-            }
-        }
-        sheet.onClose = { [weak self] in self?.workSheet = nil }
-        sheet.present(on: window)
     }
 
     /// The work context to attach to a request, or nil for the legacy (no `work`) prompt.
