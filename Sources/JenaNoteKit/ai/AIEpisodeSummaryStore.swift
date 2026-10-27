@@ -33,11 +33,28 @@ enum AISummaryState: Equatable {
     case missing, stale, ready, manuallyEdited(sourceChanged: Bool)
 }
 
+/// Generation failure for one file; `file` names the episode/setting that failed.
+struct AISummaryGenerationError: LocalizedError {
+    let file: AIWorkFile
+    let underlying: Error
+    var errorDescription: String? { "\(file.relativePath): \(underlying.localizedDescription)" }
+}
+
+/// Handle for one `prepare`/`regenerate` caller. `cancel()` affects only this caller: a queued
+/// request is dropped, the active one stops its generator; either way the queue moves on.
+final class AISummaryRequest {
+    fileprivate weak var store: AIEpisodeSummaryStore?
+    fileprivate init(store: AIEpisodeSummaryStore) { self.store = store }
+    func cancel() { store?.cancel(self) }
+}
+
 /// Cache of AI summaries for earlier episodes (and summarized settings files) under
 /// `<root>/.jenanote/summaries/`. Main-thread only.
 ///
-/// Concurrency policy: one queue at a time per store. A `prepare`/`regenerate` call made while
-/// `isGenerating` is true fails fast with `ai.work.generatingElsewhere` instead of queueing behind.
+/// Concurrency policy (spec §6.3): one generation run at a time per store (= per work root).
+/// A `prepare`/`regenerate` call made while another run is active waits in a FIFO queue; when it
+/// reaches the front its pending list is recomputed, so summaries produced by earlier callers are
+/// not generated twice. Each caller gets its own `AISummaryRequest` handle to cancel only itself.
 final class AIEpisodeSummaryStore {
     private static var registry: [String: AIEpisodeSummaryStore] = [:]
 
@@ -144,85 +161,141 @@ final class AIEpisodeSummaryStore {
         let isSetting: Bool
     }
 
-    private struct Run {
-        let id: Int
-        let generator: AISummaryGenerating
-        let jobs: [Job]
+    private enum Work {
+        case prepare(episodes: [AIWorkFile], settings: [AIWorkFile])
+        case regenerate(AIWorkFile, isSetting: Bool)
+    }
+
+    private struct Caller {
+        let request: AISummaryRequest
+        let work: Work
         let provider: AIProvider
         let model: String?
         let progress: (Int, Int) -> Void
         let completion: (Result<Int, Error>) -> Void
     }
 
-    private var run: Run?
+    private struct Run {
+        let id: Int
+        let caller: Caller
+        let generator: AISummaryGenerating
+        let jobs: [Job]
+    }
+
+    private var active: Run?
+    private var queue: [Caller] = []
     private var runCounter = 0
     private var tokens = 0
-    private(set) var isGenerating = false
 
+    /// True while a run is active or any caller is waiting in the queue.
+    var isGenerating: Bool { active != nil || !queue.isEmpty }
+
+    /// Generates missing/stale summaries (episodes first, then settings), one file at a time.
+    /// `progress(done, total)` fires after each file. On failure the run stops with an
+    /// `AISummaryGenerationError`; earlier results stay on disk. With nothing pending and an idle
+    /// store, `completion(.success(0))` is called synchronously. Int = summed token usage.
+    @discardableResult
     func prepare(episodes: [AIWorkFile], settings: [AIWorkFile], provider: AIProvider, model: String?,
                  progress: @escaping (Int, Int) -> Void,
-                 completion: @escaping (Result<Int, Error>) -> Void) {
-        dispatchPrecondition(condition: .onQueue(.main))
-        guard !isGenerating else { return completion(.failure(Self.busyError)) }
-        let jobs = pending(episodes, isSetting: false).map { Job(file: $0, isSetting: false) }
-            + pending(settings, isSetting: true).map { Job(file: $0, isSetting: true) }
-        guard !jobs.isEmpty else { return completion(.success(0)) }
-        start(jobs: jobs, provider: provider, model: model, progress: progress, completion: completion)
+                 completion: @escaping (Result<Int, Error>) -> Void) -> AISummaryRequest {
+        submit(.prepare(episodes: episodes, settings: settings), provider: provider, model: model,
+               progress: progress, completion: completion)
     }
 
+    /// Always regenerates (overwrites a manually edited summary). Fails with `ai.work.summaryOpenDirty`
+    /// without writing if the summary document is open with unsaved changes.
+    @discardableResult
     func regenerate(_ file: AIWorkFile, isSetting: Bool, provider: AIProvider, model: String?,
-                    completion: @escaping (Result<Int, Error>) -> Void) {
-        dispatchPrecondition(condition: .onQueue(.main))
-        guard !isGenerating else { return completion(.failure(Self.busyError)) }
-        if isSummaryOpenAndDirty(file, isSetting: isSetting) {
-            return completion(.failure(AIError(message: L10n.tr("ai.work.summaryOpenDirty"))))
-        }
-        start(jobs: [Job(file: file, isSetting: isSetting)], provider: provider, model: model,
-              progress: { _, _ in }, completion: completion)
+                    completion: @escaping (Result<Int, Error>) -> Void) -> AISummaryRequest {
+        submit(.regenerate(file, isSetting: isSetting), provider: provider, model: model,
+               progress: { _, _ in }, completion: completion)
     }
 
+    /// Cancels every caller, active and queued (refresh-all / teardown). Generated summaries stay cached.
     func cancel() {
         dispatchPrecondition(condition: .onQueue(.main))
-        guard let current = run else { return }
-        current.generator.cancel()
-        finish(current.id, .failure(AIError(message: L10n.tr("ai.cancelled"))))
+        let waiting = queue
+        queue.removeAll()
+        if let run = active {
+            run.generator.cancel()
+            finish(run.id, Self.cancelled)
+        }
+        waiting.forEach { $0.completion(Self.cancelled) }
     }
 
-    private static var busyError: AIError { AIError(message: L10n.tr("ai.work.generatingElsewhere")) }
+    fileprivate func cancel(_ request: AISummaryRequest) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        if let index = queue.firstIndex(where: { $0.request === request }) {
+            queue.remove(at: index).completion(Self.cancelled)
+        } else if let run = active, run.caller.request === request {
+            run.generator.cancel()
+            finish(run.id, Self.cancelled)
+        }
+    }
 
-    private func start(jobs: [Job], provider: AIProvider, model: String?,
-                       progress: @escaping (Int, Int) -> Void,
-                       completion: @escaping (Result<Int, Error>) -> Void) {
-        runCounter += 1
-        tokens = 0
-        isGenerating = true
-        run = Run(id: runCounter, generator: makeGenerator(), jobs: jobs, provider: provider, model: model,
-                  progress: progress, completion: completion)
-        step(runCounter, at: 0)
+    private static var cancelled: Result<Int, Error> { .failure(AIError(message: L10n.tr("ai.cancelled"))) }
+
+    private func submit(_ work: Work, provider: AIProvider, model: String?,
+                        progress: @escaping (Int, Int) -> Void,
+                        completion: @escaping (Result<Int, Error>) -> Void) -> AISummaryRequest {
+        dispatchPrecondition(condition: .onQueue(.main))
+        let request = AISummaryRequest(store: self)
+        queue.append(Caller(request: request, work: work, provider: provider, model: model,
+                            progress: progress, completion: completion))
+        advance()
+        return request
+    }
+
+    /// Starts the next queued caller if idle. Pending files are recomputed now, so work finished by
+    /// an earlier caller is skipped; callers with nothing left to do complete immediately.
+    private func advance() {
+        while active == nil, !queue.isEmpty {
+            let caller = queue.removeFirst()
+            let jobs: [Job]
+            switch caller.work {
+            case .prepare(let episodes, let settings):
+                jobs = pending(episodes, isSetting: false).map { Job(file: $0, isSetting: false) }
+                    + pending(settings, isSetting: true).map { Job(file: $0, isSetting: true) }
+            case .regenerate(let file, let isSetting):
+                if isSummaryOpenAndDirty(file, isSetting: isSetting) {
+                    caller.completion(.failure(AIError(message: L10n.tr("ai.work.summaryOpenDirty"))))
+                    continue
+                }
+                jobs = [Job(file: file, isSetting: isSetting)]
+            }
+            guard !jobs.isEmpty else {
+                caller.completion(.success(0))
+                continue
+            }
+            runCounter += 1
+            tokens = 0
+            active = Run(id: runCounter, caller: caller, generator: makeGenerator(), jobs: jobs)
+            step(runCounter, at: 0)
+        }
     }
 
     private func step(_ id: Int, at position: Int) {
-        guard let current = run, current.id == id else { return }
-        guard position < current.jobs.count else { return finish(id, .success(tokens)) }
-        let job = current.jobs[position]
+        guard let run = active, run.id == id else { return }
+        guard position < run.jobs.count else { return finish(id, .success(tokens)) }
+        let job = run.jobs[position]
         let source: String
         let prompt: String
         do {
             source = try AIWorkContextResolver.readText(job.file)
             prompt = try AIPrompt.makeSummary(episodeName: job.file.relativePath, text: source)
         } catch {
-            return finish(id, .failure(error))
+            return finish(id, .failure(AISummaryGenerationError(file: job.file, underlying: error)))
         }
-        current.generator.summarize(prompt: prompt, provider: current.provider, model: current.model) { [weak self] result in
-            guard let self = self, let active = self.run, active.id == id else { return } // cancelled or superseded
+        run.generator.summarize(prompt: prompt, provider: run.caller.provider, model: run.caller.model) { [weak self] result in
+            guard let self = self, let current = self.active, current.id == id else { return } // cancelled
             do {
                 let summary = try result.get()
-                try self.store(summary: summary, source: source, for: job, provider: active.provider)
-                self.tokens += active.generator.tokenUsage ?? 0
-                active.progress(position + 1, active.jobs.count)
+                try self.store(summary: summary, source: source, for: job, provider: current.caller.provider)
+                self.tokens += current.generator.tokenUsage ?? 0
+                current.caller.progress(position + 1, current.jobs.count)
                 self.step(id, at: position + 1)
             } catch {
-                self.finish(id, .failure(error))
+                self.finish(id, .failure(AISummaryGenerationError(file: job.file, underlying: error)))
             }
         }
     }
@@ -232,21 +305,27 @@ final class AIEpisodeSummaryStore {
         if isSummaryOpenAndDirty(job.file, isSetting: job.isSetting) {
             throw AIError(message: L10n.tr("ai.work.summaryOpenDirty"))
         }
+        let key = job.file.relativePath
+        var index = loadIndex()
+        // Drop the old record before replacing the text: an interruption between the writes then
+        // reads as `missing` (regenerated next time), never as a false `manuallyEdited`.
+        let removed = job.isSetting ? index.settings.removeValue(forKey: key) : index.entries.removeValue(forKey: key)
+        if removed != nil { try saveIndex(index) }
         let url = summaryURL(for: job.file, isSetting: job.isSetting)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try summary.write(to: url, atomically: true, encoding: .utf8)
-        var index = loadIndex()
         let record = AISummaryRecord(sourceHash: Self.hash(source), summaryHash: Self.summaryHash(summary),
                                      generatedAt: Date(), provider: provider.rawValue)
-        if job.isSetting { index.settings[job.file.relativePath] = record } else { index.entries[job.file.relativePath] = record }
+        if job.isSetting { index.settings[key] = record } else { index.entries[key] = record }
         try saveIndex(index)
     }
 
+    /// Completes the active caller (only while `id` is still the active run), then moves the queue on.
     private func finish(_ id: Int, _ result: Result<Int, Error>) {
-        guard let current = run, current.id == id else { return }
-        run = nil
-        isGenerating = false
-        current.completion(result)
+        guard let run = active, run.id == id else { return }
+        active = nil
+        run.caller.completion(result)
+        advance()
     }
 
     private func isSummaryOpenAndDirty(_ file: AIWorkFile, isSetting: Bool) -> Bool {
