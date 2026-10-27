@@ -142,6 +142,19 @@ final class AIWorkContextPopoverTests: XCTestCase {
         XCTAssertEqual(AIWorkContextPopoverController.stateText(.stale), "오래됨")
     }
 
+    func testLargeFileThresholdAndInvalidPathsLine() {
+        let url = root.appendingPathComponent("설정/큰.md")
+        XCTAssertEqual(AIWorkContextPopoverController.largeFileThreshold, 200_000)
+        XCTAssertFalse(AIWorkContextPopoverController.isLarge(AIWorkFile(relativePath: "a", url: url, byteCount: 200_000)))
+        XCTAssertTrue(AIWorkContextPopoverController.isLarge(AIWorkFile(relativePath: "a", url: url, byteCount: 200_001)))
+
+        let config = AIWorkContextConfig(title: "t", settingsSources: ["설정"], writingFolder: "집필")
+        let clean = AIWorkContext(rootURL: root, config: config, invalidPaths: [])
+        XCTAssertNil(AIWorkContextPopoverController.invalidPathsText(clean))
+        let broken = AIWorkContext(rootURL: root, config: config, invalidPaths: ["../밖", "/abs"])
+        XCTAssertEqual(AIWorkContextPopoverController.invalidPathsText(broken), "무시된 경로: ../밖, /abs")
+    }
+
     func testBudgetSegmentsSumToContextByteCount() {
         let resolved = resolve(current: "집필/03화.md")
         prepare(episodes: resolved.previousEpisodes, responses: ["요약하나", "요약둘"])

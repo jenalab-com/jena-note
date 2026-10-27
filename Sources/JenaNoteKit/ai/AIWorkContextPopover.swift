@@ -25,30 +25,34 @@ final class AIWorkContextPopoverController: NSViewController {
         let state: AISummaryState
     }
 
-    /// Called after `context.json` was saved or a summary run finished → parent refreshes and reloads.
+    /// Called after `context.json` was saved → parent refreshes and reloads.
     var onChange: (() -> Void)?
     var onOpenSheet: (() -> Void)?
+    /// Summary runs started here belong to the parent (the popover is transient and may be freed
+    /// mid-run): it owns the request, its progress, token accounting and error reporting.
+    var onRegenerate: ((_ file: AIWorkFile, _ isSetting: Bool) -> Void)?
+    var onRefreshAll: (() -> Void)?
+    var onCancelRefresh: (() -> Void)?
+    /// Progress of this window's own maintenance run (set by the parent); nil when none is active.
+    /// `store.isGenerating` with a nil progress means another request is generating.
+    var progress: (done: Int, total: Int)?
     /// Popover width; the parent sets it to the panel width.
     var preferredWidth: CGFloat = 340
 
     private(set) var resolved: AIResolvedWorkContext
     private let store: AIEpisodeSummaryStore
-    private let provider: AIProvider
-    private let model: String?
 
     private let stack = NSStackView()
     private var settingRowsShown: [SettingRow] = []
     private var episodeRowsShown: [EpisodeRow] = []
-    /// Last save/generation error; survives rebuilds until the next action.
+    /// Last save/open error; survives rebuilds until the next action.
     private var errorMessage: String?
 
     private static let listMaxHeight: CGFloat = 180
 
-    init(resolved: AIResolvedWorkContext, store: AIEpisodeSummaryStore, provider: AIProvider, model: String?) {
+    init(resolved: AIResolvedWorkContext, store: AIEpisodeSummaryStore) {
         self.resolved = resolved
         self.store = store
-        self.provider = provider
-        self.model = model
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -92,6 +96,17 @@ final class AIWorkContextPopoverController: NSViewController {
                        summarized: summarized.contains(file.relativePath),
                        unreadable: unreadable.contains(file.relativePath))
         }
+    }
+
+    /// Settings files above this size get a warning (spec §6.6); they stay includable.
+    static let largeFileThreshold = 200_000
+
+    static func isLarge(_ file: AIWorkFile) -> Bool { file.byteCount > largeFileThreshold }
+
+    /// Warning line for `context.json` paths that were ignored (outside the root etc., spec §6.7).
+    static func invalidPathsText(_ context: AIWorkContext) -> String? {
+        guard !context.invalidPaths.isEmpty else { return nil }
+        return String(format: L10n.tr("ai.work.invalidPaths"), context.invalidPaths.joined(separator: ", "))
     }
 
     static func episodeRows(_ resolved: AIResolvedWorkContext, store: AIEpisodeSummaryStore) -> [EpisodeRow] {
@@ -211,36 +226,17 @@ final class AIWorkContextPopoverController: NSViewController {
             guard alert.runModal() == .alertFirstButtonReturn else { return }
         }
         errorMessage = nil
-        store.regenerate(row.file, isSetting: false, provider: provider, model: model) { [weak self] result in
-            self?.generationFinished(result)
-        }
-        rebuild() // isGenerating → lists disabled
+        onRegenerate?(row.file, false)
     }
 
     @objc private func refreshAllClicked(_ sender: Any?) {
         guard !store.isGenerating else { return }
         errorMessage = nil
-        // "모두 갱신" regenerates only missing/stale summaries (spec §7.2, §6.3): `prepare` skips
-        // ready and manually edited ones, so hand-edited summaries are never overwritten here —
-        // "다시 생성" on a row is the explicit way to replace one. Summarized settings are included.
-        let summarized = AIWorkContextAssembler(resolved: resolved, store: store).summarizedSettings
-        store.prepare(episodes: resolved.previousEpisodes, settings: summarized, provider: provider, model: model,
-                      progress: { [weak self] _, _ in self?.rebuild() },
-                      completion: { [weak self] result in self?.generationFinished(result) })
-        rebuild()
+        // The parent runs `prepare`: only missing/stale summaries (AIChatViewController.refreshAllSummaries).
+        onRefreshAll?()
     }
 
-    private func generationFinished(_ result: Result<Int, Error>) {
-        if case .failure(let error) = result {
-            if let failure = error as? AISummaryGenerationError {
-                errorMessage = String(format: L10n.tr("ai.work.summaryFailed"), failure.file.relativePath,
-                                      failure.underlying.localizedDescription)
-            } else {
-                errorMessage = error.localizedDescription
-            }
-        }
-        notifyChanged()
-    }
+    @objc private func cancelRefreshClicked(_ sender: Any?) { onCancelRefresh?() }
 
     // MARK: - Building
 
@@ -262,6 +258,9 @@ final class AIWorkContextPopoverController: NSViewController {
         add(row([title, spacer(), change]), width: contentWidth)
         add(switchRow(L10n.tr("ai.work.include"), on: config.enabled, action: #selector(enabledToggled(_:))),
             width: contentWidth)
+        if let invalid = Self.invalidPathsText(resolved.context) {
+            add(warningLine(invalid, width: contentWidth), width: contentWidth)
+        }
 
         // 2. Budget
         let payload = AIWorkContextAssembler(resolved: resolved, store: store)
@@ -274,7 +273,11 @@ final class AIWorkContextPopoverController: NSViewController {
         budget.setContentCompressionResistancePriority(.required, for: .horizontal)
         add(row([bar, budget]), width: contentWidth)
 
-        if generating {
+        if let progress = progress {
+            let label = small(String(format: L10n.tr("ai.work.generating"), progress.done, progress.total))
+            label.textColor = .systemOrange
+            add(label, width: contentWidth)
+        } else if generating {
             let label = small(L10n.tr("ai.work.generatingElsewhere"))
             label.textColor = .systemOrange
             add(label, width: contentWidth)
@@ -292,8 +295,19 @@ final class AIWorkContextPopoverController: NSViewController {
                                action: #selector(refreshAllClicked(_:)))
         refresh.bezelStyle = .rounded
         refresh.controlSize = .small
-        refresh.isEnabled = !generating && !episodeRowsShown.isEmpty
-        add(row([section(L10n.tr("ai.work.summariesSection")), spacer(), refresh]), width: contentWidth)
+        refresh.isEnabled = !generating && !episodeRowsShown.isEmpty && onRefreshAll != nil
+        var summaryHeader: [NSView] = [section(L10n.tr("ai.work.summariesSection")), spacer()]
+        if progress != nil {
+            // Spec §6.3: a refresh can be cancelled mid-run; summaries already made stay cached.
+            let cancel = NSButton(title: L10n.tr("ai.work.cancelRefresh"), target: self,
+                                  action: #selector(cancelRefreshClicked(_:)))
+            cancel.bezelStyle = .rounded
+            cancel.controlSize = .small
+            summaryHeader.append(cancel)
+        } else {
+            summaryHeader.append(refresh)
+        }
+        add(row(summaryHeader), width: contentWidth)
         let episodeViews = episodeRowsShown.enumerated().map { episodeRowView($1, tag: $0, enabled: !generating) }
         if !episodeViews.isEmpty { add(list(episodeViews), width: contentWidth) }
 
@@ -326,6 +340,13 @@ final class AIWorkContextPopoverController: NSViewController {
             let icon = NSImageView(image: image)
             icon.contentTintColor = .systemOrange
             icon.toolTip = L10n.tr("ai.work.unreadable")
+            views.append(icon)
+        }
+        if Self.isLarge(item.file), let image = NSImage(systemSymbolName: "exclamationmark.triangle",
+                                                        accessibilityDescription: L10n.tr("ai.work.largeFile")) {
+            let icon = NSImageView(image: image)
+            icon.contentTintColor = .systemOrange
+            icon.toolTip = L10n.tr("ai.work.largeFile")
             views.append(icon)
         }
         let path = pathLabel(item.file.relativePath)
@@ -367,7 +388,7 @@ final class AIWorkContextPopoverController: NSViewController {
         regenerate.tag = tag
         regenerate.bezelStyle = .rounded
         regenerate.controlSize = .mini
-        regenerate.isEnabled = enabled
+        regenerate.isEnabled = enabled && onRegenerate != nil
         let row = self.row([pathLabel(item.file.relativePath), spacer(), state, open, regenerate])
         row.toolTip = item.file.relativePath
         return row
@@ -396,6 +417,14 @@ final class AIWorkContextPopoverController: NSViewController {
         toggle.action = action
         toggle.setAccessibilityLabel(title)
         return row([NSTextField(labelWithString: title), spacer(), toggle])
+    }
+
+    private func warningLine(_ text: String, width: CGFloat) -> NSView {
+        let label = NSTextField(wrappingLabelWithString: text)
+        label.font = .systemFont(ofSize: 11)
+        label.textColor = .systemOrange
+        label.preferredMaxLayoutWidth = width
+        return label
     }
 
     private func section(_ title: String) -> NSTextField {
