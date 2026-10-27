@@ -121,8 +121,8 @@ final class AIWorkContextAssemblerTests: XCTestCase {
         let bytes = assembler.payload(currentFile: root.appendingPathComponent("집필/04화.md")).payload.contextByteCount
 
         XCTAssertEqual(assembler.status(isGenerating: nil),
-                       .active(settingsCount: 2, contextBytes: bytes, summariesReady: 2, summariesTotal: 3,
-                               previousEpisode: true, outsideWriting: false, budget: AIPrompt.budget(for: bytes)))
+                       .active(settingsCount: 2, summariesReady: 2, summariesTotal: 3,
+                               outsideWriting: false, contextBytes: bytes, budget: AIPrompt.budget(for: bytes)))
         XCTAssertEqual(assembler.status(isGenerating: (1, 3)), .generating(done: 1, total: 3))
     }
 
@@ -135,13 +135,12 @@ final class AIWorkContextAssemblerTests: XCTestCase {
         XCTAssertNil(payload.previousEpisode)
         XCTAssertEqual(payload.settings.count, 2)
         XCTAssertEqual(payload.currentEpisode, "세계관.md")
-        guard case let .active(settingsCount, _, ready, total, previous, outside, _) = assembler.status(isGenerating: nil) else {
+        guard case let .active(settingsCount, ready, total, outside, _, _) = assembler.status(isGenerating: nil) else {
             return XCTFail("expected active status")
         }
         XCTAssertEqual(settingsCount, 2)
         XCTAssertEqual(ready, 0)
         XCTAssertEqual(total, 0)
-        XCTAssertFalse(previous)
         XCTAssertTrue(outside)
     }
 

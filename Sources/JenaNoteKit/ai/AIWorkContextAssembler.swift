@@ -29,11 +29,10 @@ struct AIWorkContextAssembler {
             case .missing, .stale: return false
             }
         }.count
-        return .active(settingsCount: resolved.settings.count, contextBytes: bytes,
+        return .active(settingsCount: resolved.settings.count,
                        summariesReady: ready, summariesTotal: resolved.previousEpisodes.count,
-                       previousEpisode: !resolved.isOutsideWritingFolder && resolved.previousEpisode != nil,
                        outsideWriting: resolved.isOutsideWritingFolder,
-                       budget: AIPrompt.budget(for: bytes))
+                       contextBytes: bytes, budget: AIPrompt.budget(for: bytes))
     }
 
     /// Settings files whose summary is sent instead of their text.

@@ -18,11 +18,7 @@ final class AIChatViewController: NSViewController {
     // Internal (not private) so layout tests can locate them in the panel stack.
     let documentLabel = NSTextField(labelWithString: "")
     let workBar = AIWorkContextBar()
-    /// Task 7 hook: present the work context setup sheet (bar clicked in `.none` / `.corrupt`).
-    var presentSetup: (() -> Void)?
     private var workSheet: AIWorkContextSheetController?
-    /// Task 8 hook: present the work context popover (bar clicked in any other state).
-    var presentPopover: (() -> Void)?
     private var workPopover: NSPopover?
     /// Summary run started from the popover ("다시 생성" / "모두 갱신"). It belongs to the work, not to a
     /// chat request: `cancel()`, `switchDocument()` and `suspend()` leave it running; only the popover's
@@ -90,7 +86,7 @@ final class AIChatViewController: NSViewController {
         cancelButton.isEnabled = false
         let buttons = NSStackView(views: [sendButton, cancelButton])
         buttons.orientation = .horizontal
-        workBar.onClick = { [weak self] in self?.workBarClicked() }
+        workBar.onPrimaryAction = { [weak self] in self?.openWorkWindow() }
         let stack = NSStackView(views: [top, documentLabel, workBar, providerLabel, historyScroll, selectionLabel,
                                        modeControl, requestLabel, inputScroll, options, buttons])
         stack.orientation = .vertical
@@ -178,7 +174,7 @@ final class AIChatViewController: NSViewController {
         guard let url = currentDocument?()?.fileURL else {
             resolvedWork = nil
             summaryStore = nil
-            workBar.update(.none)
+            workBar.update(.unavailable(reason: .unsavedDocument))
             return
         }
         switch AIWorkContext.locateResult(from: url) {
@@ -189,7 +185,7 @@ final class AIChatViewController: NSViewController {
         case .success(nil):
             resolvedWork = nil
             summaryStore = nil
-            workBar.update(.none)
+            workBar.update(.unavailable(reason: .notInWork))
         case .success(let context?):
             let resolved = AIWorkContextResolver.resolve(context, currentFile: url)
             let store = AIEpisodeSummaryStore.shared(for: context.rootURL)
@@ -217,16 +213,9 @@ final class AIChatViewController: NSViewController {
         controller.reload(resolved)
     }
 
-    private func workBarClicked() {
-        // The bar can be stale (e.g. an untitled document was just saved into a work); re-locate first
-        // so a click never opens a fresh setup sheet over an existing context.json.
-        refreshWorkContext()
-        switch workBar.status {
-        case .none, .corrupt:
-            if let presentSetup = presentSetup { presentSetup() } else { presentWorkSetupSheet() }
-        case .active, .disabled, .generating:
-            if let presentPopover = presentPopover { presentPopover() } else { presentWorkPopover() }
-        }
+    /// Opens the single work context window.
+    private func openWorkWindow() {
+        // TODO(Task 6)
     }
 
     private func presentWorkPopover() {
