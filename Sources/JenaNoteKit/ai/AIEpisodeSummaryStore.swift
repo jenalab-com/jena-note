@@ -44,6 +44,9 @@ struct AISummaryGenerationError: LocalizedError {
 /// request is dropped, the active one stops its generator; either way the queue moves on.
 final class AISummaryRequest {
     fileprivate weak var store: AIEpisodeSummaryStore?
+    /// Tokens spent on files this request summarized successfully so far. Kept on the handle so the
+    /// caller can count them even when the run later fails or is cancelled (spec §6.3).
+    fileprivate(set) var tokensUsed = 0
     fileprivate init(store: AIEpisodeSummaryStore) { self.store = store }
     func cancel() { store?.cancel(self) }
 }
@@ -292,6 +295,7 @@ final class AIEpisodeSummaryStore {
                 let summary = try result.get()
                 try self.store(summary: summary, source: source, for: job, provider: current.caller.provider)
                 self.tokens += current.generator.tokenUsage ?? 0
+                current.caller.request.tokensUsed += current.generator.tokenUsage ?? 0
                 current.caller.progress(position + 1, current.jobs.count)
                 self.step(id, at: position + 1)
             } catch {

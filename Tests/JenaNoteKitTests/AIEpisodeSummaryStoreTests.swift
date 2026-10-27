@@ -401,4 +401,19 @@ final class AIEpisodeSummaryStoreTests: XCTestCase {
         XCTAssertNil(try readIndex().entries["01화.md"])
         XCTAssertEqual(store.state(of: file, isSetting: false), .missing)
     }
+
+    func testTokensUsedAccumulatesOnHandleEvenAfterFailure() throws {
+        fake.tokenUsage = 10
+        fake.responses = [.success("첫 화 요약"), .failure(AIError(message: "boom"))]
+        let exp = expectation(description: "prepare")
+        var outcome: Result<Int, Error>!
+        let handle = store.prepare(episodes: episodes, settings: [], provider: .claude, model: nil,
+                                   progress: { _, _ in }, completion: { result in
+            outcome = result
+            exp.fulfill()
+        })
+        wait(for: [exp], timeout: 5)
+        XCTAssertEqual(failedFile(outcome), "02화.md")
+        XCTAssertEqual(handle.tokensUsed, 10)
+    }
 }

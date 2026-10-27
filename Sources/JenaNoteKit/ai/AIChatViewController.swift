@@ -27,6 +27,9 @@ final class AIChatViewController: NSViewController {
     /// This controller's own summary `prepare` request. Only it is cancelled by `cancel()`: the store
     /// is shared per work root, so another window's request must not be stopped.
     private var summaryRequest: AISummaryRequest?
+    /// Set while `summaryRequest` runs: on cancel, counts the tokens already spent and takes the
+    /// not-yet-sent question back out of the conversation into the input.
+    private var abortPreparation: ((_ tokensUsed: Int) -> Void)?
     private var waitingLabel: NSTextField!
     private let selectionLabel = NSTextField(wrappingLabelWithString: "")
     private let providerLabel = NSTextField(labelWithString: "")
@@ -256,8 +259,11 @@ final class AIChatViewController: NSViewController {
         }
 
         guard AISettings.executable(for: provider) != nil else { render(status: L10n.tr("ai.notInstalled")); return }
+        // The store queues behind another window's run on the same work (spec §6.3).
         let store = assembler.store
-        guard !store.isGenerating else { render(status: L10n.tr("ai.work.generatingElsewhere")); return }
+        // Committed now so the question shows while waiting; taken back out (and returned to the
+        // input) if summaries fail or are cancelled before the main request is sent.
+        let userIndex = conversation.messages.count
         commit(question, to: conversation)
         if mode == .edit, (currentSelection?() ?? NSRange(location: 0, length: 0)).length > 0 {
             conversation.messages.append(AIChatMessage(role: "status", text: L10n.tr("ai.work.snapshotNote")))
@@ -267,6 +273,10 @@ final class AIChatViewController: NSViewController {
         setBusy(true)
         showGenerating(done: 0, total: jobs.count)
         render()
+        abortPreparation = { [weak self] tokensUsed in
+            if tokensUsed > 0 { conversation.tokenUsage[provider, default: 0] += tokensUsed }
+            self?.uncommit(question, at: userIndex, in: conversation)
+        }
         var completed = 0
         var finished = false
         let handle = store.prepare(episodes: episodes, settings: summarized, provider: provider, model: options.selectedModel,
@@ -277,14 +287,20 @@ final class AIChatViewController: NSViewController {
                       },
                       completion: { [weak self, weak document] result in
             finished = true
-            guard let self = self, self.generation == token else { return }
+            guard let self = self, self.generation == token else { return } // cancel() already accounted
+            // Every summary token counts (spec §6.3), whether the run succeeded or not. A synchronous
+            // completion has no handle yet; then only a success can carry tokens.
+            let spent = self.summaryRequest?.tokensUsed ?? ((try? result.get()) ?? 0)
+            if spent > 0 { conversation.tokenUsage[provider, default: 0] += spent }
             self.summaryRequest = nil
+            self.abortPreparation = nil
             switch result {
-            case .success(let tokens):
-                if tokens > 0 { conversation.tokenUsage[provider, default: 0] += tokens }
+            case .success:
                 guard let document = document, self.currentDocument?() === document else {
+                    self.uncommit(question, at: userIndex, in: conversation)
                     return self.failRequest(L10n.tr("ai.noDocument"), question: question, conversation: conversation)
                 }
+                self.refreshWorkContext() // leave "요약 생성 중 N/N" for the real status
                 do {
                     // Snapshot now: the selection and text at the moment summaries finished.
                     let (prompt, snapshot, skipped) = try self.makePrompt(document: document, history: history,
@@ -293,9 +309,11 @@ final class AIChatViewController: NSViewController {
                     self.startRequest(prompt: prompt, snapshot: snapshot, document: document, conversation: conversation,
                                       question: question, mode: mode, provider: provider, token: token)
                 } catch {
+                    self.uncommit(question, at: userIndex, in: conversation)
                     self.failRequest(error.localizedDescription, question: question, conversation: conversation)
                 }
             case .failure(let error):
+                self.uncommit(question, at: userIndex, in: conversation)
                 let name: String
                 let reason: String
                 if let failure = error as? AISummaryGenerationError {
@@ -310,7 +328,23 @@ final class AIChatViewController: NSViewController {
             }
         })
         // The store may complete synchronously (e.g. an unreadable first file); keep no stale handle.
-        if !finished { summaryRequest = handle }
+        if !finished { summaryRequest = handle } else { abortPreparation = nil }
+    }
+
+    /// Takes a question that was never sent back out of the conversation (with its snapshot note)
+    /// and returns it to the input / draft.
+    private func uncommit(_ question: String, at index: Int, in conversation: AIConversation) {
+        var messages = conversation.messages
+        if index < messages.count, messages[index].role == "user", messages[index].text == question {
+            messages.remove(at: index)
+            if index < messages.count, messages[index].role == "status",
+               messages[index].text == L10n.tr("ai.work.snapshotNote") {
+                messages.remove(at: index)
+            }
+            conversation.messages = messages
+        }
+        if self.conversation === conversation, input.string.isEmpty { input.string = question }
+        if conversation.draft.isEmpty { conversation.draft = question }
     }
 
     private func makePrompt(document: MarkdownDocument, history: [AIChatMessage], question: String, mode: AIChatMode,
@@ -404,16 +438,20 @@ final class AIChatViewController: NSViewController {
 
     @objc func cancel() {
         let wasPreparing = summaryRequest != nil
-        if request != nil || wasPreparing {
-            conversation?.messages.append(AIChatMessage(role: "status", text: L10n.tr("ai.cancelled")))
-        }
+        let wasRequesting = request != nil
         generation = UUID()
         request?.cancel()
         request = nil
         // Only this controller's own summary run; already generated summaries stay cached.
+        // The main request was not sent yet, so the question goes back to the input.
         if let pending = summaryRequest {
             summaryRequest = nil
             pending.cancel()
+            abortPreparation?(pending.tokensUsed)
+        }
+        abortPreparation = nil
+        if wasRequesting || wasPreparing {
+            conversation?.messages.append(AIChatMessage(role: "status", text: L10n.tr("ai.cancelled")))
         }
         if isViewLoaded {
             setBusy(false)
