@@ -40,6 +40,8 @@ final class AIWorkContextSheetController: NSWindowController {
     }
 
     var onSave: ((AIWorkContext) -> Void)?
+    /// Called after the sheet has ended (saved or cancelled).
+    var onClose: (() -> Void)?
 
     private var draft: Draft
     private let rootLabel = NSTextField(labelWithString: "")
@@ -64,7 +66,7 @@ final class AIWorkContextSheetController: NSWindowController {
 
     func present(on window: NSWindow) {
         guard let sheet = self.window else { return }
-        window.beginSheet(sheet, completionHandler: nil)
+        window.beginSheet(sheet) { [weak self] _ in self?.onClose?() }
     }
 
     // MARK: - UI
@@ -174,6 +176,7 @@ final class AIWorkContextSheetController: NSWindowController {
         errorLabel.stringValue = draft.errors.map { error -> String in
             switch error {
             case .noSettingsSources: return L10n.tr("ai.work.errorNoSettings")
+            case .settingsIsRoot: return L10n.tr("ai.work.errorSourceIsRoot")
             case .settingsOutsideRoot(let path): return String(format: L10n.tr("ai.work.errorOutsideRoot"), path)
             case .writingFolderOutsideRoot:
                 return String(format: L10n.tr("ai.work.errorOutsideRoot"), draft.writingFolder.path)

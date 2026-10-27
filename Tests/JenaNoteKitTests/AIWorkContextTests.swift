@@ -119,6 +119,15 @@ final class AIWorkContextTests: XCTestCase {
         XCTAssertTrue(errors.contains(.writingFolderOutsideRoot))
     }
 
+    func testValidateRejectsRootAsSettingsSource() throws {
+        let root = try makeWork(at: tmp)
+        let writing = root.appendingPathComponent("집필")
+        XCTAssertEqual(AIWorkContext.validate(rootURL: root, settingsSources: [root], writingFolder: writing), [.settingsIsRoot])
+        // Writing folder equal to the root stays allowed.
+        let inside = root.appendingPathComponent("설정")
+        XCTAssertEqual(AIWorkContext.validate(rootURL: root, settingsSources: [inside], writingFolder: root), [])
+    }
+
     func testContainsRejectsDotDotThroughSymlink() throws {
         let root = try makeWork(at: tmp)
         let outsideSub = tmp.appendingPathComponent("outside/sub")
