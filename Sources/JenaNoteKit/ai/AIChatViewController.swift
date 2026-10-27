@@ -20,6 +20,7 @@ final class AIChatViewController: NSViewController {
     let workBar = AIWorkContextBar()
     /// Task 7 hook: present the work context setup sheet (bar clicked in `.none` / `.corrupt`).
     var presentSetup: (() -> Void)?
+    private var workSheet: AIWorkContextSheetController?
     /// Task 8 hook: present the work context popover (bar clicked in any other state).
     var presentPopover: (() -> Void)?
     private var resolvedWork: AIResolvedWorkContext?
@@ -187,9 +188,26 @@ final class AIChatViewController: NSViewController {
 
     private func workBarClicked() {
         switch workBar.status {
-        case .none, .corrupt: presentSetup?()     // Task 7: present setup sheet
+        case .none, .corrupt:
+            if let presentSetup = presentSetup { presentSetup() } else { presentWorkSetupSheet() }
         default: presentPopover?()                // Task 8: present context popover
         }
+    }
+
+    private func presentWorkSetupSheet() {
+        guard let url = currentDocument?()?.fileURL, let window = view.window else { return }
+        let sheet = AIWorkContextSheetController(fileURL: url, existing: nil)
+        workSheet = sheet
+        sheet.onSave = { [weak self] context in
+            self?.workSheet = nil
+            do {
+                try context.save()
+                self?.refreshWorkContext()
+            } catch {
+                self?.render(status: String(format: L10n.tr("ai.work.saveFailed"), error.localizedDescription))
+            }
+        }
+        sheet.present(on: window)
     }
 
     /// The work context to attach to a request, or nil for the legacy (no `work`) prompt.
