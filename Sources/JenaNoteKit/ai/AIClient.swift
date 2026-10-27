@@ -2,10 +2,13 @@ import Foundation
 
 final class AIClient {
     private let process = AIProcess()
+    static let defaultTimeout: TimeInterval = 120
+    static let summaryTimeout: TimeInterval = 240
     private(set) var tokenUsage: Int?
     func cancel() { process.cancel() }
 
-    func send(provider: AIProvider, prompt: String, model: String? = nil, completion: @escaping (Result<String, Error>) -> Void) {
+    func send(provider: AIProvider, prompt: String, model: String? = nil, timeout: TimeInterval = AIClient.defaultTimeout,
+              completion: @escaping (Result<String, Error>) -> Void) {
         guard let executable = AISettings.executable(for: provider) else {
             completion(.failure(AIError(message: L10n.tr("ai.notInstalled"))))
             return
@@ -25,7 +28,8 @@ final class AIClient {
             try "{\"hooksConfig\":{\"enabled\":false},\"mcp\":{\"allowed\":[]},\"tools\":{\"core\":[]}}".write(
                 to: geminiDirectory.appendingPathComponent("settings.json"), atomically: true, encoding: .utf8)
             process.run(executable: executable, arguments: Self.arguments(for: provider, policy: policy, model: model),
-                        input: prompt, directory: directory, environmentOverrides: provider.environmentOverrides) { result in
+                        input: prompt, directory: directory, timeout: timeout,
+                        environmentOverrides: provider.environmentOverrides) { result in
                 // This folder is created solely for this request, never the user's note folder.
                 try? FileManager.default.removeItem(at: directory)
                 completion(result.flatMap { output in
