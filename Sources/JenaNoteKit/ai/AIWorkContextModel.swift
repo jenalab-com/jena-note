@@ -126,15 +126,17 @@ enum AIWorkContextModel {
     /// → the same sum plus the limit and how much to cut.
     static func budgetFactLine(_ payload: AIWorkPayload) -> String {
         let segments = budgetSegments(payload)
-        let total = payload.contextByteCount
+        let total = segments.settings + segments.summaries + segments.previous
         let format = AIWorkContextBar.formatBytes
         let limit = AIPrompt.maximumBytes
-        if total > limit {
-            return String(format: L10n.tr("ai.work.budget.over"), format(segments.settings), format(segments.summaries),
-                          format(total), format(limit), format(total - limit))
-        }
-        return String(format: L10n.tr("ai.work.budget.under"), format(segments.settings), format(segments.summaries),
-                      format(total), format(limit))
+        let over = total > limit
+        var args: [String] = [format(segments.settings), format(segments.summaries)]
+        if segments.previous > 0 { args.append(format(segments.previous)) }
+        args.append(format(total))
+        args.append(format(limit))
+        if over { args.append(format(total - limit)) }
+        let key = "ai.work.budget." + (over ? "over" : "under") + (segments.previous > 0 ? "3" : "")
+        return String(format: L10n.tr(key), arguments: args)
     }
 
     /// Adds a settings source (file or folder) as a root-relative path, then normalizes `enabled`.
