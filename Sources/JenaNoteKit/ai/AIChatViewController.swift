@@ -15,7 +15,19 @@ final class AIChatViewController: NSViewController {
     let options = AIChatOptionsView()
     private let input = NSTextView()
     private let inputUndoManager = UndoManager()
-    private let documentLabel = NSTextField(labelWithString: "")
+    // Internal (not private) so layout tests can locate them in the panel stack.
+    let documentLabel = NSTextField(labelWithString: "")
+    let workBar = AIWorkContextBar()
+    /// Task 7 hook: present the work context setup sheet (bar clicked in `.none` / `.corrupt`).
+    var presentSetup: (() -> Void)?
+    /// Task 8 hook: present the work context popover (bar clicked in any other state).
+    var presentPopover: (() -> Void)?
+    private var resolvedWork: AIResolvedWorkContext?
+    private var summaryStore: AIEpisodeSummaryStore?
+    /// The store this controller is currently running `prepare` on. Only that run is cancelled by
+    /// `cancel()`: the store is shared per work root, so another window's run must not be stopped.
+    private var preparingStore: AIEpisodeSummaryStore?
+    private var waitingLabel: NSTextField!
     private let selectionLabel = NSTextField(wrappingLabelWithString: "")
     private let providerLabel = NSTextField(labelWithString: "")
     private var modeControl: NSSegmentedControl!
@@ -45,7 +57,7 @@ final class AIChatViewController: NSViewController {
         responseProgress.isIndeterminate = true
         responseProgress.usesThreadedAnimation = true
         responseProgress.setAccessibilityLabel(L10n.tr("ai.waiting"))
-        let waitingLabel = NSTextField(labelWithString: L10n.tr("ai.waiting"))
+        waitingLabel = NSTextField(labelWithString: L10n.tr("ai.waiting"))
         waitingLabel.font = .systemFont(ofSize: 11)
         waitingLabel.textColor = .secondaryLabelColor
         loadingRow = NSStackView(views: [responseProgress, waitingLabel])
@@ -66,7 +78,8 @@ final class AIChatViewController: NSViewController {
         cancelButton.isEnabled = false
         let buttons = NSStackView(views: [sendButton, cancelButton])
         buttons.orientation = .horizontal
-        let stack = NSStackView(views: [top, documentLabel, providerLabel, historyScroll, selectionLabel,
+        workBar.onClick = { [weak self] in self?.workBarClicked() }
+        let stack = NSStackView(views: [top, documentLabel, workBar, providerLabel, historyScroll, selectionLabel,
                                        modeControl, requestLabel, inputScroll, options, buttons])
         stack.orientation = .vertical
         stack.alignment = .leading
@@ -80,6 +93,7 @@ final class AIChatViewController: NSViewController {
             stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -14),
             top.widthAnchor.constraint(equalTo: stack.widthAnchor),
             documentLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            workBar.widthAnchor.constraint(equalTo: stack.widthAnchor),
             historyScroll.widthAnchor.constraint(equalTo: stack.widthAnchor),
             historyScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 60),
             options.widthAnchor.constraint(equalTo: stack.widthAnchor),
@@ -94,7 +108,7 @@ final class AIChatViewController: NSViewController {
                                                 name: NSTextView.didChangeSelectionNotification, object: nil)
     }
 
-    deinit { request?.cancel(); NotificationCenter.default.removeObserver(self) }
+    deinit { request?.cancel(); preparingStore?.cancel(); NotificationCenter.default.removeObserver(self) }
 
     private func makeScroll(textView: NSTextView, editable: Bool) -> NSScrollView {
         let scroll = NSScrollView()
@@ -125,6 +139,7 @@ final class AIChatViewController: NSViewController {
             input.string = ""
             transcript.setMessages([])
             sendButton.isEnabled = false
+            refreshWorkContext()
             return
         }
         inputUndoManager.removeAllActions()
@@ -135,6 +150,50 @@ final class AIChatViewController: NSViewController {
         sendButton.isEnabled = true
         render()
         selectionChanged()
+        refreshWorkContext()
+    }
+
+    // MARK: - Work context
+
+    /// Re-locates and re-resolves the work for the current document and updates the bar.
+    func refreshWorkContext() {
+        _ = view
+        guard let url = currentDocument?()?.fileURL else {
+            resolvedWork = nil
+            summaryStore = nil
+            workBar.update(.none)
+            return
+        }
+        switch AIWorkContext.locateResult(from: url) {
+        case .failure:
+            resolvedWork = nil
+            summaryStore = nil
+            workBar.update(.corrupt)
+        case .success(nil):
+            resolvedWork = nil
+            summaryStore = nil
+            workBar.update(.none)
+        case .success(let context?):
+            let resolved = AIWorkContextResolver.resolve(context, currentFile: url)
+            let store = AIEpisodeSummaryStore.shared(for: context.rootURL)
+            resolvedWork = resolved
+            summaryStore = store
+            workBar.update(AIWorkContextAssembler(resolved: resolved, store: store).status(isGenerating: nil))
+        }
+    }
+
+    private func workBarClicked() {
+        switch workBar.status {
+        case .none, .corrupt: presentSetup?()     // Task 7: present setup sheet
+        default: presentPopover?()                // Task 8: present context popover
+        }
+    }
+
+    /// The work context to attach to a request, or nil for the legacy (no `work`) prompt.
+    private func requestWork() -> AIWorkContextAssembler? {
+        guard let resolved = resolvedWork, let store = summaryStore, resolved.context.config.enabled else { return nil }
+        if resolved.isOutsideWritingFolder && resolved.settings.isEmpty { return nil }
+        return AIWorkContextAssembler(resolved: resolved, store: store)
     }
 
     func suspend() {
@@ -163,78 +222,193 @@ final class AIChatViewController: NSViewController {
         if !isSuspended { options.configure(provider: AISettings.provider, tokens: conversation?.tokenUsage[AISettings.provider]) }
     }
 
+    /// Order (spec §6.8): fix the question → generate missing summaries → snapshot → prompt → send.
+    /// When no summary is needed (the usual case) the snapshot is taken at click time, as before.
     @objc func send() {
-        guard request == nil, let document = currentDocument?() else { return }
+        guard request == nil, preparingStore == nil, let document = currentDocument?() else { return }
         let conversation = AIConversationStore.shared.conversation(for: document)
         self.conversation = conversation
         documentLabel.stringValue = document.displayName
         let question = input.string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty else { return }
+        let mode = conversation.mode
+        let provider = AISettings.provider
+        let history = conversation.messages
+        refreshWorkContext()
+        let work = requestWork()
+        let episodes = work?.resolved.previousEpisodes ?? []
+        let summarized = work?.summarizedSettings ?? []
+        let jobs = work.map { $0.store.pending(episodes, isSetting: false) + $0.store.pending(summarized, isSetting: true) } ?? []
+
+        guard let assembler = work, !jobs.isEmpty else {
+            do {
+                let (prompt, snapshot, skipped) = try makePrompt(document: document, history: history,
+                                                                 question: question, mode: mode, work: work)
+                guard AISettings.executable(for: provider) != nil else {
+                    throw AIError(message: L10n.tr("ai.notInstalled"))
+                }
+                commit(question, to: conversation)
+                noteSkipped(skipped, in: conversation)
+                startRequest(prompt: prompt, snapshot: snapshot, document: document, conversation: conversation,
+                             question: question, mode: mode, provider: provider, token: UUID())
+            } catch { render(status: error.localizedDescription) }
+            return
+        }
+
+        guard AISettings.executable(for: provider) != nil else { render(status: L10n.tr("ai.notInstalled")); return }
+        let store = assembler.store
+        guard !store.isGenerating else { render(status: L10n.tr("ai.work.generatingElsewhere")); return }
+        commit(question, to: conversation)
+        if mode == .edit, (currentSelection?() ?? NSRange(location: 0, length: 0)).length > 0 {
+            conversation.messages.append(AIChatMessage(role: "status", text: L10n.tr("ai.work.snapshotNote")))
+        }
+        let token = UUID()
+        generation = token
+        preparingStore = store
+        setBusy(true)
+        showGenerating(done: 0, total: jobs.count)
+        render()
+        var completed = 0
+        store.prepare(episodes: episodes, settings: summarized, provider: provider, model: options.selectedModel,
+                      progress: { [weak self] done, total in
+                          completed = done
+                          guard let self = self, self.generation == token else { return }
+                          self.showGenerating(done: done, total: total)
+                      },
+                      completion: { [weak self, weak document] result in
+            guard let self = self, self.generation == token else { return }
+            self.preparingStore = nil
+            switch result {
+            case .success(let tokens):
+                if tokens > 0 { conversation.tokenUsage[provider, default: 0] += tokens }
+                guard let document = document, self.currentDocument?() === document else {
+                    return self.failRequest(L10n.tr("ai.noDocument"), question: question, conversation: conversation)
+                }
+                do {
+                    // Snapshot now: the selection and text at the moment summaries finished.
+                    let (prompt, snapshot, skipped) = try self.makePrompt(document: document, history: history,
+                                                                          question: question, mode: mode, work: assembler)
+                    self.noteSkipped(skipped, in: conversation)
+                    self.startRequest(prompt: prompt, snapshot: snapshot, document: document, conversation: conversation,
+                                      question: question, mode: mode, provider: provider, token: token)
+                } catch {
+                    self.failRequest(error.localizedDescription, question: question, conversation: conversation)
+                }
+            case .failure(let error):
+                let name = completed < jobs.count ? jobs[completed].relativePath : ""
+                self.failRequest(String(format: L10n.tr("ai.work.summaryFailed"), name, error.localizedDescription),
+                                 question: question, conversation: conversation)
+            }
+        })
+    }
+
+    private func makePrompt(document: MarkdownDocument, history: [AIChatMessage], question: String, mode: AIChatMode,
+                            work: AIWorkContextAssembler?) throws -> (String, AIEditSnapshot, [AIWorkFile]) {
         let selection = currentSelection?() ?? NSRange(location: 0, length: 0)
         let snapshot = AIEditSnapshot(document: document, selection: selection)
-        let mode = conversation.mode
-        do {
-            let prompt = try AIPrompt.make(snapshot: snapshot, messages: conversation.messages,
-                                           request: question, mode: mode, hasSelection: selection.length > 0)
-            let provider = AISettings.provider
-            guard AISettings.executable(for: provider) != nil else {
-                throw AIError(message: L10n.tr("ai.notInstalled"))
+        var payload: AIWorkPayload?
+        var skipped: [AIWorkFile] = []
+        if let work = work, let url = document.fileURL {
+            (payload, skipped) = work.payload(currentFile: url)
+        }
+        let prompt = try AIPrompt.make(snapshot: snapshot, messages: history, request: question, mode: mode,
+                                       hasSelection: selection.length > 0, work: payload)
+        return (prompt, snapshot, skipped)
+    }
+
+    private func commit(_ question: String, to conversation: AIConversation) {
+        conversation.messages.append(AIChatMessage(role: "user", text: question))
+        input.string = ""
+        conversation.draft = ""
+    }
+
+    /// Files that could not be read are not sent; say so rather than answering without them silently.
+    private func noteSkipped(_ skipped: [AIWorkFile], in conversation: AIConversation) {
+        guard !skipped.isEmpty else { return }
+        let names = skipped.map(\.relativePath).joined(separator: ", ")
+        conversation.messages.append(AIChatMessage(role: "status", text: L10n.tr("ai.work.unreadable") + ": " + names))
+    }
+
+    private func showGenerating(done: Int, total: Int) {
+        waitingLabel.stringValue = String(format: L10n.tr("ai.work.generating"), done, total)
+        workBar.update(.generating(done: done, total: total))
+    }
+
+    /// Failure before the main request was sent: keep the question so nothing is lost.
+    private func failRequest(_ message: String, question: String, conversation: AIConversation) {
+        conversation.messages.append(AIChatMessage(role: "status", text: message))
+        if input.string.isEmpty { input.string = question; conversation.draft = question }
+        setBusy(false)
+        options.refresh()
+        render()
+        refreshWorkContext()
+    }
+
+    private func startRequest(prompt: String, snapshot: AIEditSnapshot, document: MarkdownDocument,
+                              conversation: AIConversation, question: String, mode: AIChatMode,
+                              provider: AIProvider, token: UUID) {
+        let client = AIClient()
+        request = client
+        generation = token
+        setBusy(true)
+        waitingLabel.stringValue = L10n.tr("ai.waiting")
+        render()
+        client.send(provider: provider, prompt: prompt, model: self.options.selectedModel) { [weak self, weak document] result in
+            guard let self = self, self.generation == token else { return }
+            self.request = nil
+            self.setBusy(false)
+            if let tokens = client.tokenUsage {
+                conversation.tokenUsage[provider, default: 0] += tokens
             }
-            conversation.messages.append(AIChatMessage(role: "user", text: question))
-            input.string = ""
-            conversation.draft = ""
-            let client = AIClient()
-            request = client
-            let token = UUID()
-            generation = token
-            setBusy(true)
-            render()
-            client.send(provider: provider, prompt: prompt, model: self.options.selectedModel) { [weak self, weak document] result in
-                guard let self = self, self.generation == token else { return }
-                self.request = nil
-                self.setBusy(false)
-                if let tokens = client.tokenUsage {
-                    conversation.tokenUsage[provider, default: 0] += tokens
-                }
-                self.options.refresh()
-                switch result {
-                case .failure(let error):
-                    conversation.messages.append(AIChatMessage(role: "status", text: error.localizedDescription))
-                    // Retain the request so a connection failure does not lose the user's work.
-                    if self.input.string.isEmpty { self.input.string = question; conversation.draft = question }
-                case .success(let answer):
-                    if mode == .guide {
-                        conversation.messages.append(AIChatMessage(role: "assistant", text: answer))
-                    } else {
-                        do {
-                            let edit = try AIPrompt.parseEdit(answer)
-                            conversation.messages.append(AIChatMessage(role: "assistant", text: edit.explanation))
-                            if let replacement = edit.replacement {
-                                guard let doc = document, self.currentDocument?() === doc, snapshot.canApply(to: doc) else {
-                                    throw AIError(message: L10n.tr("ai.editConflict"))
-                                }
-                                guard let apply = self.applyEdit else { throw AIError(message: L10n.tr("ai.noDocument")) }
-                                try apply(snapshot, replacement)
-                                conversation.messages.append(AIChatMessage(role: "status", text: L10n.tr("ai.applied")))
+            self.options.refresh()
+            switch result {
+            case .failure(let error):
+                conversation.messages.append(AIChatMessage(role: "status", text: error.localizedDescription))
+                // Retain the request so a connection failure does not lose the user's work.
+                if self.input.string.isEmpty { self.input.string = question; conversation.draft = question }
+            case .success(let answer):
+                if mode == .guide {
+                    conversation.messages.append(AIChatMessage(role: "assistant", text: answer))
+                } else {
+                    do {
+                        let edit = try AIPrompt.parseEdit(answer)
+                        conversation.messages.append(AIChatMessage(role: "assistant", text: edit.explanation))
+                        if let replacement = edit.replacement {
+                            guard let doc = document, self.currentDocument?() === doc, snapshot.canApply(to: doc) else {
+                                throw AIError(message: L10n.tr("ai.editConflict"))
                             }
-                        } catch {
-                            conversation.messages.append(AIChatMessage(role: "status", text: error.localizedDescription + "\n\n" + answer))
+                            guard let apply = self.applyEdit else { throw AIError(message: L10n.tr("ai.noDocument")) }
+                            try apply(snapshot, replacement)
+                            conversation.messages.append(AIChatMessage(role: "status", text: L10n.tr("ai.applied")))
                         }
+                    } catch {
+                        conversation.messages.append(AIChatMessage(role: "status", text: error.localizedDescription + "\n\n" + answer))
                     }
                 }
-                self.render()
             }
-        } catch { render(status: error.localizedDescription) }
+            self.render()
+            self.refreshWorkContext()
+        }
     }
 
     @objc func cancel() {
-        if request != nil {
+        let wasPreparing = preparingStore != nil
+        if request != nil || wasPreparing {
             conversation?.messages.append(AIChatMessage(role: "status", text: L10n.tr("ai.cancelled")))
         }
         generation = UUID()
         request?.cancel()
         request = nil
-        if isViewLoaded { setBusy(false); render() }
+        // Only this controller's own summary run; already generated summaries stay cached.
+        if let store = preparingStore {
+            preparingStore = nil
+            store.cancel()
+        }
+        if isViewLoaded {
+            setBusy(false)
+            render()
+            if wasPreparing { refreshWorkContext() }
+        }
     }
 
     private func setBusy(_ busy: Bool) {
@@ -242,7 +416,7 @@ final class AIChatViewController: NSViewController {
         options.setBusy(busy)
         loadingRow.isHidden = !busy
         if busy { responseProgress.startAnimation(nil) }
-        else { responseProgress.stopAnimation(nil) }
+        else { responseProgress.stopAnimation(nil); waitingLabel.stringValue = L10n.tr("ai.waiting") }
         sendButton.isEnabled = !busy && currentDocument?() != nil
         cancelButton.isEnabled = busy
         modeControl.isEnabled = !busy

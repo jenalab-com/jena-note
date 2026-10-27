@@ -87,18 +87,25 @@ struct AIWorkContext: Equatable {
     // MARK: Discovery
 
     static func locate(from fileURL: URL) -> AIWorkContext? {
+        try? locateResult(from: fileURL).get()
+    }
+
+    /// Same search as `locate`, but surfaces a `context.json` that exists and fails to load
+    /// (`AIWorkContextError.corrupt`) instead of treating it as "no work". `.success(nil)` means
+    /// no `context.json` was found within range. Used by the AI panel's work context bar.
+    static func locateResult(from fileURL: URL) -> Result<AIWorkContext?, Error> {
         let file = norm(fileURL)
-        if file.pathComponents.contains(folderName) { return nil }
+        if file.pathComponents.contains(folderName) { return .success(nil) }
         var dir = file.deletingLastPathComponent()
         for _ in 0...maxAncestorLevels {
-            if isBoundary(dir) { return nil }
+            if isBoundary(dir) { return .success(nil) }
             let candidate = dir.appendingPathComponent(folderName).appendingPathComponent(fileName)
             if FileManager.default.fileExists(atPath: candidate.path) {
-                return try? load(rootURL: dir)
+                do { return .success(try load(rootURL: dir)) } catch { return .failure(error) }
             }
             dir = dir.deletingLastPathComponent()
         }
-        return nil
+        return .success(nil)
     }
 
     static func load(rootURL: URL) throws -> AIWorkContext {
