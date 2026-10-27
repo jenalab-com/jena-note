@@ -23,6 +23,7 @@ final class AIChatViewController: NSViewController {
     private var workSheet: AIWorkContextSheetController?
     /// Task 8 hook: present the work context popover (bar clicked in any other state).
     var presentPopover: (() -> Void)?
+    private var workPopover: NSPopover?
     private var resolvedWork: AIResolvedWorkContext?
     private var summaryStore: AIEpisodeSummaryStore?
     /// This controller's own summary `prepare` request. Only it is cancelled by `cancel()`: the store
@@ -184,19 +185,48 @@ final class AIChatViewController: NSViewController {
             summaryStore = store
             workBar.update(AIWorkContextAssembler(resolved: resolved, store: store).status(isGenerating: nil))
         }
+        syncWorkPopover()
+    }
+
+    /// Keeps an open popover in step with the bar: reloads it with the fresh resolution, or closes it
+    /// when the document is no longer part of a (valid) work.
+    private func syncWorkPopover() {
+        guard let popover = workPopover, popover.isShown,
+              let controller = popover.contentViewController as? AIWorkContextPopoverController else { return }
+        if let resolved = resolvedWork { controller.reload(resolved) } else { popover.close() }
     }
 
     private func workBarClicked() {
         switch workBar.status {
         case .none, .corrupt:
             if let presentSetup = presentSetup { presentSetup() } else { presentWorkSetupSheet() }
-        default: presentPopover?()                // Task 8: present context popover
+        case .active, .disabled, .generating:
+            if let presentPopover = presentPopover { presentPopover() } else { presentWorkPopover() }
         }
     }
 
-    private func presentWorkSetupSheet() {
+    private func presentWorkPopover() {
+        guard let resolved = resolvedWork, let store = summaryStore else { return }
+        let controller = AIWorkContextPopoverController(resolved: resolved, store: store,
+                                                        provider: AISettings.provider, model: options.selectedModel)
+        controller.preferredWidth = max(view.bounds.width, Self.minimumPanelWidth)
+        // The popover saves context.json itself; re-resolve so the bar and the popover show the result.
+        controller.onChange = { [weak self] in self?.refreshWorkContext() }
+        controller.onOpenSheet = { [weak self] in
+            guard let self = self else { return }
+            self.workPopover?.close()
+            self.presentWorkSetupSheet(existing: self.resolvedWork?.context)
+        }
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentViewController = controller
+        workPopover = popover
+        popover.show(relativeTo: workBar.bounds, of: workBar, preferredEdge: .maxY)
+    }
+
+    private func presentWorkSetupSheet(existing: AIWorkContext? = nil) {
         guard let url = currentDocument?()?.fileURL, let window = view.window else { return }
-        let sheet = AIWorkContextSheetController(fileURL: url, existing: nil)
+        let sheet = AIWorkContextSheetController(fileURL: url, existing: existing)
         workSheet = sheet
         sheet.onSave = { [weak self] context in
             self?.workSheet = nil
