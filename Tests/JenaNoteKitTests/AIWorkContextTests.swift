@@ -164,4 +164,57 @@ final class AIWorkContextTests: XCTestCase {
         XCTAssertFalse(ctx.contains(link.appendingPathComponent("x.md")))
         XCTAssertTrue(ctx.contains(root.appendingPathComponent("설정")))
     }
+
+    func testSymlinkedJenanoteFolderIsRejected() throws {
+        let root = try makeWork(at: tmp)
+        let outside = tmp.appendingPathComponent("outside")
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        // A real context.json outside the root, reached through a symlinked .jenanote.
+        let outsideFile = outside.appendingPathComponent("context.json")
+        try JSONEncoder().encode(config()).write(to: outsideFile)
+        try FileManager.default.createSymbolicLink(at: root.appendingPathComponent(".jenanote"), withDestinationURL: outside)
+
+        XCTAssertThrowsError(try AIWorkContext.load(rootURL: root)) { error in
+            XCTAssertEqual(error as? AIWorkContextError, .notFound)
+        }
+        XCTAssertNil(AIWorkContext.locate(from: root.appendingPathComponent("집필/01화.md")))
+
+        var cfg = config()
+        cfg.title = "덮어쓰기"
+        XCTAssertThrowsError(try AIWorkContext(rootURL: root, config: cfg, invalidPaths: []).save())
+        let untouched = try JSONDecoder().decode(AIWorkContextConfig.self, from: Data(contentsOf: outsideFile))
+        XCTAssertEqual(untouched.title, "달빛도시")
+    }
+
+    func testSymlinkedContextFileIsRejected() throws {
+        let root = try makeWork(at: tmp)
+        let outsideFile = tmp.appendingPathComponent("context.json")
+        try JSONEncoder().encode(config()).write(to: outsideFile)
+        let dir = root.appendingPathComponent(".jenanote")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: dir.appendingPathComponent("context.json"),
+                                                   withDestinationURL: outsideFile)
+        XCTAssertThrowsError(try AIWorkContext.load(rootURL: root))
+        XCTAssertThrowsError(try AIWorkContext(rootURL: root, config: config(), invalidPaths: []).save())
+    }
+
+    func testLoadTreatsEmptyWritingFolderAsRoot() throws {
+        let root = try makeWork(at: tmp)
+        for writing in ["", "."] {
+            let cfg = AIWorkContextConfig(title: "달빛도시", settingsSources: ["설정"], writingFolder: writing)
+            try AIWorkContext(rootURL: root, config: cfg, invalidPaths: []).save()
+            let loaded = try AIWorkContext.load(rootURL: root)
+            XCTAssertEqual(loaded.invalidPaths, [], "writingFolder '\(writing)'")
+            XCTAssertEqual(loaded.writingFolderURL.map(norm), norm(root))
+        }
+    }
+
+    func testInvalidWritingFolderIsIgnoredNotWidened() throws {
+        let root = try makeWork(at: tmp)
+        let cfg = AIWorkContextConfig(title: "달빛도시", settingsSources: ["설정"], writingFolder: "../밖")
+        try AIWorkContext(rootURL: root, config: cfg, invalidPaths: []).save()
+        let loaded = try AIWorkContext.load(rootURL: root)
+        XCTAssertEqual(loaded.invalidPaths, ["../밖"])
+        XCTAssertNil(loaded.writingFolderURL)
+    }
 }

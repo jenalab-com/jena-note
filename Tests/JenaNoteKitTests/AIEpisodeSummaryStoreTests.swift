@@ -416,4 +416,64 @@ final class AIEpisodeSummaryStoreTests: XCTestCase {
         XCTAssertEqual(failedFile(outcome), "02화.md")
         XCTAssertEqual(handle.tokensUsed, 10)
     }
+
+    // MARK: - Containment (F1) and one index load per sweep (F3)
+
+    func testSymlinkedSummaryIsNotRead() throws {
+        let fm = FileManager.default
+        let secret = tmp.appendingPathComponent("credentials")
+        try "SECRET".write(to: secret, atomically: true, encoding: .utf8)
+        let file = episode("01화.md")
+        // Planted work folder: the summary is a link to an outside file and its record's summaryHash
+        // mismatches (it would read as "manuallyEdited" and be sent as a summary forever).
+        let summary = store.summaryURL(for: file, isSetting: false)
+        try fm.createDirectory(at: summary.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try fm.createSymbolicLink(at: summary, withDestinationURL: secret)
+        var index = AISummaryIndex()
+        index.entries["01화.md"] = AISummaryRecord(sourceHash: AIEpisodeSummaryStore.hash("첫 화 본문"),
+                                                    summaryHash: "sha256:planted", generatedAt: Date(), provider: "claude")
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(index).write(to: store.indexURL)
+
+        XCTAssertNil(store.summaryText(for: file, isSetting: false))
+        XCTAssertEqual(store.state(of: file, isSetting: false), .missing)
+        XCTAssertEqual(store.pending([file], isSetting: false), [file])
+        // Regenerating refuses to write through the link; the outside file is untouched.
+        fake.responses = [.success("요약")]
+        XCTAssertEqual(failedFile(prepare([file])), "01화.md")
+        XCTAssertEqual(try String(contentsOf: secret, encoding: .utf8), "SECRET")
+    }
+
+    func testSymlinkedJenanoteFolderBlocksSummaryReadAndWrite() throws {
+        let fm = FileManager.default
+        let outside = tmp.appendingPathComponent("outside")
+        let outsideSummary = outside.appendingPathComponent("summaries/01화.md.txt")
+        try fm.createDirectory(at: outside.appendingPathComponent("summaries"), withIntermediateDirectories: true)
+        try "밖의 요약".write(to: outsideSummary, atomically: true, encoding: .utf8)
+        try fm.createSymbolicLink(at: root.appendingPathComponent(".jenanote"), withDestinationURL: outside)
+        let file = episode("01화.md")
+        XCTAssertNil(store.summaryText(for: file, isSetting: false))
+        fake.responses = [.success("요약")]
+        XCTAssertEqual(failedFile(prepare([file])), "01화.md")
+        XCTAssertFalse(fm.fileExists(atPath: outside.appendingPathComponent("summaries/index.json").path))
+        XCTAssertEqual(try String(contentsOf: outsideSummary, encoding: .utf8), "밖의 요약")
+    }
+
+    func testStateSweepLoadsIndexOnce() throws {
+        fake.responses = [.success("1 요약"), .success("2 요약")]
+        XCTAssertNoThrow(try prepare([episode("01화.md"), episode("02화.md")]).get())
+        try write("집필/02화.md", "고친 둘째 화")
+        let files = episodes
+        let before = store.indexLoadCount
+        let index = store.snapshotIndex()
+        let swept = files.map { store.state(of: $0, isSetting: false, index: index) }
+        let pending = store.pending(files, isSetting: false, index: index)
+        XCTAssertEqual(store.indexLoadCount - before, 1)
+        XCTAssertEqual(swept, [.ready, .stale, .missing])
+        // Same answers as the one-shot overloads (which load per call).
+        XCTAssertEqual(swept, files.map { store.state(of: $0, isSetting: false) })
+        XCTAssertEqual(pending, store.pending(files, isSetting: false))
+        XCTAssertEqual(pending.map(\.relativePath), ["02화.md", "03화.md"])
+    }
 }

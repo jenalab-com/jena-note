@@ -109,11 +109,34 @@ final class AIEpisodeSummaryStore {
         return base.appendingPathComponent(file.relativePath + ".txt")
     }
 
+    // MARK: - Containment
+
+    /// Summary files and index.json are read only when they sit under the root with no symlinked
+    /// component (`.jenanote`, `summaries`, sub-folders, the leaf) — see `AIWorkContext.isSafeInsideRoot`.
+    private func isSafe(_ url: URL) -> Bool { AIWorkContext.isSafeInsideRoot(url, root: rootURL) }
+
+    /// Creates `directory` (under the root) and checks that `file` can be written without following a
+    /// symlink or leaving the root. Throws `AIError` on violation, before anything is written.
+    private func prepareWrite(of file: URL, in directory: URL) throws {
+        try AIWorkContext.ensureSafeInsideRoot(directory, root: rootURL)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try AIWorkContext.ensureSafeInsideRoot(file, root: rootURL)
+    }
+
     // MARK: - Index
 
+    /// Number of `index.json` loads (test hook for the one-load-per-sweep rule).
+    private(set) var indexLoadCount = 0
+
+    /// One `index.json` read for a whole sweep: pass it to `state(of:isSetting:index:)` /
+    /// `pending(_:isSetting:index:)` instead of reloading per file.
+    func snapshotIndex() -> AISummaryIndex { loadIndex() }
+
     func loadIndex() -> AISummaryIndex {
-        // Missing or corrupt index counts as empty: summaries are regenerable.
-        guard let data = try? Data(contentsOf: indexURL) else { return AISummaryIndex() }
+        indexLoadCount += 1
+        // Missing, corrupt or unsafe (symlinked / outside the root) index counts as empty:
+        // summaries are regenerable.
+        guard isSafe(indexURL), let data = try? Data(contentsOf: indexURL) else { return AISummaryIndex() }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return (try? decoder.decode(AISummaryIndex.self, from: data)) ?? AISummaryIndex()
@@ -123,7 +146,7 @@ final class AIEpisodeSummaryStore {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        try FileManager.default.createDirectory(at: summariesURL, withIntermediateDirectories: true)
+        try prepareWrite(of: indexURL, in: summariesURL)
         try encoder.encode(index).write(to: indexURL, options: .atomic)
     }
 
@@ -133,14 +156,21 @@ final class AIEpisodeSummaryStore {
 
     // MARK: - State
 
+    /// nil when missing, unreadable, or unsafe (reached through a symlink / outside the root).
     func summaryText(for file: AIWorkFile, isSetting: Bool) -> String? {
-        guard let data = try? Data(contentsOf: summaryURL(for: file, isSetting: isSetting)),
+        let url = summaryURL(for: file, isSetting: isSetting)
+        guard isSafe(url), let data = try? Data(contentsOf: url),
               let text = String(data: data, encoding: .utf8) else { return nil }
         return AIWorkContextResolver.normalize(text)
     }
 
     func state(of file: AIWorkFile, isSetting: Bool) -> AISummaryState {
-        guard let record = record(for: file, isSetting: isSetting, in: loadIndex()),
+        state(of: file, isSetting: isSetting, index: loadIndex())
+    }
+
+    /// Same as `state(of:isSetting:)` against an index loaded once by the caller (`snapshotIndex()`).
+    func state(of file: AIWorkFile, isSetting: Bool, index: AISummaryIndex) -> AISummaryState {
+        guard let record = record(for: file, isSetting: isSetting, in: index),
               let summary = summaryText(for: file, isSetting: isSetting) else { return .missing }
         let sourceHash = (try? AIWorkContextResolver.readText(file)).map(Self.hash)
         let sourceChanged = sourceHash != record.sourceHash
@@ -149,8 +179,13 @@ final class AIEpisodeSummaryStore {
     }
 
     func pending(_ files: [AIWorkFile], isSetting: Bool) -> [AIWorkFile] {
+        pending(files, isSetting: isSetting, index: loadIndex())
+    }
+
+    /// Same as `pending(_:isSetting:)` against an index loaded once by the caller (`snapshotIndex()`).
+    func pending(_ files: [AIWorkFile], isSetting: Bool, index: AISummaryIndex) -> [AIWorkFile] {
         files.filter {
-            switch state(of: $0, isSetting: isSetting) {
+            switch state(of: $0, isSetting: isSetting, index: index) {
             case .missing, .stale: return true
             case .ready, .manuallyEdited: return false
             }
@@ -257,8 +292,9 @@ final class AIEpisodeSummaryStore {
             let jobs: [Job]
             switch caller.work {
             case .prepare(let episodes, let settings):
-                jobs = pending(episodes, isSetting: false).map { Job(file: $0, isSetting: false) }
-                    + pending(settings, isSetting: true).map { Job(file: $0, isSetting: true) }
+                let index = loadIndex()
+                jobs = pending(episodes, isSetting: false, index: index).map { Job(file: $0, isSetting: false) }
+                    + pending(settings, isSetting: true, index: index).map { Job(file: $0, isSetting: true) }
             case .regenerate(let file, let isSetting):
                 if isSummaryOpenAndDirty(file, isSetting: isSetting) {
                     caller.completion(.failure(AIError(message: L10n.tr("ai.work.summaryOpenDirty"))))
@@ -310,13 +346,14 @@ final class AIEpisodeSummaryStore {
             throw AIError(message: L10n.tr("ai.work.summaryOpenDirty"))
         }
         let key = job.file.relativePath
+        // Containment check before anything is written (symlinked folders/leaf, outside the root).
+        let url = summaryURL(for: job.file, isSetting: job.isSetting)
+        try prepareWrite(of: url, in: url.deletingLastPathComponent())
         var index = loadIndex()
         // Drop the old record before replacing the text: an interruption between the writes then
         // reads as `missing` (regenerated next time), never as a false `manuallyEdited`.
         let removed = job.isSetting ? index.settings.removeValue(forKey: key) : index.entries.removeValue(forKey: key)
         if removed != nil { try saveIndex(index) }
-        let url = summaryURL(for: job.file, isSetting: job.isSetting)
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try summary.write(to: url, atomically: true, encoding: .utf8)
         let record = AISummaryRecord(sourceHash: Self.hash(source), summaryHash: Self.summaryHash(summary),
                                      generatedAt: Date(), provider: provider.rawValue)
