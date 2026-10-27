@@ -55,6 +55,25 @@ enum AIWorkContextModel {
         }
     }
 
+    enum EpisodeTone: Equatable { case ready, manual, stale, missing }
+
+    /// v2 wording for the episodes tab (spec §7.2 ②): plain-language state, whether it gets the 🔒,
+    /// and the tone the view maps to a dot color. `stateText` keeps the v1 wording.
+    static func episodeStateLabel(_ state: AISummaryState) -> (text: String, isManual: Bool, tone: EpisodeTone) {
+        switch state {
+        case .ready: return (L10n.tr("ai.work.episodes.ready"), false, .ready)
+        case .stale: return (L10n.tr("ai.work.episodes.stale"), false, .stale)
+        case .missing: return (L10n.tr("ai.work.episodes.missing"), false, .missing)
+        case .manuallyEdited(let sourceChanged):
+            return (L10n.tr(sourceChanged ? "ai.work.episodes.manualChanged" : "ai.work.episodes.manual"), true, .manual)
+        }
+    }
+
+    /// Newest `generatedAt` among the episode summaries in `index` ("마지막 갱신").
+    static func lastRefresh(_ index: AISummaryIndex) -> Date? {
+        index.entries.values.map(\.generatedAt).max()
+    }
+
     /// Unchecking a settings file adds it to `excludedSettings`; checking it again removes it.
     static func toggleIncluded(_ config: inout AIWorkContextConfig, path: String) {
         if let index = config.excludedSettings.firstIndex(of: path) {

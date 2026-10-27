@@ -97,7 +97,7 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
         return AIWorkContextAssembler(resolved: resolved, store: store).payload(currentFile: currentFile).payload
     }
 
-    /// Tab slots, re-rendered through `AIWorkContextRenderable` after every reload. Task 5 replaces the episodes placeholder.
+    /// Tab slots, re-rendered through `AIWorkContextRenderable` after every reload.
     var sourcesView: NSView? { didSet { if selectedTab == .sources { select(.sources) }; renderTabs() } }
     var episodesView: NSView? { didSet { if selectedTab == .episodes { select(.episodes) }; renderTabs() } }
     private(set) var foldersView: AIWorkContextFoldersView!
@@ -116,7 +116,7 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
         super.init(window: window)
         window.delegate = self
         sourcesView = AIWorkContextSourcesView(controller: self)
-        episodesView = Self.placeholder(L10n.tr("ai.work.tab.episodes"))
+        episodesView = AIWorkContextEpisodesView(controller: self)
         foldersView = AIWorkContextFoldersView(controller: self)
         buildUI()
         window.center()
@@ -128,19 +128,6 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     // MARK: - UI
-
-    private static func placeholder(_ text: String) -> NSView {
-        let view = NSView()
-        let label = NSTextField(labelWithString: text)
-        label.textColor = .secondaryLabelColor
-        label.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(label)
-        NSLayoutConstraint.activate([
-            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            label.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-        ])
-        return view
-    }
 
     private func buildUI() {
         guard let content = window?.contentView else { return }

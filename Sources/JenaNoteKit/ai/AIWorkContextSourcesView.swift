@@ -280,17 +280,25 @@ final class AIWorkContextSourcesView: NSView, AIWorkContextRenderable, NSTableVi
 
     // MARK: - Actions
 
-    @objc private func includeClicked(_ sender: NSButton) { toggleInclude(row: sender.tag) }
+    // Actions that rebuild the table tear down the clicked control, so the change runs on the next
+    // main-loop turn, after AppKit has finished with the sender.
+    @objc private func includeClicked(_ sender: NSButton) {
+        let row = sender.tag
+        DispatchQueue.main.async { [weak self] in self?.toggleInclude(row: row) }
+    }
 
     @objc private func modeChanged(_ sender: NSSegmentedControl) {
-        setSummarized(row: sender.tag, sender.selectedSegment == 1)
+        let row = sender.tag
+        let summarized = sender.selectedSegment == 1
+        DispatchQueue.main.async { [weak self] in self?.setSummarized(row: row, summarized) }
     }
 
     @objc private func sortChanged() { setSort(sortControl.selectedSegment == 1 ? .name : .sizeDescending) }
 
     @objc private func removeClicked(_ sender: NSButton) {
         guard sender.tag < shownSources.count else { return }
-        removeSource(shownSources[sender.tag].relativePath)
+        let path = shownSources[sender.tag].relativePath
+        DispatchQueue.main.async { [weak self] in self?.removeSource(path) }
     }
 
     @objc private func addFolderClicked() {
