@@ -51,6 +51,14 @@ final class AISummaryRequest {
     func cancel() { store?.cancel(self) }
 }
 
+/// Registration handle for `AIEpisodeSummaryStore.addGenerationObserver`. Releasing the token (or
+/// passing it to `removeObserver`) unsubscribes.
+final class AIStoreObserverToken {
+    fileprivate weak var store: AIEpisodeSummaryStore?
+    fileprivate init(store: AIEpisodeSummaryStore) { self.store = store }
+    deinit { store?.removeObserver(self) }
+}
+
 /// Cache of AI summaries for earlier episodes (and summarized settings files) under
 /// `<root>/.jenanote/summaries/`. Main-thread only.
 ///
@@ -228,6 +236,27 @@ final class AIEpisodeSummaryStore {
     /// True while a run is active or any caller is waiting in the queue.
     var isGenerating: Bool { active != nil || !queue.isEmpty }
 
+    // MARK: - Generation observers
+
+    private var observers: [ObjectIdentifier: () -> Void] = [:]
+
+    /// `handler` runs on the main thread whenever generation state changes: a run starts, a summary
+    /// is stored, a run finishes or is cancelled, a queued caller is dropped. Keep the token alive.
+    func addGenerationObserver(_ handler: @escaping () -> Void) -> AIStoreObserverToken {
+        dispatchPrecondition(condition: .onQueue(.main))
+        let token = AIStoreObserverToken(store: self)
+        observers[ObjectIdentifier(token)] = handler
+        return token
+    }
+
+    func removeObserver(_ token: AIStoreObserverToken) {
+        observers[ObjectIdentifier(token)] = nil
+    }
+
+    private func notifyObservers() {
+        for handler in Array(observers.values) { handler() }
+    }
+
     /// Generates missing/stale summaries (episodes first, then settings), one file at a time.
     /// `progress(done, total)` fires after each file. On failure the run stops with an
     /// `AISummaryGenerationError`; earlier results stay on disk. With nothing pending and an idle
@@ -259,12 +288,14 @@ final class AIEpisodeSummaryStore {
             finish(run.id, Self.cancelled)
         }
         waiting.forEach { $0.completion(Self.cancelled) }
+        notifyObservers()
     }
 
     fileprivate func cancel(_ request: AISummaryRequest) {
         dispatchPrecondition(condition: .onQueue(.main))
         if let index = queue.firstIndex(where: { $0.request === request }) {
             queue.remove(at: index).completion(Self.cancelled)
+            notifyObservers()
         } else if let run = active, run.caller.request === request {
             run.generator.cancel()
             finish(run.id, Self.cancelled)
@@ -309,6 +340,7 @@ final class AIEpisodeSummaryStore {
             runCounter += 1
             tokens = 0
             active = Run(id: runCounter, caller: caller, generator: makeGenerator(), jobs: jobs)
+            notifyObservers()
             step(runCounter, at: 0)
         }
     }
@@ -333,6 +365,7 @@ final class AIEpisodeSummaryStore {
                 self.tokens += current.generator.tokenUsage ?? 0
                 current.caller.request.tokensUsed += current.generator.tokenUsage ?? 0
                 current.caller.progress(position + 1, current.jobs.count)
+                self.notifyObservers()
                 self.step(id, at: position + 1)
             } catch {
                 self.finish(id, .failure(AISummaryGenerationError(file: job.file, underlying: error)))
@@ -367,6 +400,7 @@ final class AIEpisodeSummaryStore {
         active = nil
         run.caller.completion(result)
         advance()
+        notifyObservers()
     }
 
     private func isSummaryOpenAndDirty(_ file: AIWorkFile, isSetting: Bool) -> Bool {

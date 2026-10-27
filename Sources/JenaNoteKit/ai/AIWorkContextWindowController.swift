@@ -80,7 +80,9 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
 
     private(set) var context: AIWorkContext
     private(set) var resolved: AIResolvedWorkContext?
-    private(set) var store: AIEpisodeSummaryStore
+    private(set) var store: AIEpisodeSummaryStore { didSet { observeStore() } }
+    /// Re-renders the tabs when any request (this window's or another's) changes the store's generation state.
+    private var storeObserver: AIStoreObserverToken?
     /// True while the context only lives in memory (first setup, nothing saved yet).
     private(set) var isProvisional: Bool
     /// Last save failure, shown in the folders tab until the next successful save.
@@ -120,6 +122,7 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
         window.minSize = NSSize(width: 560, height: 360)
         super.init(window: window)
         window.delegate = self
+        observeStore()
         sourcesView = AIWorkContextSourcesView(controller: self)
         episodesView = AIWorkContextEpisodesView(controller: self)
         foldersView = AIWorkContextFoldersView(controller: self)
@@ -342,6 +345,10 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
 
     private func refreshResolved() {
         resolved = AIWorkContextResolver.resolve(context, currentFile: currentFile ?? context.rootURL)
+    }
+
+    private func observeStore() {
+        storeObserver = store.addGenerationObserver { [weak self] in self?.renderTabs() }
     }
 
     private func renderTabs() {
