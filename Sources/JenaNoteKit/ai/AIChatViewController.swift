@@ -24,6 +24,13 @@ final class AIChatViewController: NSViewController {
     /// Task 8 hook: present the work context popover (bar clicked in any other state).
     var presentPopover: (() -> Void)?
     private var workPopover: NSPopover?
+    /// Summary run started from the popover ("다시 생성" / "모두 갱신"). It belongs to the work, not to a
+    /// chat request: `cancel()`, `switchDocument()` and `suspend()` leave it running; only the popover's
+    /// cancel button and `deinit` stop it. Separate from the send flow's `summaryRequest`.
+    private var maintenanceRequest: AISummaryRequest?
+    private var maintenanceStore: AIEpisodeSummaryStore?
+    private var maintenanceProgress: (done: Int, total: Int)?
+    private var maintenanceCancelled = false
     private var resolvedWork: AIResolvedWorkContext?
     private var summaryStore: AIEpisodeSummaryStore?
     /// This controller's own summary `prepare` request. Only it is cancelled by `cancel()`: the store
@@ -113,7 +120,12 @@ final class AIChatViewController: NSViewController {
                                                 name: NSTextView.didChangeSelectionNotification, object: nil)
     }
 
-    deinit { request?.cancel(); summaryRequest?.cancel(); NotificationCenter.default.removeObserver(self) }
+    deinit {
+        request?.cancel()
+        summaryRequest?.cancel()
+        maintenanceRequest?.cancel()
+        NotificationCenter.default.removeObserver(self)
+    }
 
     private func makeScroll(textView: NSTextView, editable: Bool) -> NSScrollView {
         let scroll = NSScrollView()
@@ -183,9 +195,16 @@ final class AIChatViewController: NSViewController {
             let store = AIEpisodeSummaryStore.shared(for: context.rootURL)
             resolvedWork = resolved
             summaryStore = store
-            workBar.update(AIWorkContextAssembler(resolved: resolved, store: store).status(isGenerating: nil))
+            workBar.update(AIWorkContextAssembler(resolved: resolved, store: store)
+                .status(isGenerating: ownMaintenanceProgress.map { ($0.done, $0.total) }))
         }
         syncWorkPopover()
+    }
+
+    /// This window's maintenance progress, only while the shown work is the one being maintained.
+    private var ownMaintenanceProgress: (done: Int, total: Int)? {
+        guard let store = maintenanceStore, store === summaryStore else { return nil }
+        return maintenanceProgress
     }
 
     /// Keeps an open popover in step with the bar: reloads it with the fresh resolution, or closes it
@@ -193,7 +212,9 @@ final class AIChatViewController: NSViewController {
     private func syncWorkPopover() {
         guard let popover = workPopover, popover.isShown,
               let controller = popover.contentViewController as? AIWorkContextPopoverController else { return }
-        if let resolved = resolvedWork { controller.reload(resolved) } else { popover.close() }
+        guard let resolved = resolvedWork else { return popover.close() }
+        controller.progress = ownMaintenanceProgress
+        controller.reload(resolved)
     }
 
     private func workBarClicked() {
@@ -207,9 +228,12 @@ final class AIChatViewController: NSViewController {
 
     private func presentWorkPopover() {
         guard let resolved = resolvedWork, let store = summaryStore else { return }
-        let controller = AIWorkContextPopoverController(resolved: resolved, store: store,
-                                                        provider: AISettings.provider, model: options.selectedModel)
+        let controller = AIWorkContextPopoverController(resolved: resolved, store: store)
         controller.preferredWidth = max(view.bounds.width, Self.minimumPanelWidth)
+        controller.progress = ownMaintenanceProgress
+        controller.onRegenerate = { [weak self] file, isSetting in self?.regenerateSummary(file, isSetting: isSetting) }
+        controller.onRefreshAll = { [weak self] in self?.refreshAllSummaries() }
+        controller.onCancelRefresh = { [weak self] in self?.cancelMaintenance() }
         // The popover saves context.json itself; re-resolve so the bar and the popover show the result.
         controller.onChange = { [weak self] in self?.refreshWorkContext() }
         controller.onOpenSheet = { [weak self] in
@@ -222,6 +246,92 @@ final class AIChatViewController: NSViewController {
         popover.contentViewController = controller
         workPopover = popover
         popover.show(relativeTo: workBar.bounds, of: workBar, preferredEdge: .maxY)
+    }
+
+    // MARK: - Summary maintenance (popover)
+
+    private func regenerateSummary(_ file: AIWorkFile, isSetting: Bool) {
+        guard let store = summaryStore else { return }
+        let provider = AISettings.provider
+        let model = options.selectedModel
+        runMaintenance(store: store, total: 1, name: file.relativePath) { _, completion in
+            store.regenerate(file, isSetting: isSetting, provider: provider, model: model, completion: completion)
+        }
+    }
+
+    /// "모두 갱신" regenerates only missing/stale summaries (spec §7.2, §6.3): `prepare` skips ready and
+    /// manually edited ones, so hand-edited summaries are never overwritten here — "다시 생성" on a row
+    /// is the explicit way to replace one. Summarized settings are included.
+    private func refreshAllSummaries() {
+        guard let resolved = resolvedWork, let store = summaryStore else { return }
+        let summarized = AIWorkContextAssembler(resolved: resolved, store: store).summarizedSettings
+        let total = store.pending(resolved.previousEpisodes, isSetting: false).count
+            + store.pending(summarized, isSetting: true).count
+        let provider = AISettings.provider
+        let model = options.selectedModel
+        runMaintenance(store: store, total: total, name: nil) { progress, completion in
+            store.prepare(episodes: resolved.previousEpisodes, settings: summarized, provider: provider, model: model,
+                          progress: progress, completion: completion)
+        }
+    }
+
+    private func cancelMaintenance() {
+        guard let handle = maintenanceRequest else { return }
+        maintenanceCancelled = true
+        handle.cancel() // completion runs synchronously; already generated summaries stay cached
+    }
+
+    /// Starts a popover summary run owned by this controller: progress drives the bar and an open
+    /// popover; on completion every spent token is counted (spec §6.3) and failures become a status line.
+    private func runMaintenance(store: AIEpisodeSummaryStore, total: Int, name: String?,
+                                start: (_ progress: @escaping (Int, Int) -> Void,
+                                        _ completion: @escaping (Result<Int, Error>) -> Void) -> AISummaryRequest) {
+        guard maintenanceRequest == nil else { return }
+        let provider = AISettings.provider
+        let conversation = self.conversation // tokens and messages go to the conversation that started it
+        var handle: AISummaryRequest?
+        var finished = false
+        maintenanceCancelled = false
+        let request = start({ [weak self] done, total in
+            guard let self = self, self.maintenanceRequest != nil else { return }
+            self.maintenanceProgress = (done, total)
+            self.refreshWorkContext()
+        }, { [weak self] result in
+            finished = true
+            // A synchronous completion has no handle yet; then only a success can carry tokens.
+            let spent = handle?.tokensUsed ?? ((try? result.get()) ?? 0)
+            if spent > 0 { conversation?.tokenUsage[provider, default: 0] += spent }
+            guard let self = self else { return }
+            let cancelled = self.maintenanceCancelled
+            self.maintenanceRequest = nil
+            self.maintenanceStore = nil
+            self.maintenanceProgress = nil
+            self.maintenanceCancelled = false
+            if case .failure(let error) = result {
+                let message: String
+                if cancelled {
+                    message = L10n.tr("ai.cancelled")
+                } else if let failure = error as? AISummaryGenerationError {
+                    message = String(format: L10n.tr("ai.work.summaryFailed"), failure.file.relativePath,
+                                     failure.underlying.localizedDescription)
+                } else if let name = name {
+                    message = String(format: L10n.tr("ai.work.summaryFailed"), name, error.localizedDescription)
+                } else {
+                    message = error.localizedDescription
+                }
+                conversation?.messages.append(AIChatMessage(role: "status", text: message))
+            }
+            if self.isViewLoaded {
+                self.render()
+                self.refreshWorkContext()
+            }
+        })
+        handle = request
+        guard !finished else { return }
+        maintenanceRequest = request
+        maintenanceStore = store
+        maintenanceProgress = (0, total)
+        refreshWorkContext()
     }
 
     private func presentWorkSetupSheet(existing: AIWorkContext? = nil) {
