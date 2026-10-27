@@ -12,7 +12,7 @@ struct AIWorkContextConfig: Codable, Equatable {
 }
 
 enum AIWorkContextValidationError: Equatable {
-    case noSettingsSources, settingsOutsideRoot(String), writingFolderOutsideRoot
+    case noSettingsSources, settingsOutsideRoot(String), settingsIsRoot, writingFolderOutsideRoot
 }
 
 enum AIWorkContextError: Error { case corrupt, notFound }
@@ -152,9 +152,15 @@ struct AIWorkContext: Equatable {
     static func validate(rootURL: URL, settingsSources: [URL], writingFolder: URL) -> [AIWorkContextValidationError] {
         var errors: [AIWorkContextValidationError] = []
         if settingsSources.isEmpty { errors.append(.noSettingsSources) }
-        for source in settingsSources where relativePath(of: source, to: rootURL) == nil {
-            errors.append(.settingsOutsideRoot(source.path))
+        for source in settingsSources {
+            guard let rel = relativePath(of: source, to: rootURL) else {
+                errors.append(.settingsOutsideRoot(source.path))
+                continue
+            }
+            // The root itself has an empty relative path, which `isSafeRelative` rejects later.
+            if rel.isEmpty { errors.append(.settingsIsRoot) }
         }
+        // A writing folder equal to the root is allowed: it falls back to the root anyway.
         if relativePath(of: writingFolder, to: rootURL) == nil { errors.append(.writingFolderOutsideRoot) }
         return errors
     }

@@ -76,4 +76,12 @@ final class AIWorkContextSheetTests: XCTestCase {
         XCTAssertFalse(config.includePreviousEpisode)
         XCTAssertFalse(config.enabled)
     }
+
+    func testDraftWithRootAsSettingsSourceCannotSave() throws {
+        let (root, file) = try makeWork(withSettings: true)
+        var draft = AIWorkContextSheetController.draft(fileURL: file, existing: nil)
+        draft.settingsSources = [root]
+        XCTAssertEqual(draft.errors, [.settingsIsRoot])
+        XCTAssertFalse(draft.canSave)
+    }
 }

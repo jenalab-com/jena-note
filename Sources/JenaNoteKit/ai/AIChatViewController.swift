@@ -229,7 +229,6 @@ final class AIChatViewController: NSViewController {
         let sheet = AIWorkContextSheetController(fileURL: url, existing: existing)
         workSheet = sheet
         sheet.onSave = { [weak self] context in
-            self?.workSheet = nil
             do {
                 try context.save()
                 self?.refreshWorkContext()
@@ -237,6 +236,7 @@ final class AIChatViewController: NSViewController {
                 self?.render(status: String(format: L10n.tr("ai.work.saveFailed"), error.localizedDescription))
             }
         }
+        sheet.onClose = { [weak self] in self?.workSheet = nil }
         sheet.present(on: window)
     }
 
