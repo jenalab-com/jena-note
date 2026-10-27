@@ -227,6 +227,20 @@ final class AIWorkContextModelTests: XCTestCase {
                        "설정 600KB + 지난 화 요약 40KB = 640KB. 한도는 500KB예요. 140KB를 줄여야 보낼 수 있어요.")
     }
 
+    func testBudgetFactLineIncludesPreviousEpisodeWhenPresent() {
+        func payload(settings: Int) -> AIWorkPayload {
+            AIWorkPayload(
+                title: "t", currentEpisode: "",
+                settings: [AIWorkSetting(name: "s", text: String(repeating: "a", count: settings), summarized: false)],
+                previousSummaries: [AIWorkSummary(name: "e", summary: String(repeating: "b", count: 40_000))],
+                previousEpisode: AIWorkEpisodeText(name: "p", text: String(repeating: "c", count: 30_000)))
+        }
+        XCTAssertEqual(AIWorkContextModel.budgetFactLine(payload(settings: 180_000)),
+                       "설정 180KB + 지난 화 요약 40KB + 앞 화 30KB = 250KB / 500KB")
+        XCTAssertEqual(AIWorkContextModel.budgetFactLine(payload(settings: 600_000)),
+                       "설정 600KB + 지난 화 요약 40KB + 앞 화 30KB = 670KB. 한도는 500KB예요. 170KB를 줄여야 보낼 수 있어요.")
+    }
+
     func testAddingSourceRejectsOutsideRootAndRoot() throws {
         var cfg = config([])
         XCTAssertThrowsError(try AIWorkContextModel.addingSource(root, to: &cfg, root: root)) {
@@ -276,6 +290,7 @@ final class AIWorkContextModelTests: XCTestCase {
         let result = resolved(cfg)
         let rows = AIWorkContextModel.settingRows(result)
         XCTAssertEqual(rows.count, Set(rows.map(\.file.relativePath)).count)
+        XCTAssertEqual(rows.filter { $0.file.relativePath == "설정/금지.md" }.count, 1)
         XCTAssertEqual(AIWorkContextModel.sourceRows(result).map(\.relativePath), ["설정", "설정/금지.md"])
     }
 
