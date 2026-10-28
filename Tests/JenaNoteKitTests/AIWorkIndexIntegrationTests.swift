@@ -5,6 +5,14 @@ import XCTest
 /// Runs the actual AIClient/process adapter against a deterministic executable, never a paid provider.
 final class AIWorkIndexIntegrationTests: XCTestCase {
     func testChatUsesLocalIndexThenRetrievesEvidenceAndAnswersThroughCLIAdapter() throws {
+        try exerciseChat(holdSummaries: false)
+    }
+
+    func testChatAnswersWhileBackgroundSummaryNeverCompletes() throws {
+        try exerciseChat(holdSummaries: true)
+    }
+
+    private func exerciseChat(holdSummaries: Bool) throws {
         _ = NSApplication.shared
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root.appendingPathComponent("settings"), withIntermediateDirectories: true)
@@ -52,7 +60,7 @@ final class AIWorkIndexIntegrationTests: XCTestCase {
         let localStore = AIWorkIndexStore.shared(for: root)
         localStore.availability = { .available }
         localStore.generate = { _, completion in
-            completion(.success(AIIndexSummary(text: "설정과 사건의 검색 요약", origin: .apple)))
+            if !holdSummaries { completion(.success(AIIndexSummary(text: "설정과 사건의 검색 요약", origin: .apple))) }
             return {}
         }
         let document = MarkdownDocument()
@@ -64,7 +72,7 @@ final class AIWorkIndexIntegrationTests: XCTestCase {
         let prepared = expectation(description: "Automatic preparation on document open")
         let indexStore = AIWorkIndexStore.shared(for: root)
         let preparationTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { timer in
-            if !indexStore.isRunning && indexStore.index.passages.count == 4 && indexStore.done == 4 {
+            if indexStore.index.passages.count == 4 && (holdSummaries ? indexStore.isRunning : indexStore.done == 4) {
                 timer.invalidate(); prepared.fulfill()
             }
         }
@@ -89,9 +97,14 @@ final class AIWorkIndexIntegrationTests: XCTestCase {
         XCTAssertTrue(chat.options.modelPicker.isEnabled)
         let conversation = AIConversationStore.shared.conversation(for: document)
         XCTAssertTrue(conversation.messages.contains { $0.role == "assistant" && $0.text.contains("부활은 불가능해요") })
-        XCTAssertEqual(conversation.tokenUsage[.claude], 60, "Retrieval and final response are both counted")
+        XCTAssertEqual(conversation.tokenUsage[.claude], 30, "Small works send original evidence without an extra retrieval call")
         XCTAssertEqual(indexStore.index.passages.count, 4)
-        XCTAssertTrue(indexStore.index.passages.allSatisfy { !$0.summary.isEmpty })
+        if holdSummaries {
+            XCTAssertTrue(indexStore.isRunning, "Chat must not cancel the background work")
+            XCTAssertEqual(indexStore.done, 0, "No summary was needed to answer")
+        } else {
+            XCTAssertTrue(indexStore.index.passages.allSatisfy { !$0.summary.isEmpty })
+        }
         XCTAssertEqual(document.content.string, "저장 전 열린 글", "Guide mode must not modify the author’s document")
         XCTAssertTrue(FileManager.default.fileExists(atPath: root.appendingPathComponent(".jenanote/work-index.json").path))
         let workWindow = AIWorkContextWindowController.shared(for: root, store: AIEpisodeSummaryStore.shared(for: root))
@@ -100,6 +113,7 @@ final class AIWorkIndexIntegrationTests: XCTestCase {
         XCTAssertTrue(sources.budgetBar.isHidden)
         XCTAssertTrue(sources.tableView.tableColumns.first { $0.identifier.rawValue == "mode" }?.isHidden == true)
         XCTAssertTrue(workWindow.episodesView is AIWorkIndexView)
+        if holdSummaries { return }
         for (tab, name) in [(AIWorkContextWindowController.Tab.sources, "sources"), (.episodes, "episodes")] {
             workWindow.select(tab)
             workWindow.window?.appearance = NSAppearance(named: .darkAqua)

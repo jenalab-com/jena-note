@@ -30,14 +30,24 @@ final class AIWorkIndexStore {
     var availability: () -> AIWorkLocalSummarizer.Availability
     private var activeAvailability = AIWorkLocalSummarizer.Availability.available
     private var retryExcerpts = false
+    private var priorityKeys: [String] = []
+    private var currentPath: String?
+    private(set) var hasSearchSnapshot = false
+    private var completedSinceSave = 0
+    private var lastSavedAt = Date.distantPast
+    private var pendingSave: DispatchWorkItem?
+    private(set) var persistenceCount = 0
 
     var excerptCount: Int { index.passages.filter { $0.summaryOrigin == .excerpt }.count }
     var summaryCount: Int { index.passages.filter { $0.summaryOrigin == .apple }.count }
 
     var statusText: String {
-        if isRunning && total == 0 { return L10n.tr("ai.index.waiting") }
+        if isRunning && !hasSearchSnapshot { return L10n.tr("ai.index.waiting") }
         if isRunning { return String(format: L10n.tr("ai.index.preparing"), done, total) }
-        if let error { return L10n.tr("ai.index.failed") + " " + error }
+        if let error { return L10n.tr(hasSearchSnapshot ? "ai.index.summaryStopped" : "ai.index.failed") + " " + error }
+        if index.passages.contains(where: { $0.summary.isEmpty }) {
+            return String(format: L10n.tr("ai.index.pending"), index.passages.filter { !$0.summary.isEmpty }.count, index.passages.count)
+        }
         if excerptCount > 0 { return String(format: L10n.tr("ai.index.readyWithExcerpts"), excerptCount) }
         return String(format: L10n.tr("ai.index.ready"), Set(index.passages.map(\.path)).count)
     }
@@ -57,7 +67,73 @@ final class AIWorkIndexStore {
         guard let url, let context = AIWorkContext.locate(from: url) else { return }
         let store = shared(for: context.rootURL)
         guard context.config.enabled else { store.cancel(); return }
+        store.prioritizeDocument(url)
         store.schedule(context: context)
+    }
+
+    /// A fresh read snapshot is independent of the potentially hours-long summary queue.
+    func prepareForSearch(context: AIWorkContext,
+                          completion: @escaping (Result<AIWorkIndex, Error>) -> Void) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard context.config.enabled else {
+            completion(.failure(AIError(message: L10n.tr("ai.cancelled"))))
+            return
+        }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result { try AIWorkIndex.scan(context: context) }
+            DispatchQueue.main.async {
+                completion(result.map { fresh in
+                    var snapshot = fresh
+                    self.restoreSummaries(into: &snapshot)
+                    if self.isRunning && self.activeContext == context && self.hasSearchSnapshot,
+                       snapshot.passages.map(\.id) != self.index.passages.map(\.id) {
+                        self.needsRescan = true
+                    }
+                    return snapshot
+                })
+            }
+        }
+    }
+
+    func prioritizeDocument(_ url: URL) {
+        currentPath = AIWorkContext.relativePath(of: url, to: root)
+    }
+
+    func prioritize(_ passages: [AIIndexedPassage]) {
+        // Bound recent request state; repeated questions must not grow the queue indefinitely.
+        var seen = Set<String>()
+        priorityKeys = Array((passages.map(\.cacheKey) + priorityKeys).filter { seen.insert($0).inserted }.prefix(64))
+    }
+
+    private func nextPosition() -> Int? {
+        for key in priorityKeys {
+            if let position = index.passages.firstIndex(where: { $0.cacheKey == key && $0.summary.isEmpty }) { return position }
+        }
+        if let currentPath {
+            var seen = Set<String>()
+            let paths = index.passages.filter { !$0.isSetting }.map(\.path).filter { seen.insert($0).inserted }
+            var preferred = [currentPath]
+            if let current = paths.firstIndex(of: currentPath), current > 0 { preferred.append(paths[current - 1]) }
+            for path in preferred {
+                if let position = index.passages.firstIndex(where: { $0.path == path && $0.summary.isEmpty }) { return position }
+            }
+        }
+        return index.passages.firstIndex { $0.summary.isEmpty }
+    }
+
+    private func restoreSummaries(into fresh: inout AIWorkIndex, retryExcerpts: Bool = false) {
+        var cached: [String: AIIndexedPassage] = [:]
+        for passage in index.passages where !passage.summary.isEmpty {
+            if retryExcerpts && passage.summaryOrigin == .excerpt { continue }
+            cached[passage.cacheKey] = passage
+        }
+        for i in fresh.passages.indices {
+            if let saved = cached[fresh.passages[i].cacheKey] {
+                fresh.passages[i].summary = saved.summary
+                fresh.passages[i].summaryOrigin = saved.summaryOrigin
+                fresh.passages[i].summaryIssue = saved.summaryIssue
+            }
+        }
     }
 
     func schedule(context: AIWorkContext) {
@@ -100,6 +176,7 @@ final class AIWorkIndexStore {
         error = nil
         done = 0
         total = 0
+        hasSearchSnapshot = false
         let token = UUID()
         generation = token
         needsRescan = false
@@ -115,24 +192,15 @@ final class AIWorkIndexStore {
                 switch scan {
                 case .failure(let error): self.finish(.failure(error))
                 case .success(var fresh):
-                    var cached: [String: AIIndexedPassage] = [:]
                     let availabilityChanged = self.index.summaryAvailability != self.activeAvailability.signature
-                    for passage in self.index.passages where !passage.summary.isEmpty {
-                        if passage.summaryOrigin == .excerpt && (self.retryExcerpts || availabilityChanged) { continue }
-                        cached[passage.cacheKey] = passage
-                    }
-                    for i in fresh.passages.indices {
-                        if let saved = cached[fresh.passages[i].cacheKey] {
-                            fresh.passages[i].summary = saved.summary
-                            fresh.passages[i].summaryOrigin = saved.summaryOrigin
-                            fresh.passages[i].summaryIssue = saved.summaryIssue
-                        }
-                    }
+                    self.restoreSummaries(into: &fresh, retryExcerpts: self.retryExcerpts || availabilityChanged)
                     fresh.summaryAvailability = self.activeAvailability.signature
                     self.retryExcerpts = false
                     self.index = fresh
                     self.total = fresh.passages.count
                     self.done = fresh.passages.filter { !$0.summary.isEmpty }.count
+                    self.hasSearchSnapshot = true
+                    do { try self.persist() } catch { self.finish(.failure(error)); return }
                     self.next(token: token)
                 }
             }
@@ -141,13 +209,17 @@ final class AIWorkIndexStore {
 
     private func next(token: UUID) {
         guard generation == token else { return }
-        do { try persist() } catch { finish(.failure(error)); return }
+        if completedSinceSave >= 8 || (completedSinceSave > 0 && Date().timeIntervalSince(lastSavedAt) >= 5) {
+            do { try persist() } catch { finish(.failure(error)); return }
+        }
         notify()
-        guard let position = index.passages.firstIndex(where: { $0.summary.isEmpty }) else {
-            if needsRescan, let context = activeContext {
-                needsRescan = false
-                scan(context: context, token: token)
-            } else { finish(.success(index)) }
+        if needsRescan, let context = activeContext {
+            needsRescan = false
+            scan(context: context, token: token)
+            return
+        }
+        guard let position = nextPosition() else {
+            finish(.success(index))
             return
         }
         let passage = index.passages[position]
@@ -166,6 +238,8 @@ final class AIWorkIndexStore {
                         self.index.passages[i].summaryIssue = summary.issue
                     }
                     self.done = self.index.passages.filter { !$0.summary.isEmpty }.count
+                    self.completedSinceSave += 1
+                    self.scheduleSave(token: token)
                     self.next(token: token)
                 }
             }
@@ -180,17 +254,40 @@ final class AIWorkIndexStore {
         }
     }
 
+    private func scheduleSave(token: UUID) {
+        guard pendingSave == nil else { return }
+        let item = DispatchWorkItem { [weak self] in
+            guard let self, self.generation == token, self.isRunning else { return }
+            self.pendingSave = nil
+            do { try self.persist() } catch {
+                self.generation = UUID()
+                self.cancelGeneration?()
+                self.cancelGeneration = nil
+                self.finish(.failure(error))
+            }
+        }
+        pendingSave = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: item)
+    }
+
     private func persist() throws {
+        pendingSave?.cancel()
+        pendingSave = nil
         let folder = root.appendingPathComponent(".jenanote")
         let url = folder.appendingPathComponent("work-index.json")
         guard AIWorkContext.isSafeInsideRoot(url, root: root) else { throw AIWorkContextError.corrupt }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         index.updatedAt = Date()
         try JSONEncoder().encode(index).write(to: url, options: .atomic)
+        persistenceCount += 1
+        completedSinceSave = 0
+        lastSavedAt = Date()
     }
 
     func cancel() {
         debounce?.cancel()
+        pendingSave?.cancel()
+        pendingSave = nil
         generation = UUID()
         cancelGeneration?()
         cancelGeneration = nil
@@ -199,11 +296,15 @@ final class AIWorkIndexStore {
 
     private func finish(_ result: Result<AIWorkIndex, Error>) {
         isRunning = false
-        if case .failure(let failure) = result { error = failure.localizedDescription; try? persist() }
+        var finalResult = result
+        if hasSearchSnapshot {
+            do { try persist() } catch { finalResult = .failure(error) }
+        }
+        if case .failure(let failure) = finalResult { error = failure.localizedDescription }
         let completions = waiters
         waiters.removeAll()
         notify()
-        completions.forEach { $0(result) }
+        completions.forEach { $0(finalResult) }
     }
 
     private func notify() { NotificationCenter.default.post(name: Self.changed, object: self) }

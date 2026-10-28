@@ -6,6 +6,7 @@ final class AIWorkRetrieval {
     static let maximumRounds = 4
     static let evidenceBytes = 160_000
     static let pageSize = 32
+    static let directPassageLimit = 24
     private(set) var tokensUsed = 0
     private(set) var consulted: [String] = []
     private var cancelled = false
@@ -52,10 +53,73 @@ final class AIWorkRetrieval {
         return passages.dropFirst(number * pageSize).prefix(pageSize).map(\.catalogEntry)
     }
 
+    /// Literal candidates only: source text remains the authority, not inferred facts.
+    static func searchTerms(_ text: String) -> [String] {
+        let ignored: Set<String> = ["설정", "장면", "확인", "확인해", "확인해줘", "알려줘", "봐줘", "그리고", "어떻게", "이것", "이거", "the", "and", "this", "that", "please"]
+        let words = text.components(separatedBy: CharacterSet.alphanumerics.inverted)
+        let suffixes = ["에서는", "에게는", "으로", "에서", "에게", "에는", "은", "는", "이", "가", "을", "를", "의", "와", "과"]
+        var seen = Set<String>()
+        var terms: [String] = []
+        for word in words where word.count >= 2 && !ignored.contains(word.lowercased()) {
+            let bounded = String(word.prefix(120))
+            if seen.insert(bounded).inserted { terms.append(bounded) }
+            if let suffix = suffixes.first(where: { word.hasSuffix($0) && word.count - $0.count >= 2 }) {
+                let stem = String(word.dropLast(suffix.count).prefix(120))
+                if !ignored.contains(stem), seen.insert(stem).inserted { terms.append(stem) }
+            }
+            if terms.count >= 24 { break }
+        }
+        return Array(terms.prefix(24))
+    }
+
+    static func localCandidates(passages: [AIIndexedPassage], question: String,
+                                document: String, history: [AIChatMessage] = []) -> [AIIndexedPassage] {
+        let questionTerms = searchTerms(question)
+        let previous = history.last(where: { $0.role == "user" })?.text ?? ""
+        let contextTerms = searchTerms(String(previous.prefix(1000)) + " " + String(document.prefix(4000)))
+        // Search in groups to preserve the existing interpreter's eight-query limit.
+        func matches(_ terms: [String]) -> [AIIndexedPassage] {
+            stride(from: 0, to: terms.count, by: 8).flatMap {
+                AIWorkIndex.search(Array(terms.dropFirst($0).prefix(8)), in: passages, limit: 8)
+            }
+        }
+        var seen = Set<String>()
+        let ranked = (matches(questionTerms) + matches(contextTerms)).filter { seen.insert($0.id).inserted }
+        var selected = Array(ranked.prefix(8))
+        seen = Set(selected.map(\.id))
+        // Keep adjacent context without crossing into another file or an ineligible chapter.
+        for hit in Array(selected) {
+            guard let position = passages.firstIndex(where: { $0.id == hit.id }) else { continue }
+            for neighbor in [position - 1, position + 1] where passages.indices.contains(neighbor) {
+                let passage = passages[neighbor]
+                if passage.path == hit.path, seen.insert(passage.id).inserted { selected.append(passage) }
+                if selected.count >= 16 { return selected }
+            }
+        }
+        return selected
+    }
+
     func prepare(passages: [AIIndexedPassage], title: String, currentEpisode: String,
                  document: String, question: String, history: [AIChatMessage] = [], provider: AIProvider, model: String?,
+                 prioritize: (([AIIndexedPassage]) -> Void)? = nil,
                  completion: @escaping (Result<AIWorkPayload, Error>) -> Void) {
         started = Date()
+        guard !cancelled else { return }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let candidates = Self.localCandidates(passages: passages, question: question, document: document, history: history)
+            DispatchQueue.main.async { [weak self] in
+                guard let self, !self.cancelled, !self.completed else { return }
+                self.prepareEvidence(passages: passages, candidates: candidates, title: title, currentEpisode: currentEpisode,
+                                     document: document, question: question, history: history, provider: provider, model: model,
+                                     prioritize: prioritize, completion: completion)
+            }
+        }
+    }
+
+    private func prepareEvidence(passages: [AIIndexedPassage], candidates: [AIIndexedPassage], title: String,
+                                 currentEpisode: String, document: String, question: String, history: [AIChatMessage],
+                                 provider: AIProvider, model: String?, prioritize: (([AIIndexedPassage]) -> Void)?,
+                                 completion: @escaping (Result<AIWorkPayload, Error>) -> Void) {
         let complete: (Result<AIWorkPayload, Error>) -> Void = { [weak self] result in
             guard let self, !self.cancelled, !self.completed else { return }
             self.completed = true
@@ -71,11 +135,16 @@ final class AIWorkRetrieval {
         }
         deadline = timeout
         DispatchQueue.main.asyncAfter(deadline: .now() + 240, execute: timeout)
-        var selected: [AIIndexedPassage] = []
+        prioritize?(candidates)
+        var selected: [AIIndexedPassage] = candidates
         // Recent prose supplies continuity even for vague requests such as "continue".
-        selected += passages.filter { !$0.isSetting }.suffix(2)
-        let summaries = Array(passages.filter(\.isSetting).prefix(16))
+        for passage in passages.filter({ !$0.isSetting }).suffix(2) where !selected.contains(where: { $0.id == passage.id }) {
+            selected.append(passage)
+        }
+        var settingIDs = Set<String>()
+        let summaries = Array((candidates + passages).filter { $0.isSetting && settingIDs.insert($0.id).inserted }.prefix(16))
         func finish(limited: Bool) {
+            prioritize?(selected)
             self.consulted = selected.map(\.citation)
             var payload = AIWorkPayload(title: title, currentEpisode: currentEpisode,
                 settings: selected.filter(\.isSetting).map { AIWorkSetting(name: $0.citation, text: $0.text, summarized: false) },
@@ -85,6 +154,12 @@ final class AIWorkRetrieval {
             payload.retrievalNote = "Reference coverage: \(selected.count) of \(passages.count) indexed passages read. "
                 + (limited ? "Search budget reached; do not claim an exhaustive review." : "Only the cited passages were checked; do not claim an exhaustive review.")
             complete(.success(payload))
+        }
+        if passages.count <= Self.directPassageLimit,
+           passages.reduce(0, { $0 + $1.text.utf8.count }) <= Self.evidenceBytes {
+            selected = passages
+            finish(limited: false)
+            return
         }
         func step(_ round: Int, findings: [[String: Any]]) {
             guard !self.cancelled, !self.completed else { return }
@@ -151,6 +226,8 @@ final class AIWorkRetrieval {
                 }
             } catch { complete(.failure(error)) }
         }
-        step(0, findings: Self.page(0, passages: passages))
+        var catalogIDs = Set<String>()
+        let initialCatalog = (candidates + passages).filter { catalogIDs.insert($0.id).inserted }.prefix(Self.pageSize)
+        step(0, findings: initialCatalog.map(\.catalogEntry))
     }
 }
