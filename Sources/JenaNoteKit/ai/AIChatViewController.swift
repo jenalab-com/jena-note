@@ -582,8 +582,8 @@ final class AIChatViewController: NSViewController {
         if !isSuspended { options.configure(provider: AISettings.provider, tokens: conversation?.tokenUsage[AISettings.provider]) }
     }
 
-    /// Order (spec §6.8): fix the question → generate missing summaries → snapshot → prompt → send.
-    /// When no summary is needed (the usual case) the snapshot is taken at click time, as before.
+    /// Fix the question → fresh source index → snapshot → evidence → send.
+    /// Background summaries never gate a chat request.
     @objc func send() {
         guard !preparingIndex, request == nil, summaryRequest == nil, let document = currentDocument?() else { return }
         let conversation = AIConversationStore.shared.conversation(for: document)
@@ -624,7 +624,7 @@ final class AIChatViewController: NSViewController {
         render()
         let store = AIWorkIndexStore.shared(for: work.resolved.context.rootURL)
         let model = options.selectedModel
-        store.ensure(context: work.resolved.context) { [weak self, weak document] result in
+        store.prepareForSearch(context: work.resolved.context) { [weak self, weak document] result in
             guard let self, self.generation == token, let document, self.currentDocument?() === document else { return }
             do {
                 let index = try result.get()
@@ -636,11 +636,13 @@ final class AIChatViewController: NSViewController {
                 let passages = try index.eligible(for: resolved)
                 let selection = self.currentSelection?() ?? NSRange(location: 0, length: 0)
                 let snapshot = AIEditSnapshot(document: document, selection: selection)
+                store.prioritizeDocument(url)
                 let retrieval = AIWorkRetrieval()
                 self.retrieval = retrieval
                 self.waitingLabel.stringValue = L10n.tr("ai.index.searching")
                 retrieval.prepare(passages: passages, title: latest.config.title, currentEpisode: url.lastPathComponent,
-                                  document: snapshot.content.string, question: question, history: history, provider: provider, model: model) { [weak self, weak document] result in
+                                  document: snapshot.content.string, question: question, history: history, provider: provider, model: model,
+                                  prioritize: store.prioritize) { [weak self, weak document] result in
                     guard let self, self.generation == token else { return }
                     conversation.tokenUsage[provider, default: 0] += retrieval.tokensUsed
                     self.retrieval = nil

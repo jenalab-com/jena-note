@@ -16,7 +16,9 @@ struct AIIndexedPassage: Codable, Equatable {
     var cacheKey: String { (isSetting ? "setting:" : "episode:") + contentHash }
     var citation: String { "\(path):\(firstLine)-\(lastLine)" }
     var catalogEntry: [String: Any] {
-        ["id": id, "source": citation, "kind": isSetting ? "setting" : "episode", "summary": summary, "summaryKind": summaryOrigin?.rawValue ?? "unknown"]
+        ["id": id, "source": citation, "kind": isSetting ? "setting" : "episode",
+         "summary": summary.isEmpty ? String(text.prefix(700)) : summary,
+         "summaryKind": summary.isEmpty ? "excerpt" : (summaryOrigin?.rawValue ?? "unknown")]
     }
 }
 

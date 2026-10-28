@@ -259,6 +259,8 @@ final class AIWorkContextBarTests: XCTestCase {
         let chat = makeChat(showing: doc, presented: { window = $0 })
         chat.openWorkWindow()
         XCTAssertTrue(window?.episodesView is AIWorkIndexView)
+        // Background preparation is independent of send; automatic triggers are disabled in tests.
+        store.ensure(context: try XCTUnwrap(AIWorkContext.locate(from: work.file))) { _ in }
         try editableInput(of: chat).string = "하연의 반응 봐줘"
         chat.send()
         XCTAssertTrue(store.isRunning)
@@ -318,6 +320,7 @@ final class AIWorkContextBarTests: XCTestCase {
         defer { store.cancel() }
         var presented = 0
         let chat = makeChat(showing: document(at: work.file), presented: { _ in presented += 1 })
+        store.ensure(context: try XCTUnwrap(AIWorkContext.locate(from: work.file))) { _ in }
         try editableInput(of: chat).string = "봐줘"
         chat.send()
         guard case .indexed(_, true, _) = chat.workBar.status else { return XCTFail("Expected indexing state") }

@@ -198,7 +198,10 @@ final class AIWorkIndexTests: XCTestCase {
     func testSearchThenReadReturnsOriginalEvidenceAndCannotReadUnknownIDs() throws {
         let index = try AIWorkIndex.scan(context: context)
         let resolved = AIWorkContextResolver.resolve(context, currentFile: root.appendingPathComponent("chapters/02.md"))
-        let passages = try index.eligible(for: resolved, includeOpenSettings: false)
+        var passages = try index.eligible(for: resolved, includeOpenSettings: false)
+        for i in 0..<25 {
+            passages += AIWorkIndex.split(text: "unrelated \(i)", path: "settings/extra\(i).md", isSetting: true)
+        }
         let rule = try XCTUnwrap(passages.first { $0.isSetting })
         var calls = 0
         let retrieval = AIWorkRetrieval(generate: { prompt, _, _, completion in
@@ -240,5 +243,179 @@ final class AIWorkIndexTests: XCTestCase {
         XCTAssertThrowsError(try AIWorkRetrieval.decode("rm -rf /"))
         XCTAssertThrowsError(try AIWorkRetrieval.decode("{}"))
         XCTAssertNoThrow(try AIWorkRetrieval.decode("```json\n{\"done\":true}\n```"))
+    }
+
+    func testSearchSnapshotDoesNotWaitForOrCancelBackgroundInference() throws {
+        let started = expectation(description: "inference held")
+        var cancellations = 0
+        let store = AIWorkIndexStore(root: root, generate: { _, _ in
+            started.fulfill()
+            return { cancellations += 1 }
+        })
+        store.ensure(context: context) { _ in }
+        wait(for: [started], timeout: 5)
+        defer { store.cancel() }
+        try write("settings/rules.md", "새 규칙: 부활 가능")
+        let ready = expectation(description: "search ready while inference is held")
+        store.prepareForSearch(context: context) { result in
+            do {
+                let snapshot = try result.get()
+                XCTAssertTrue(snapshot.passages.contains { $0.text.contains("새 규칙") })
+                XCTAssertTrue(snapshot.passages.allSatisfy { $0.summary.isEmpty })
+                XCTAssertEqual(store.done, 0)
+                XCTAssertTrue(store.isRunning)
+                XCTAssertEqual(cancellations, 0)
+            } catch { XCTFail("\(error)") }
+            ready.fulfill()
+        }
+        wait(for: [ready], timeout: 5)
+    }
+
+    func testSearchSnapshotReusesOnlyUnchangedCacheAndHonorsCurrentExclusions() throws {
+        var calls = 0
+        let store = AIWorkIndexStore(root: root, generate: fake { calls += 1 })
+        _ = try ensure(store)
+        try write("chapters/01.md", "수정된 원문")
+        context.config.excludedSettings = ["settings/rules.md"]
+        let ready = expectation(description: "fresh eligible sources")
+        store.prepareForSearch(context: context) { result in
+            do {
+                let snapshot = try result.get()
+                XCTAssertFalse(snapshot.passages.contains { $0.isSetting })
+                XCTAssertEqual(snapshot.passages.first { $0.path == "chapters/01.md" }?.summary, "")
+                XCTAssertFalse(snapshot.passages.first { $0.path == "chapters/02.md" }?.summary.isEmpty ?? true)
+                XCTAssertEqual(calls, 4, "Search preparation must not invoke inference")
+            } catch { XCTFail("\(error)") }
+            ready.fulfill()
+        }
+        wait(for: [ready], timeout: 5)
+    }
+
+    func testQuestionPriorityAppliesAfterCurrentInferenceWithoutCancellingIt() throws {
+        let first = expectation(description: "first"), second = expectation(description: "priority next")
+        var pending: ((Result<AIIndexSummary, Error>) -> Void)?
+        var calls: [String] = []
+        var cancellations = 0
+        let store = AIWorkIndexStore(root: root, generate: { passage, completion in
+            calls.append(passage.id)
+            pending = completion
+            (calls.count == 1 ? first : second).fulfill()
+            return { cancellations += 1 }
+        })
+        store.ensure(context: context) { _ in }
+        wait(for: [first], timeout: 5)
+        let priority = try XCTUnwrap(store.index.passages.last)
+        store.prioritize([priority])
+        XCTAssertEqual(calls.count, 1)
+        XCTAssertEqual(cancellations, 0)
+        pending?(.success(AIIndexSummary(text: "first complete", origin: .apple)))
+        wait(for: [second], timeout: 5)
+        XCTAssertEqual(calls.last, priority.id)
+        XCTAssertEqual(cancellations, 0)
+        store.cancel()
+        let reopened = AIWorkIndexStore(root: root)
+        XCTAssertEqual(reopened.index.passages.filter { !$0.summary.isEmpty }.count, 1, "Stopping flushes completed work")
+    }
+
+    func testOpenDocumentAndPreviousChapterAreSummarizedBeforeOtherFiles() throws {
+        var paths: [String] = []
+        let store = AIWorkIndexStore(root: root, generate: { passage, completion in
+            paths.append(passage.path)
+            completion(.success(AIIndexSummary(text: "summary", origin: .apple)))
+            return {}
+        })
+        store.prioritizeDocument(root.appendingPathComponent("chapters/02.md"))
+        _ = try ensure(store)
+        XCTAssertEqual(Array(paths.prefix(2)), ["chapters/02.md", "chapters/01.md"])
+    }
+
+    func testFastSummariesBatchWholeIndexWritesAndFlushAtCompletion() throws {
+        for i in 0..<20 { try write("settings/extra\(i).md", "unique setting \(i)") }
+        let store = AIWorkIndexStore(root: root, generate: fake {})
+        let result = try ensure(store)
+        XCTAssertLessThan(store.persistenceCount, result.passages.count / 2)
+        let reopened = AIWorkIndexStore(root: root)
+        XCTAssertEqual(reopened.index.passages, result.passages)
+    }
+
+    func testUnfinishedCatalogUsesOriginalPreviewWithoutPretendingSummaryIsComplete() throws {
+        let passage = try XCTUnwrap(AIWorkIndex.scan(context: context).passages.first)
+        XCTAssertEqual(passage.catalogEntry["summaryKind"] as? String, "excerpt")
+        XCTAssertEqual(passage.catalogEntry["summary"] as? String, passage.text)
+        XCTAssertTrue(passage.summary.isEmpty)
+    }
+
+    func testSmallCorpusUsesOriginalsWithoutAnyRetrievalModelCalls() throws {
+        let index = try AIWorkIndex.scan(context: context)
+        let resolved = AIWorkContextResolver.resolve(context, currentFile: root.appendingPathComponent("chapters/02.md"))
+        let passages = try index.eligible(for: resolved, includeOpenSettings: false)
+        let retrieval = AIWorkRetrieval(generate: { _, _, _, _ in
+            XCTFail("Small complete corpus needs no evidence-selection round trip")
+            return {}
+        })
+        let ready = expectation(description: "direct evidence")
+        retrieval.prepare(passages: passages, title: "t", currentEpisode: "02", document: "현재 화", question: "부활?", provider: .claude, model: nil) { result in
+            do {
+                let payload = try result.get()
+                XCTAssertTrue(payload.settings.contains { $0.text.contains("부활은 불가능") })
+                XCTAssertFalse(payload.retrievedPassages.contains { $0.text.contains("미래비밀") })
+                XCTAssertEqual(retrieval.tokensUsed, 0)
+            } catch { XCTFail("\(error)") }
+            ready.fulfill()
+        }
+        wait(for: [ready], timeout: 5)
+    }
+
+    func testLargeCorpusPrimesFirstRetrievalWithRelevantOriginalBeyondFirstCatalogPage() throws {
+        var passages = (0..<50).flatMap { AIWorkIndex.split(text: "무관한 자료 \($0)", path: "settings/\($0).md", isSetting: true) }
+        let relevant = AIWorkIndex.split(text: "흑룡의 봉인은 달빛으로만 풀린다.", path: "settings/seal.md", isSetting: true)
+        passages += relevant
+        var calls = 0
+        let retrieval = AIWorkRetrieval(generate: { prompt, _, _, completion in
+            calls += 1
+            do {
+                let json = try XCTUnwrap(prompt.components(separatedBy: "INPUT:").last?.data(using: .utf8))
+                let object = try XCTUnwrap(JSONSerialization.jsonObject(with: json) as? [String: Any])
+                let evidence = try XCTUnwrap(object["readEvidence"] as? [[String: String]])
+                XCTAssertTrue(evidence.contains { $0["text"] == relevant.first?.text })
+            } catch { XCTFail("\(error)") }
+            completion(.success("{\"done\":true}"), 5)
+            return {}
+        })
+        let ready = expectation(description: "one retrieval round")
+        retrieval.prepare(passages: passages, title: "t", currentEpisode: "02", document: "", question: "흑룡의 봉인을 풀려면?", provider: .claude, model: nil) { result in
+            do {
+                let payload = try result.get()
+                XCTAssertEqual(payload.settings.first?.text, relevant.first?.text)
+            } catch { XCTFail("\(error)") }
+            ready.fulfill()
+        }
+        wait(for: [ready], timeout: 5)
+        XCTAssertEqual(calls, 1)
+    }
+
+    func testCancellingDuringLocalSearchDoesNotStartAProviderOrDeliverLateEvidence() throws {
+        let unexpected = expectation(description: "cancelled retrieval must stay silent")
+        unexpected.isInverted = true
+        let retrieval = AIWorkRetrieval(generate: { _, _, _, _ in unexpected.fulfill(); return {} })
+        retrieval.prepare(passages: try AIWorkIndex.scan(context: context).passages, title: "t", currentEpisode: "02",
+                          document: "", question: "부활", provider: .claude, model: nil) { _ in unexpected.fulfill() }
+        retrieval.cancel()
+        wait(for: [unexpected], timeout: 0.2)
+    }
+
+    func testLocalSearchFindsLateSourceIn4312UnsummarizedPassages() {
+        let filler = String(repeating: "세계의 평범한 기록이다. ", count: 40)
+        var passages = (0..<4311).map { i in
+            AIIndexedPassage(id: "\(i)", path: "settings/\(i).md", isSetting: true, firstLine: 1, lastLine: 1,
+                             text: filler, contentHash: "\(i)", summary: "")
+        }
+        let target = AIIndexedPassage(id: "target", path: "settings/seal.md", isSetting: true, firstLine: 1, lastLine: 1,
+                                     text: "은빛열쇠로 봉인을 연다.", contentHash: "target", summary: "")
+        passages.append(target)
+        let started = Date()
+        let found = AIWorkRetrieval.localCandidates(passages: passages, question: "은빛열쇠의 역할은?", document: "")
+        print("Synthetic 4312-passage local search: \(Date().timeIntervalSince(started)) seconds")
+        XCTAssertEqual(found.first?.id, target.id, "Relevant source outside the first catalog page must be discoverable without summaries")
     }
 }
