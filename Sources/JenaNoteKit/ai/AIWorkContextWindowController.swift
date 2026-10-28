@@ -132,7 +132,7 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
         window.delegate = self
         observeStore()
         sourcesView = AIWorkContextSourcesView(controller: self)
-        episodesView = AIWorkContextEpisodesView(controller: self)
+        episodesView = AIWorkIndexView(controller: self)
         foldersView = AIWorkContextFoldersView(controller: self)
         buildUI()
         window.center()
@@ -309,6 +309,8 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
         if wasSaved {
             do {
                 try updated.save()
+                let indexStore = AIWorkIndexStore.shared(for: updated.rootURL)
+                if updated.config.enabled { indexStore.schedule(context: updated) } else { indexStore.cancel() }
                 lastSaveError = nil
             } catch {
                 lastSaveError = String(format: L10n.tr("ai.work.saveFailed"), error.localizedDescription)
@@ -319,6 +321,7 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
         let oldKey = Self.key(for: oldRoot)
         let newKey = Self.key(for: newRoot)
         if oldKey != newKey {
+            AIWorkIndexStore.shared(for: oldRoot).cancel()
             Self.controllers[oldKey] = nil
             Self.controllers[newKey] = self
             store = AIEpisodeSummaryStore.shared(for: newRoot)
@@ -353,6 +356,8 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
         }
         do {
             try updated.save()
+            let indexStore = AIWorkIndexStore.shared(for: updated.rootURL)
+            if updated.config.enabled { indexStore.schedule(context: updated) } else { indexStore.cancel() }
             isProvisional = false
             lastSaveError = nil
         } catch {

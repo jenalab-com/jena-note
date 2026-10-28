@@ -1,0 +1,98 @@
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/7] Emitting module JenaNoteKit
+[4/7] Compiling JenaNoteKit AIWorkIndexView.swift
+[4/9] Write Objects.LinkFileList
+[6/9] Linking JenaNote
+[7/9] Applying JenaNote
+[8/9] Linking JenaNotePackageTests
+Build complete! (2.01s)
+Test Suite 'Selected tests' started at 2026-10-28 16:35:01.322.
+Test Suite 'JenaNotePackageTests.xctest' started at 2026-10-28 16:35:01.323.
+Test Suite 'AIWorkContextWindowTests' started at 2026-10-28 16:35:01.323.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testChangeRootRefusesWhenTargetHasContext]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testChangeRootRefusesWhenTargetHasContext]' passed (0.175 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testChangeRootReloadsDiskBeforeMoving]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testChangeRootReloadsDiskBeforeMoving]' passed (0.040 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testClosingCommitsPendingTitleEdit]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testClosingCommitsPendingTitleEdit]' passed (0.077 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testClosingFirstSetupWithoutSourcesSavesNothing]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testClosingFirstSetupWithoutSourcesSavesNothing]' passed (0.023 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testClosingFirstSetupWithValidSuggestionSaves]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testClosingFirstSetupWithValidSuggestionSaves]' passed (0.031 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testEnableSwitchCannotEnableWithoutSources]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testEnableSwitchCannotEnableWithoutSources]' passed (0.019 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testEpisodesActionsDisabledWhileProvisional]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testEpisodesActionsDisabledWhileProvisional]' passed (0.049 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testFirstSetupDoesNotWriteUntilValidChange]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testFirstSetupDoesNotWriteUntilValidChange]' passed (0.047 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testFirstSetupUsesExistingContextAtSuggestedRoot]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testFirstSetupUsesExistingContextAtSuggestedRoot]' passed (0.025 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testFoldersTabRejectsWritingFolderOutsideRoot]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testFoldersTabRejectsWritingFolderOutsideRoot]' passed (0.021 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testMutateSavesImmediatelyAndNotifies]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testMutateSavesImmediatelyAndNotifies]' passed (0.028 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testSharedReturnsSameControllerPerRoot]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testSharedReturnsSameControllerPerRoot]' passed (0.046 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testWindowReloadsConfigBeforeMutating]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testWindowReloadsConfigBeforeMutating]' passed (0.029 seconds).
+Test Suite 'AIWorkContextWindowTests' passed at 2026-10-28 16:35:01.933.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.609 (0.610) seconds
+Test Suite 'AIWorkIndexIntegrationTests' started at 2026-10-28 16:35:01.933.
+Test Case '-[JenaNoteKitTests.AIWorkIndexIntegrationTests testChatUsesLocalIndexThenRetrievesEvidenceAndAnswersThroughCLIAdapter]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexIntegrationTests testChatUsesLocalIndexThenRetrievesEvidenceAndAnswersThroughCLIAdapter]' passed (1.232 seconds).
+Test Suite 'AIWorkIndexIntegrationTests' passed at 2026-10-28 16:35:03.165.
+	 Executed 1 test, with 0 failures (0 unexpected) in 1.232 (1.232) seconds
+Test Suite 'AIWorkIndexTests' started at 2026-10-28 16:35:03.165.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testAutomaticEvidenceFitsWithoutRequiringAuthorToExcludeFiles]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testAutomaticEvidenceFitsWithoutRequiringAuthorToExcludeFiles]' passed (0.029 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testCancellationRejectsLateResultAndPreservesQuestionIndependentIndex]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testCancellationRejectsLateResultAndPreservesQuestionIndependentIndex]' passed (0.010 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testConcurrentPrepareDoesNotDuplicateModelCalls]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testConcurrentPrepareDoesNotDuplicateModelCalls]' passed (0.009 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testFailedPassageIsCachedUntilExplicitRetryAndSuccessfulPassagesAreKept]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testFailedPassageIsCachedUntilExplicitRetryAndSuccessfulPassagesAreKept]' passed (0.014 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testFailurePreservesCompletedChunksAndRetryResumes]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testFailurePreservesCompletedChunksAndRetryResumes]' passed (0.012 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testFutureFilesAreIndexedButNeverEnterCatalogSearchOrEvidence]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testFutureFilesAreIndexedButNeverEnterCatalogSearchOrEvidence]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testLargeKoreanFileIsLosslesslyChunkedWithBoundedUnicodeAndLines]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testLargeKoreanFileIsLosslesslyChunkedWithBoundedUnicodeAndLines]' passed (0.040 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testLegacyIndexIsRebuiltWithoutTouchingManualSummaries]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testLegacyIndexIsRebuiltWithoutTouchingManualSummaries]' passed (0.073 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testMalformedRetrievalCommandDoesNotExecuteAnything]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testMalformedRetrievalCommandDoesNotExecuteAnything]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testPersistentCacheReusesUnchangedContentAndRefreshesOnlyChangedFile]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testPersistentCacheReusesUnchangedContentAndRefreshesOnlyChangedFile]' passed (0.015 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testSearchThenReadReturnsOriginalEvidenceAndCannotReadUnknownIDs]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testSearchThenReadReturnsOriginalEvidenceAndCannotReadUnknownIDs]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testSymlinkAndExcludedSourcesNeverIndexed]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testSymlinkAndExcludedSourcesNeverIndexed]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testUnavailableModelUsesPersistedExcerptsAndUpgradesWhenReady]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testUnavailableModelUsesPersistedExcerptsAndUpgradesWhenReady]' passed (0.017 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testWhitespacePassageNeverBlocksPreparationOrCallsTheModel]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testWhitespacePassageNeverBlocksPreparationOrCallsTheModel]' passed (0.009 seconds).
+Test Suite 'AIWorkIndexTests' passed at 2026-10-28 16:35:03.410.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 0.244 (0.245) seconds
+Test Suite 'AIWorkLocalSummarizerTests' started at 2026-10-28 16:35:03.410.
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testCancellingRunningInferencePropagatesToTheModel]' started.
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testCancellingRunningInferencePropagatesToTheModel]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testEmptyResponseIsAnExcerptNotAFalseSuccessfulSummary]' started.
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testEmptyResponseIsAnExcerptNotAFalseSuccessfulSummary]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testLocalSuccessAndFailurePreserveProvenanceAndOriginal]' started.
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testLocalSuccessAndFailurePreserveProvenanceAndOriginal]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testMultipleWorksShareSequentialInferenceAndCancelledQueueEntryIsSkipped]' started.
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testMultipleWorksShareSequentialInferenceAndCancelledQueueEntryIsSkipped]' passed (0.047 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testTimeoutFallsBackButExplicitCancellationDoesNotPublishSummary]' started.
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testTimeoutFallsBackButExplicitCancellationDoesNotPublishSummary]' passed (0.022 seconds).
+Test Suite 'AIWorkLocalSummarizerTests' passed at 2026-10-28 16:35:03.481.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.070 (0.070) seconds
+Test Suite 'JenaNotePackageTests.xctest' passed at 2026-10-28 16:35:03.481.
+	 Executed 33 tests, with 0 failures (0 unexpected) in 2.155 (2.158) seconds
+Test Suite 'Selected tests' passed at 2026-10-28 16:35:03.481.
+	 Executed 33 tests, with 0 failures (0 unexpected) in 2.155 (2.159) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

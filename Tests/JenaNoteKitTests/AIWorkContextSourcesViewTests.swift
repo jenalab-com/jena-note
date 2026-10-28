@@ -56,7 +56,7 @@ final class AIWorkContextSourcesViewTests: XCTestCase {
         XCTAssertEqual(view.shownRows.map(\.file.relativePath), ["설정/나.md", "설정/다.md", "설정/가.md"])
         XCTAssertEqual(view.fileRowViews.count, 3)
         XCTAssertEqual(view.tableView.numberOfRows, 3)
-        XCTAssertEqual(view.filesHeaderLabel.stringValue, String(format: L10n.tr("ai.work.sources.filesHeader"), 3))
+        XCTAssertEqual(view.filesHeaderLabel.stringValue, String(format: L10n.tr("ai.index.files"), 3))
 
         view.setSort(.name)
         XCTAssertEqual(view.shownRows.map(\.file.relativePath), ["설정/가.md", "설정/나.md", "설정/다.md"])
@@ -74,10 +74,11 @@ final class AIWorkContextSourcesViewTests: XCTestCase {
 
         XCTAssertEqual(try diskConfig(root).excludedSettings, ["설정/나.md"])
         XCTAssertEqual(controller.context.config.excludedSettings, ["설정/나.md"])
-        XCTAssertNotEqual(view.factLabel.stringValue, factBefore)
+        XCTAssertEqual(view.factLabel.stringValue, factBefore, "Automatic mode does not ask the author to balance bytes")
+        XCTAssertTrue(view.budgetBar.isHidden)
         XCTAssertLessThan(view.budgetBar.fractions[0], settingsFractionBefore)
         XCTAssertEqual(view.shownRows.first?.included, false)
-        XCTAssertEqual(view.filesHeaderLabel.stringValue, String(format: L10n.tr("ai.work.sources.filesHeader"), 2))
+        XCTAssertEqual(view.filesHeaderLabel.stringValue, String(format: L10n.tr("ai.index.files"), 2))
 
         view.toggleInclude(row: 0)
         XCTAssertEqual(try diskConfig(root).excludedSettings, [])

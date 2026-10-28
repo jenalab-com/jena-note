@@ -177,7 +177,8 @@ final class AIWorkContextWindowTests: XCTestCase {
         let controller = AIWorkContextWindowController.forFirstSetup(
             fileURL: root.appendingPathComponent("집필/03화.md"), store: AIEpisodeSummaryStore(rootURL: root))
         XCTAssertTrue(controller.isProvisional)
-        let episodes = try XCTUnwrap(controller.episodesView as? AIWorkContextEpisodesView)
+        let episodes = AIWorkContextEpisodesView(controller: controller)
+        controller.episodesView = episodes
         XCTAssertEqual(episodes.shownRows.count, 2)
         XCTAssertFalse(episodes.refreshButton.isEnabled)
         XCTAssertEqual(episodes.remakeButtons.map(\.isEnabled), [false, false])

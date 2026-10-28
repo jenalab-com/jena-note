@@ -2,6 +2,7 @@ import AppKit
 
 enum AIWorkContextStatus: Equatable {
     case unavailable(reason: UnavailableReason)
+    case indexed(text: String, running: Bool, failed: Bool)
     case disabled
     case corrupt
     case active(settingsCount: Int, summariesReady: Int, summariesTotal: Int,
@@ -46,7 +47,7 @@ final class AIWorkContextBar: NSView {
         super.init(frame: frameRect)
         wantsLayer = true
         layer?.cornerRadius = 8
-        layer?.borderWidth = 1
+        layer?.borderWidth = 0
 
         dot.wantsLayer = true
         dot.layer?.cornerRadius = 4
@@ -61,6 +62,7 @@ final class AIWorkContextBar: NSView {
         detailLabel.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(10), for: .horizontal)
 
         button.bezelStyle = .rounded
+        button.isBordered = false
         button.controlSize = .small
         button.font = .systemFont(ofSize: NSFont.systemFontSize(for: .small))
         button.target = self
@@ -116,7 +118,7 @@ final class AIWorkContextBar: NSView {
         toolTip = appearance.tooltip
         effectiveAppearance.performAsCurrentDrawingAppearance {
             dot.layer?.backgroundColor = appearance.dotColor.cgColor
-            layer?.backgroundColor = (appearance.background ?? NSColor.controlBackgroundColor).cgColor
+            layer?.backgroundColor = (appearance.background ?? NSColor.clear).cgColor
             layer?.borderColor = NSColor.separatorColor.cgColor
         }
         setAccessibilityLabel(displayedText)
@@ -141,6 +143,10 @@ final class AIWorkContextBar: NSView {
             return AIWorkContextBarAppearance(dotColor: .systemGray, text: L10n.tr("ai.work.row.off"), detail: nil,
                                               buttonTitle: settingsButton, buttonEnabled: false,
                                               background: nil, tooltip: L10n.tr("ai.work.row.saveFirst"))
+        case let .indexed(text, running, failed):
+            return AIWorkContextBarAppearance(dotColor: failed ? .systemRed : running ? .systemBlue : .systemGreen,
+                                              text: text, detail: nil, buttonTitle: settingsButton,
+                                              buttonEnabled: true, background: nil, tooltip: text)
         case .disabled:
             return AIWorkContextBarAppearance(dotColor: .systemGray, text: L10n.tr("ai.work.row.disabled"), detail: nil,
                                               buttonTitle: L10n.tr("ai.work.row.enableButton"), buttonEnabled: true,

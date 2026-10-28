@@ -1,0 +1,52 @@
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/7] Compiling JenaNoteKit AIChatOptionsView.swift
+[4/7] Emitting module JenaNoteKit
+[4/9] Write Objects.LinkFileList
+[6/9] Linking JenaNote
+[7/9] Applying JenaNote
+[8/9] Linking JenaNotePackageTests
+Build complete! (1.32s)
+Test Suite 'Selected tests' started at 2026-10-28 16:15:23.955.
+Test Suite 'JenaNotePackageTests.xctest' started at 2026-10-28 16:15:23.956.
+Test Suite 'AIChatComposerTests' started at 2026-10-28 16:15:23.956.
+Test Case '-[JenaNoteKitTests.AIChatComposerTests testComposerContainsAllControlsAndFitsNarrowAndWidePanels]' started.
+Test Case '-[JenaNoteKitTests.AIChatComposerTests testComposerContainsAllControlsAndFitsNarrowAndWidePanels]' passed (0.178 seconds).
+Test Case '-[JenaNoteKitTests.AIChatComposerTests testKoreanCompositionConfirmationNeverSubmits]' started.
+Test Case '-[JenaNoteKitTests.AIChatComposerTests testKoreanCompositionConfirmationNeverSubmits]' passed (0.013 seconds).
+Test Case '-[JenaNoteKitTests.AIChatComposerTests testReturnSubmitsOnceAndShiftReturnInsertsNewline]' started.
+Test Case '-[JenaNoteKitTests.AIChatComposerTests testReturnSubmitsOnceAndShiftReturnInsertsNewline]' passed (0.001 seconds).
+Test Suite 'AIChatComposerTests' passed at 2026-10-28 16:15:24.148.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.192 (0.192) seconds
+Test Suite 'AIMetadataTests' started at 2026-10-28 16:15:24.148.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testClaudeControlExchangeKeepsModelListWhenUsageIsUnsupported]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testClaudeControlExchangeKeepsModelListWhenUsageIsUnsupported]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIMetadataTests testClaudeUsesActualPeriodsAndDoesNotInventDisabledMonthlyUsage]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testClaudeUsesActualPeriodsAndDoesNotInventDisabledMonthlyUsage]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.AIMetadataTests testClientSendsSelectedModelAndReportsTokens]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testClientSendsSelectedModelAndReportsTokens]' passed (0.399 seconds).
+Test Case '-[JenaNoteKitTests.AIMetadataTests testCodexPrimaryCanBeWeeklyAndMultipleBucketsAreNotLost]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testCodexPrimaryCanBeWeeklyAndMultipleBucketsAreNotLost]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIMetadataTests testCompactUsageMatchesSingleLineWithModelScope]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testCompactUsageMatchesSingleLineWithModelScope]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIMetadataTests testInteractiveMetadataHandshakeWaitsForResponsesWithoutInference]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testInteractiveMetadataHandshakeWaitsForResponsesWithoutInference]' passed (0.189 seconds).
+Test Case '-[JenaNoteKitTests.AIMetadataTests testLoaderIsInsideScrollableConversationAfterLastMessage]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testLoaderIsInsideScrollableConversationAfterLastMessage]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.AIMetadataTests testModelIsPassedAsSingleArgumentAndProviderPreferenceIsSeparate]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testModelIsPassedAsSingleArgumentAndProviderPreferenceIsSeparate]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.AIMetadataTests testResetCountdownFormatsDaysHoursAndMinutes]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testResetCountdownFormatsDaysHoursAndMinutes]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIMetadataTests testTokenAccountingDoesNotDoubleCountCachedOrReasoningTokens]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testTokenAccountingDoesNotDoubleCountCachedOrReasoningTokens]' passed (0.000 seconds).
+Test Suite 'AIMetadataTests' passed at 2026-10-28 16:15:24.742.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.593 (0.593) seconds
+Test Suite 'JenaNotePackageTests.xctest' passed at 2026-10-28 16:15:24.742.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.785 (0.786) seconds
+Test Suite 'Selected tests' passed at 2026-10-28 16:15:24.742.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.785 (0.786) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

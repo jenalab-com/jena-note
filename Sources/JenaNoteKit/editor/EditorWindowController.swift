@@ -82,6 +82,8 @@ class EditorWindowController: NSWindowController {
             self?.saveReadingProgress(offset: offset)
             self?.updateBookmarkButtonState()
         }
+        NotificationCenter.default.addObserver(self, selector: #selector(workIndexChanged),
+                                                name: AIWorkIndexStore.changed, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(aiWindowWillClose),
                                                 name: NSWindow.willCloseNotification, object: window)
 
@@ -188,7 +190,18 @@ class EditorWindowController: NSWindowController {
             }
             updateSidebarSelection()
             aiChatVC?.switchDocument()
+            AIWorkIndexStore.prepareDocument((newValue as? MarkdownDocument)?.fileURL)
+            workIndexChanged()
         }
+    }
+
+    @objc private func workIndexChanged() {
+        guard let url = (document as? MarkdownDocument)?.fileURL,
+              let context = AIWorkContext.locate(from: url), context.config.enabled else {
+            statusBar.setWorkStatus("")
+            return
+        }
+        statusBar.setWorkStatus(AIWorkIndexStore.shared(for: context.rootURL).statusText)
     }
 
     // MARK: - Window Title

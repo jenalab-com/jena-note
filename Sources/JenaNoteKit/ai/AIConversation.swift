@@ -142,7 +142,7 @@ enum AIPrompt {
         ]
         var hasWork = false
         if let work {
-            context["work"] = try fit(work, base: context).json()
+            context["work"] = try fit(work, base: context, maximumBytes: work.retrievalNote == nil ? maximumBytes : maximumBytes - 4096).json()
             hasWork = true
         }
         let json = try JSONSerialization.data(withJSONObject: context, options: [.sortedKeys])

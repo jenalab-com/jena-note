@@ -1,0 +1,27 @@
+Protective Master Boot Record(MBR : 0) 체크섬 처리 중…
+Protective Master Boot Record(MBR : : 확인됨 CRC32 $BC114419
+GPT Header(Primary GPT Header : 1) 체크섬 처리 중…
+  GPT Header(Primary GPT Header : 1): 확인됨 CRC32 $D9DE5B72
+GPT Partition Data(Primary GPT Table : 2) 체크섬 처리 중…
+GPT Partition Data(Primary GPT Table: 확인됨 CRC32 $E7F27FF0
+(Apple_Free : 3) 체크섬 처리 중…
+                    (Apple_Free : 3): 확인됨 CRC32 $00000000
+disk image(Apple_APFS : 4) 체크섬 처리 중…
+          disk image(Apple_APFS : 4): 확인됨 CRC32 $89D29C46
+(Apple_Free : 5) 체크섬 처리 중…
+                    (Apple_Free : 5): 확인됨 CRC32 $00000000
+GPT Partition Data(Backup GPT Table : 6) 체크섬 처리 중…
+GPT Partition Data(Backup GPT Table : 확인됨 CRC32 $E7F27FF0
+GPT Header(Backup GPT Header : 7) 체크섬 처리 중…
+   GPT Header(Backup GPT Header : 7): 확인됨 CRC32 $FEB000A9
+확인됨 CRC32 $242B5933
+hdiutil: verify: checksum of "/Volumes/Backup/Project/jena/source/jena-note/.build/JenaNote.dmg" is VALID
+
+/Volumes/JenaNote/JenaNote.app: valid on disk
+/Volumes/JenaNote/JenaNote.app: satisfies its Designated Requirement
+
+Mounted app version: 1.7.0
+Mounted executable SHA-256 matches local signed app.
+Applications shortcut verified.
+
+DMG SHA-256: 26ddce68d72e37c80a0fcdc556bf14cb5528434e80043b11bcba2f043fdcc466

@@ -9,6 +9,19 @@ struct AIQuota {
     let title: String
     let usedPercent: Double
     let resetsAt: Date?
+    var modelName: String? = nil
+
+    func resetCountdown(now: Date = Date()) -> String {
+        guard let resetsAt else { return "—" }
+        let minutes = Int(ceil(max(0, resetsAt.timeIntervalSince(now)) / 60))
+        if minutes >= 1440 { return "\(minutes / 1440)d \(minutes % 1440 / 60)h" }
+        return "\(minutes / 60)h \(minutes % 60)m"
+    }
+
+    func compactSummary(now: Date = Date()) -> String {
+        let percent = String(format: "%.0f", usedPercent) + "%"
+        return percent + " " + (modelName ?? resetCountdown(now: now))
+    }
 
     var summary: String { "\(title) \(String(format: "%.0f", usedPercent))%" }
 }
@@ -31,16 +44,18 @@ struct AIMetadata {
                 guard let percent = (row["percent"] as? NSNumber)?.doubleValue, percent.isFinite else { continue }
                 let group = row["group"] as? String ?? ""
                 var title = group == "session" ? L10n.tr("ai.quotaSession") : group == "weekly" ? L10n.tr("ai.quotaWeekly") : group == "monthly" ? L10n.tr("ai.quotaMonth") : group
+                var modelName: String?
                 if let scope = row["scope"] as? [String: Any], let model = scope["model"] as? [String: Any],
-                   let name = model["display_name"] as? String { title += " (\(name))" }
-                result.quotas.append(AIQuota(title: title, usedPercent: percent, resetsAt: date(row["resets_at"])))
+                   let name = model["display_name"] as? String { title += " (\(name))"; modelName = name }
+                result.quotas.append(AIQuota(title: title, usedPercent: percent, resetsAt: date(row["resets_at"]), modelName: modelName))
             }
         } else {
             for (key, title) in [("five_hour", "ai.quotaSession"), ("seven_day", "ai.quotaWeekly"),
                                   ("seven_day_opus", "ai.quotaWeekly"), ("seven_day_sonnet", "ai.quotaWeekly")] {
                 guard let row = limits[key] as? [String: Any], let percent = (row["utilization"] as? NSNumber)?.doubleValue, percent.isFinite else { continue }
                 let suffix = key == "seven_day_opus" ? " (Opus)" : key == "seven_day_sonnet" ? " (Sonnet)" : ""
-                result.quotas.append(AIQuota(title: L10n.tr(title) + suffix, usedPercent: percent, resetsAt: date(row["resets_at"])))
+                result.quotas.append(AIQuota(title: L10n.tr(title) + suffix, usedPercent: percent, resetsAt: date(row["resets_at"]),
+                                             modelName: key == "seven_day_opus" ? "Opus" : key == "seven_day_sonnet" ? "Sonnet" : nil))
             }
         }
         if let extra = limits["extra_usage"] as? [String: Any], extra["is_enabled"] as? Bool == true,
