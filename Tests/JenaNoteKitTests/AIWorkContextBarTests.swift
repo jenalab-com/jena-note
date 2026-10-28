@@ -136,7 +136,7 @@ final class AIWorkContextBarTests: XCTestCase {
         let enabledConfig = try AIWorkContext.load(rootURL: off.root).config
         XCTAssertTrue(enabledConfig.enabled)
         XCTAssertFalse(enabledConfig.disabledByUser)
-        guard case .active = disabled.workBar.status else {
+        guard case .indexed = disabled.workBar.status else {
             return XCTFail("row should be active after 켜기, got \(disabled.workBar.status)")
         }
 
@@ -158,7 +158,7 @@ final class AIWorkContextBarTests: XCTestCase {
         let on = try makeWork("사용중")
         try save(AIWorkContextConfig(title: "사용중", settingsSources: ["설정"], writingFolder: "집필"), at: on.root)
         let active = makeChat(showing: document(at: on.file), presented: record)
-        guard case .active = active.workBar.status else {
+        guard case .indexed = active.workBar.status else {
             return XCTFail("expected active, got \(active.workBar.status)")
         }
         active.openWorkWindow()
@@ -226,7 +226,7 @@ final class AIWorkContextBarTests: XCTestCase {
         // The editor moves on to work B; A's window stays around.
         shown = document(at: b.file)
         chat.switchDocument()
-        guard case .active = chat.workBar.status else {
+        guard case .indexed = chat.workBar.status else {
             return XCTFail("panel should show work B, got \(chat.workBar.status)")
         }
 
@@ -247,31 +247,28 @@ final class AIWorkContextBarTests: XCTestCase {
 
     /// I5: during this panel's own send-flow preparation the episodes tab shows its progress, not
     /// "another request is generating".
-    func testEpisodesTabShowsOwnSendProgressNotOther() throws {
+    func testAutomaticPreparationTabIsDefaultAndCancellingChatLeavesSharedIndexAlive() throws {
         let work = try makeGeneratingWork("보내기진행")
         try useFakeClaude(near: work.root)
+        let store = AIWorkIndexStore.shared(for: work.root)
+        store.availability = { .available }
+        store.generate = { _, _ in return {} }
+        defer { store.cancel() }
         let doc = document(at: work.file)
-        doc.content = NSMutableAttributedString(attributedString: MarkdownSerializer.parse("셋째 화"))
         var window: AIWorkContextWindowController?
         let chat = makeChat(showing: doc, presented: { window = $0 })
         chat.openWorkWindow()
-        let controller = try XCTUnwrap(window)
-        let episodes = try XCTUnwrap(controller.episodesView as? AIWorkContextEpisodesView)
-
+        XCTAssertTrue(window?.episodesView is AIWorkIndexView)
         try editableInput(of: chat).string = "하연의 반응 봐줘"
         chat.send()
-        XCTAssertTrue(work.store.isGenerating)
-        XCTAssertEqual(controller.sendProgress?.done, 0)
-        XCTAssertEqual(controller.sendProgress?.total, 2)
-        XCTAssertFalse(episodes.sendProgressLabel.isHidden)
-        XCTAssertEqual(episodes.sendProgressLabel.stringValue, "지난 화 요약 만드는 중 0/2")
-        XCTAssertTrue(episodes.otherGeneratingLabel.isHidden)
-        XCTAssertFalse(episodes.refreshButton.isEnabled)
-
-        chat.cancel()
-        XCTAssertNil(controller.sendProgress)
-        XCTAssertTrue(episodes.sendProgressLabel.isHidden)
-        XCTAssertTrue(episodes.otherGeneratingLabel.isHidden)
+        XCTAssertTrue(store.isRunning)
+        XCTAssertTrue(chat.isAwaitingResponse)
+        XCTAssertEqual(chat.sendButton.toolTip, L10n.tr("ai.stop"))
+        chat.sendButton.performClick(nil)
+        XCTAssertEqual(chat.sendButton.toolTip, L10n.tr("ai.send"))
+        XCTAssertTrue(store.isRunning, "Chat cancellation must not stop a shared folder index")
+        XCTAssertFalse(chat.isAwaitingResponse)
+        XCTAssertEqual(try editableInput(of: chat).string, "하연의 반응 봐줘")
     }
 
     /// I4: settings over the limit vs. over the limit only until §6.4 drops old summaries.
@@ -312,42 +309,22 @@ final class AIWorkContextBarTests: XCTestCase {
                        "설정 300KB + 지난 화 요약 250KB + 앞 화 0KB = 550KB. 한도는 500KB예요. 오래된 요약 2개가 이번 요청에서 빠져요.")
     }
 
-    func testGeneratingRowActionCancelsInsteadOfOpening() throws {
+    func testIndexingRowOpensSettingsWithoutCancellingSharedPreparation() throws {
         let work = try makeGeneratingWork("생성중")
-        let previousProvider = AISettings.provider
-        let previousPath = AISettings.customPath(for: .claude)
-        let fixture = work.root.deletingLastPathComponent().appendingPathComponent("claude")
-        try "#!/bin/sh\nexit 0\n".write(to: fixture, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: fixture.path)
-        AISettings.provider = .claude
-        AISettings.setPath(fixture.path, for: .claude)
-        defer {
-            AISettings.setPath(previousPath, for: .claude)
-            AISettings.provider = previousProvider
-        }
-        let doc = document(at: work.file)
-        doc.content = NSMutableAttributedString(attributedString: MarkdownSerializer.parse("셋째 화"))
+        try useFakeClaude(near: work.root)
+        let store = AIWorkIndexStore.shared(for: work.root)
+        store.availability = { .available }
+        store.generate = { _, _ in return {} }
+        defer { store.cancel() }
         var presented = 0
-        let chat = makeChat(showing: doc, presented: { _ in presented += 1 })
-        func descendants(_ view: NSView) -> [NSView] { view.subviews.flatMap { [$0] + descendants($0) } }
-        let input = try XCTUnwrap(descendants(chat.view).compactMap { $0 as? NSTextView }.first { $0.isEditable })
-        input.string = "하연의 반응 봐줘"
+        let chat = makeChat(showing: document(at: work.file), presented: { _ in presented += 1 })
+        try editableInput(of: chat).string = "봐줘"
         chat.send()
-        guard case .generating = chat.workBar.status else {
-            return XCTFail("send should be generating summaries, got \(chat.workBar.status)")
-        }
-        XCTAssertTrue(chat.isAwaitingResponse)
-        // Minor 4: a refresh (KVO / viewWillAppear / onChange) keeps the send flow's row.
-        chat.refreshWorkContext()
-        guard case .generating = chat.workBar.status else {
-            return XCTFail("refresh must not wipe the generating row, got \(chat.workBar.status)")
-        }
-
-        chat.workBar.onPrimaryAction?()
-        XCTAssertEqual(presented, 0, "취소 must never open the window")
-        XCTAssertFalse(chat.isAwaitingResponse, "the request (and its summary run) is cancelled")
-        XCTAssertEqual(input.string, "하연의 반응 봐줘", "the unsent question goes back to the input")
-        if case .generating = chat.workBar.status { XCTFail("row should leave the generating state") }
+        guard case .indexed(_, true, _) = chat.workBar.status else { return XCTFail("Expected indexing state") }
+        chat.openWorkWindow()
+        XCTAssertEqual(presented, 1)
+        XCTAssertTrue(store.isRunning)
+        chat.cancel()
     }
 
     func testCorruptBackupFailureDoesNotOpenFirstSetup() throws {
@@ -413,7 +390,7 @@ final class AIWorkContextBarTests: XCTestCase {
         let chat = makeChat(showing: untitled, presented: { _ in })
         XCTAssertEqual(chat.workBar.status, .unavailable(reason: .unsavedDocument))
         untitled.fileURL = work.file   // what Save As does
-        guard case .active = chat.workBar.status else {
+        guard case .indexed = chat.workBar.status else {
             return XCTFail("row should follow the new file URL, got \(chat.workBar.status)")
         }
     }
@@ -500,14 +477,13 @@ final class AIWorkContextBarTests: XCTestCase {
         XCTAssertEqual(bar.displayedText, "작품 문맥 꺼짐")
     }
 
-    func testBarSitsDirectlyBelowDocumentLabelInChatPanel() throws {
+    func testWorkContextSitsInsideComposerAboveInput() throws {
         let chat = AIChatViewController()
         chat.view.frame = NSRect(x: 0, y: 0, width: 300, height: 700)
-        let stack = try XCTUnwrap(chat.view.subviews.compactMap { $0 as? NSStackView }.first)
-        let views = stack.arrangedSubviews
-        let label = try XCTUnwrap(views.firstIndex { $0 === chat.documentLabel })
-        let bar = try XCTUnwrap(views.firstIndex { $0 === chat.workBar })
-        XCTAssertEqual(bar, label + 1)
+        let stack = try XCTUnwrap(chat.composer.subviews.compactMap { $0 as? NSStackView }.first)
+        XCTAssertTrue(stack.arrangedSubviews.first === chat.workBar)
+        XCTAssertTrue(chat.input.isDescendant(of: chat.composer))
+        XCTAssertFalse(chat.documentLabel.isDescendant(of: chat.composer))
         chat.view.layoutSubtreeIfNeeded()
         XCTAssertEqual(chat.workBar.frame.width, stack.frame.width, accuracy: 1)
     }

@@ -59,6 +59,12 @@ class MarkdownDocument: NSDocument {
         return data
     }
 
+    override func write(to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType,
+                        originalContentsURL absoluteOriginalContentsURL: URL?) throws {
+        try super.write(to: url, ofType: typeName, for: saveOperation, originalContentsURL: absoluteOriginalContentsURL)
+        DispatchQueue.main.async { AIWorkIndexStore.prepareDocument(url) }
+    }
+
     private func isPlainText(_ typeName: String) -> Bool {
         let ext = fileURL?.pathExtension.lowercased() ?? ""
         return ext == "txt" || typeName == "public.plain-text"

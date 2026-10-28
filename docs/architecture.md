@@ -213,20 +213,15 @@ func applyList(ordered: Bool, to textView: NSTextView) { ... }
 
 **주의:** 조판된 스토리지를 document 로 그대로 넘기지 말 것 — 반드시 `unstyled()` 를 거친다.
 
-### 작품 문맥 (`ai/`, ADR-0014)
-연재 작품 안에서 AI 요청에 설정 원문·지난 화 요약·앞 화 전문을 앱이 골라 함께 보낸다. 모든 파일은 `Sources/JenaNoteKit/ai/`에 있다.
-- `AIWorkContext`: `<작품 루트>/.jenanote/context.json` 모델(Codable), 작품 루트 탐색(위로 최대 6단계), 작품 폴더 탭용 제안 계산, 로드/저장
-- `AIWorkContextResolver`: 설정 파일 목록·화 목록(재귀, 상대 경로 자연 정렬)·지난 화·앞 화 계산, 원문 읽기, 용량 계산
-- `AIWorkPayload`: 프롬프트 JSON의 `work` 객체 모델
-- `AIEpisodeSummaryStore`: 작품 루트별 레지스트리. 요약 `.txt`·`index.json` 읽기/쓰기, SHA-256 해시, 상태 판정(없음/준비됨/오래됨/직접 수정됨), 순차 생성 큐(루트별 하나, 다른 요청 뒤에 줄 선다)
-- `AIWorkContextAssembler`: 해석 결과와 요약을 묶어 `AIWorkPayload`를 만든다(구현 중 분리된 조립 단계)
-- `AIWorkContextBar`: 눌리는 줄(상태 점·문구·버튼). 줄 전체와 버튼이 같은 동작으로 작품 문맥 창을 연다
-- `AIWorkContextModel`: 순수 로직(UI 없음) — 행 모델·토글·용량 문장·출처 관리·`FoldersDraft`
-- `AIWorkContextWindowController`: 작품 루트별 1개 창, 사이드바 3탭, `mutate` 단일 저장 경로, 루트 변경 시 기존 설정 보호
-- `AIWorkContextSourcesView` + `AIWorkContextSourceRowViews`: ① 참고 자료 탭(출처·용량 막대·파일 목록)
-- `AIWorkContextEpisodesView`: ② 지난 화 탭
-- `AIWorkContextFoldersView`: ③ 작품 폴더 탭
-- 기존 변경: `AIPrompt.make(... work:)`가 예산 축소를 수행하고, `AIChatViewController.send()`는 요약 준비 후 스냅샷을 뜬다. `AIProcess`/`AIClient`는 요청별 제한 시간(기본 120초, 요약 240초)을 받는다.
+### 작품 문맥 (`ai/`, ADR-0015)
+- `AIWorkContext` / `AIWorkContextResolver`: 작품 등록, 경로 검증, 파일 목록·현재 화 이전 범위 계산. 기존 설정·제외 목록을 유지한다.
+- `AIWorkIndex`: 안전한 원문 스캔, UTF-8 크기별 조각 분할, 내용 해시·줄 위치, 요청별 접근 범위, 원문·요약 문자열 검색.
+- `AIWorkIndexStore`: 작품별 공유 생성 큐. 백그라운드 스캔, 변경 조각만 AI 요약, 조각별 원자 저장, 재개·재시도·사용량·진행 알림. `.jenanote/work-index.json`에 원문 조각과 검색용 요약을 함께 보관한다.
+- `AIWorkRetrieval`: AI의 JSON 검색/읽기 요청을 앱에서 실행. 최대 4회/240초/원문 160KB. 현재 화 이후의 파일은 목차·검색·읽기 모두에서 제외한다.
+- `AIWorkPayload` / `AIPrompt`: 선택된 설정 원문·이전 화 발췌와 확인 범위를 보내고 최종 자료 크기를 자동 조절한다. 본문은 임의로 자르지 않는다.
+- `AIWorkContextBar` / `StatusBarView`: 준비·완료·실패 한 줄. `AIWorkContextWindowController`의 참고 자료 탭은 출처 관리, `AIWorkIndexView`는 이전 화의 자동 준비/재시도/사용량, 작품 폴더 탭은 등록 범위를 관리한다.
+- 이전 `AIEpisodeSummaryStore`·수동 요약 포맷은 보존한다. 기존 요약 파일을 자동 인덱스에 덮어쓰거나 혼합하지 않는다. 호환 로직의 회귀 테스트를 유지한다.
+- `MarkdownDocument` 저장과 `EditorWindowController` 문서 열기는 준비를 예약한다. `AIChatViewController`는 요청 직전 준비 확인 → 현재 본문 스냅샷 → 원문 탐색 → 기존 답변/수정 호출 순서다. `AIProcess`/`AIClient` 도구 차단 정책은 그대로다.
 
 ---
 
@@ -292,15 +287,17 @@ Cmd+S
   → SidebarDataSource.reloadTree(animating:)
 ```
 
-### AI 요청에 작품 문맥 포함 (ADR-0014)
+### AI 요청에 작품 문맥 포함 (ADR-0015)
 ```
+글 열기 / 저장 / 자료 등록
+  → AIWorkIndexStore.schedule (0.8초 변경 모으기)
+  → 백그라운드 스캔 → 변경 조각 AI 요약 → 영속 저장
 send()
-  → AIWorkContext.locateResult(from: fileURL)     (.jenanote/context.json 탐색)
-  → AIWorkContextResolver.resolve(...)            (설정 / 지난 화 / 앞 화)
-  → AIEpisodeSummaryStore.prepare(지난 화)         (없거나 오래된 것만 순차 CLI 호출, 실패 시 중단)
-  → 스냅샷(요약 준비가 끝난 시점의 본문·선택 영역)
-  → AIPrompt.make(..., work:)                     (예산 초과 시 오래된 요약 → 앞 화 순으로 제거)
-  → AIClient.send(prompt)                         (기존과 동일: 임시 디렉터리, 도구 전부 차단)
+  → AIWorkIndexStore.ensure (현재 폴더 변경 재확인 / 진행 중 작업 공유)
+  → 본문·선택 스냅샷 + 현재 화 이전 범위
+  → AIWorkRetrieval (AI가 검색어/읽기 ID 선택 → 앱이 검색/발췌, 최대 4회)
+  → AIPrompt.make(... work:) (자료 자동 축소, 확인 범위 명시)
+  → AIClient.send → 기존 가이드 / 수정 충돌 검사 / Undo
 ```
 
 ---
@@ -528,6 +525,8 @@ clean:
 
 ### ADR-0014: 작품 문맥 — 앱이 선별해 보낸다, AI는 읽지 않는다 (2026-10-27)
 
+> 자동 준비·탐색과 화면 동작은 ADR-0015로 대체됨. 아래는 이전 결정의 이력이다.
+
 - **상태:** 구현
 - **맥락:** AI 가이드·수정은 열려 있는 파일 하나만 본다. 연재물에서는 "죽은 인물이 살아 있다", "존댓말을 안 쓰는 인물이 존댓말을 한다" 같은 설정·앞뒤 문맥 불일치가 가장 자주, 가장 아프게 생긴다. ADR-0011에 따라 CLI는 요청별 임시 디렉터리에서 모든 도구를 차단한 채 실행되므로 AI가 노트 폴더를 스스로 읽을 경로는 없고, 이는 의도된 보안 경계다.
 - **가정:** 작가가 작품 루트(설정 폴더 + 집필 폴더)를 가진 연재물을 쓴다. 한 화는 보통 수천 자이고 요약은 1분 안팎에 끝난다. 프롬프트 한도 `AIPrompt.maximumBytes`(500,000바이트)는 유지한다.
@@ -554,3 +553,23 @@ clean:
   - 창은 `AIEpisodeSummaryStore.addGenerationObserver`로 요약 생성 상태를 따라간다. **요약 생성의 소유자는 여전히 채팅 패널**이고 창은 관찰·요청만 한다.
   - 생성 중 줄의 "취소"는 **이번 요청과 요약 생성을 함께 취소**한다.
   - 위 본문의 "시트가 제안", "팝오버의 …" 표현은 각각 작품 폴더 탭, 작품 문맥 창으로 읽는다.
+
+
+### ADR-0015: 작품별 영속 인덱스와 앱이 실행하는 AI 자료 탐색 (2026-10-28)
+
+- 상태: 구현. ADR-0014의 수동 용량 관리·요청 직전 요약 정책을 대체한다.
+- 맥락: 수동 파일 제외/요약으로 500KB를 맞추는 부담을 작가가 실사용에서 확인했다.
+- 결정: 작품별 조각 인덱스·AI 검색용 요약을 영속 저장하고 열기/저장 시 증분 갱신한다. AI는 구조화된 검색/읽기 요청을 반환하며 앱만 실제 파일을 읽는다. CLI 도구 차단은 유지한다.
+- 가정: 한 작품 수십~수백 화, 로컬 디스크, 기존 CLI 텍스트 응답 계약.
+- 트레이드오프: 최초 AI 호출 비용/지연, 요약 손실과 검색 누락 가능성. 원문 근거와 확인 범위를 표시한다. 횟수·문맥·시간 제한은 앱 코드 책임.
+- 대안: CLI 셸 개방(제공사별 차이), 벡터 DB(초기 복잡도), 계속 수동 관리(사용성 문제 유지).
+- 상세: `superpowers/specs/2026-10-28-work-index-design.md`, `superpowers/plans/2026-10-28-work-index.md`.
+
+### ADR-0016: 초기 작품 요약의 온디바이스 분리 (2026-10-28)
+
+- 상태: 채택, 한국어 실기 품질/시간 검증 별도. ADR-0015의 초기 CLI 요약만 대체.
+- 맥락/가정: 로컬 macOS 앱, 작품 수십~수백 화, 재생성 가능 캐시. 초기 요약에 집필용 CLI 사용량을 쓰지 않는다.
+- 결정: Foundation Models 전용 요약 경계, v2/2,400바이트 조각, 새 세션과 직렬 추론, 출처/발췌 사유 영속화. 비지원/실패는 원문 발췌, 외부 자동 우회 없음. 질문별 원문 탐색·집필은 기존 CLI.
+- 상태 소유: 작품별 저장소가 진행률/캐시를 소유, 요약 실행기는 앱 전체 추론 순서를 소유. 원문/설정은 권위 데이터. 캐시는 내용·역할·버전으로 무효화하고 가용성 변화/수동 재시도는 발췌만 갱신.
+- 대안/이유: CLI 자동 우회는 사용량 제거 목적 위반, 비지원 환경 차단은 집필 방해. 발췌는 검색 품질 저하를 수용하는 대신 원문 전량 보존.
+- 상세: `superpowers/specs/2026-10-28-foundation-work-index-design.md`.

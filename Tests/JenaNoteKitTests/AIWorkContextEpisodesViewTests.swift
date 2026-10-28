@@ -69,10 +69,9 @@ final class AIWorkContextEpisodesViewTests: XCTestCase {
     private func open() -> (AIWorkContextWindowController, AIWorkContextEpisodesView) {
         let controller = AIWorkContextWindowController.shared(for: root, store: store)
         controller.currentFile = root.appendingPathComponent("집필/03화.md")
-        guard let view = controller.episodesView as? AIWorkContextEpisodesView else {
-            XCTFail("episodes tab is not AIWorkContextEpisodesView")
-            return (controller, AIWorkContextEpisodesView(controller: controller))
-        }
+        // Legacy saved-summary editor remains independently testable; automatic indexing is the default tab.
+        let view = AIWorkContextEpisodesView(controller: controller)
+        controller.episodesView = view
         return (controller, view)
     }
 

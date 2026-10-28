@@ -3,6 +3,31 @@ import XCTest
 @testable import JenaNoteKit
 
 final class AIMetadataTests: XCTestCase {
+    func testCompactUsageMatchesSingleLineWithModelScope() {
+        let now = Date(timeIntervalSince1970: 1000)
+        let quotas = [
+            AIQuota(title: "Session", usedPercent: 18, resetsAt: now.addingTimeInterval(7080)),
+            AIQuota(title: "Weekly", usedPercent: 65, resetsAt: now.addingTimeInterval(122400)),
+            AIQuota(title: "Weekly (Fable)", usedPercent: 100, resetsAt: now.addingTimeInterval(122400), modelName: "Fable")
+        ]
+        XCTAssertEqual(quotas.map { $0.compactSummary(now: now) }.joined(separator: " · "),
+                       "18% 1h 58m · 65% 1d 10h · 100% Fable")
+    }
+
+    func testResetCountdownFormatsDaysHoursAndMinutes() {
+        let now = Date(timeIntervalSince1970: 1000)
+        func countdown(_ seconds: Double?) -> String {
+            AIQuota(title: "Session", usedPercent: 35,
+                    resetsAt: seconds.map { now.addingTimeInterval($0) }).resetCountdown(now: now)
+        }
+        XCTAssertEqual(countdown(183600), "2d 3h")
+        XCTAssertEqual(countdown(19200), "5h 20m")
+        XCTAssertEqual(countdown(86400), "1d 0h")
+        XCTAssertEqual(countdown(1), "0h 1m")
+        XCTAssertEqual(countdown(-60), "0h 0m")
+        XCTAssertEqual(countdown(nil), "—")
+    }
+
     func testClaudeUsesActualPeriodsAndDoesNotInventDisabledMonthlyUsage() {
         let value = AIMetadata.claude(models: ["models": [["value": "opus", "displayName": "Opus"]]], usage: [
             "rate_limits": ["five_hour": ["utilization": 0, "resets_at": "2026-10-25T12:00:00Z"],

@@ -10,6 +10,7 @@ final class StatusBarView: NSView {
 
     static let barHeight: CGFloat = 22
 
+    private let workLabel = NSTextField(labelWithString: "")
     private let charLabel = NSTextField(labelWithString: "")
     private let separator = NSBox()
 
@@ -26,6 +27,11 @@ final class StatusBarView: NSView {
         charLabel.stringValue = text
     }
 
+    func setWorkStatus(_ text: String) {
+        workLabel.stringValue = text
+        workLabel.toolTip = text
+    }
+
     private func setupViews() {
         separator.boxType = .separator
         separator.translatesAutoresizingMaskIntoConstraints = false
@@ -38,7 +44,16 @@ final class StatusBarView: NSView {
         charLabel.lineBreakMode = .byTruncatingHead
         addSubview(charLabel)
 
+        workLabel.translatesAutoresizingMaskIntoConstraints = false
+        workLabel.font = .systemFont(ofSize: 11)
+        workLabel.textColor = .secondaryLabelColor
+        workLabel.lineBreakMode = .byTruncatingTail
+        workLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        addSubview(workLabel)
         NSLayoutConstraint.activate([
+            workLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            workLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            workLabel.trailingAnchor.constraint(lessThanOrEqualTo: charLabel.leadingAnchor, constant: -12),
             separator.topAnchor.constraint(equalTo: topAnchor),
             separator.leadingAnchor.constraint(equalTo: leadingAnchor),
             separator.trailingAnchor.constraint(equalTo: trailingAnchor),

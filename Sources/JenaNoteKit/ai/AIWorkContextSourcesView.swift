@@ -42,6 +42,14 @@ final class AIWorkContextSourcesView: NSView, AIWorkContextRenderable, NSTableVi
         self.controller = controller
         super.init(frame: .zero)
         build()
+        NotificationCenter.default.addObserver(self, selector: #selector(indexStatusChanged), name: AIWorkIndexStore.changed, object: nil)
+    }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
+
+    @objc private func indexStatusChanged() {
+        guard let controller else { return }
+        factLabel.stringValue = AIWorkIndexStore.shared(for: controller.context.rootURL).statusText
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -165,6 +173,13 @@ final class AIWorkContextSourcesView: NSView, AIWorkContextRenderable, NSTableVi
                 .payload(currentFile: resolved.context.rootURL).payload
         render(resolved, payload: payload, store: controller.store, enabled: controller.context.config.enabled,
                baseBytes: AIPrompt.estimatedBaseBytes(for: controller.currentFile))
+        budgetBar.isHidden = true
+        hint.stringValue = L10n.tr("ai.index.automatic")
+        filesHeaderLabel.stringValue = String(format: L10n.tr("ai.index.files"), resolved.settings.count)
+        factLabel.stringValue = AIWorkIndexStore.shared(for: resolved.context.rootURL).statusText
+        factLabel.textColor = .secondaryLabelColor
+        tableView.tableColumns.first { $0.identifier.rawValue == Column.mode.rawValue }?.isHidden = true
+
     }
 
     /// `baseBytes` feeds the §6.4 trim preview behind the fact line (same estimate as the panel row).

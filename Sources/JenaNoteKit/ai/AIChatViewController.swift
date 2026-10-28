@@ -13,7 +13,8 @@ final class AIChatViewController: NSViewController {
     let responseProgress = NSProgressIndicator()
     private var loadingRow: NSStackView!
     let options = AIChatOptionsView()
-    private let input = NSTextView()
+    let input = AIChatInputView()
+    let composer = AIChatSurface(isComposer: true)
     private let inputUndoManager = UndoManager()
     // Internal (not private) so layout tests can locate them in the panel stack.
     let documentLabel = NSTextField(labelWithString: "")
@@ -54,26 +55,27 @@ final class AIChatViewController: NSViewController {
     private var abortPreparation: ((_ tokensUsed: Int) -> Void)?
     private var waitingLabel: NSTextField!
     private let selectionLabel = NSTextField(wrappingLabelWithString: "")
-    private let providerLabel = NSTextField(labelWithString: "")
-    private var modeControl: NSSegmentedControl!
-    private var sendButton: NSButton!
-    private var cancelButton: NSButton!
+    private(set) var modeControl: NSSegmentedControl!
+    private(set) var sendButton: NSButton!
     private var conversation: AIConversation?
+    private var retrieval: AIWorkRetrieval?
+    private var preparingIndex = false
     private var request: AIClient?
     private var generation = UUID()
     private var isSuspended = false
 
     override func loadView() {
-        view = NSView()
-        let title = NSTextField(labelWithString: L10n.tr("ai.title"))
-        title.font = .boldSystemFont(ofSize: 14)
-        let settings = NSButton(title: L10n.tr("ai.settings"), target: self, action: #selector(showSettings))
-        let top = NSStackView(views: [title, settings])
+        view = AIChatSurface()
+        documentLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        documentLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let settings = NSButton(image: NSImage(systemSymbolName: "ellipsis", accessibilityDescription: L10n.tr("ai.settings"))!,
+                                target: self, action: #selector(showSettings))
+        settings.isBordered = false
+        settings.toolTip = L10n.tr("ai.settings")
+        let top = NSStackView(views: [documentLabel, settings])
         top.orientation = .horizontal
         top.distribution = .equalSpacing
         documentLabel.lineBreakMode = .byTruncatingMiddle
-        providerLabel.font = .systemFont(ofSize: 11)
-        providerLabel.textColor = .secondaryLabelColor
         selectionLabel.font = .systemFont(ofSize: 11)
         selectionLabel.textColor = .secondaryLabelColor
         let historyScroll = transcript
@@ -94,38 +96,55 @@ final class AIChatViewController: NSViewController {
         responseProgress.heightAnchor.constraint(equalToConstant: 4).isActive = true
         let inputScroll = makeScroll(textView: input, editable: true)
         input.setAccessibilityLabel(L10n.tr("ai.request"))
+        input.toolTip = L10n.tr("ai.composer.keyboard")
+        input.onSubmit = { [weak self] in self?.send() }
+        input.canSubmit = { [weak self] in self?.isAwaitingResponse == false }
         modeControl = NSSegmentedControl(labels: [L10n.tr("ai.guide"), L10n.tr("ai.edit")],
                                          trackingMode: .selectOne, target: self, action: #selector(modeChanged))
         modeControl.selectedSegment = 0
-        let requestLabel = NSTextField(labelWithString: L10n.tr("ai.request"))
-        sendButton = NSButton(title: L10n.tr("ai.send"), target: self, action: #selector(send))
-        cancelButton = NSButton(title: L10n.tr("ai.stop"), target: self, action: #selector(cancel))
-        cancelButton.isEnabled = false
-        let buttons = NSStackView(views: [sendButton, cancelButton])
-        buttons.orientation = .horizontal
+        modeControl.controlSize = .small
+        modeControl.segmentStyle = .rounded
+        modeControl.font = .systemFont(ofSize: 11)
+        modeControl.setContentHuggingPriority(.required, for: .horizontal)
+        sendButton = NSButton(title: "", target: self, action: #selector(performComposerAction))
+        sendButton.isBordered = false
+        sendButton.widthAnchor.constraint(equalToConstant: 26).isActive = true
+        sendButton.heightAnchor.constraint(equalToConstant: 26).isActive = true
+        updateActionButton()
+        options.install(modeControl: modeControl, actionButton: sendButton)
         workBar.onPrimaryAction = { [weak self] in self?.openWorkWindow() }
-        let stack = NSStackView(views: [top, documentLabel, workBar, providerLabel, historyScroll, selectionLabel,
-                                       modeControl, requestLabel, inputScroll, options, buttons])
+        let composerContent = NSStackView(views: [workBar, selectionLabel, inputScroll, options])
+        composerContent.orientation = .vertical
+        composerContent.alignment = .leading
+        composerContent.spacing = 8
+        composerContent.translatesAutoresizingMaskIntoConstraints = false
+        composer.addSubview(composerContent)
+        for item in composerContent.arrangedSubviews {
+            item.widthAnchor.constraint(equalTo: composerContent.widthAnchor).isActive = true
+        }
+        NSLayoutConstraint.activate([
+            composerContent.leadingAnchor.constraint(equalTo: composer.leadingAnchor, constant: 10),
+            composerContent.trailingAnchor.constraint(equalTo: composer.trailingAnchor, constant: -10),
+            composerContent.topAnchor.constraint(equalTo: composer.topAnchor, constant: 10),
+            composerContent.bottomAnchor.constraint(equalTo: composer.bottomAnchor, constant: -10),
+            inputScroll.heightAnchor.constraint(equalToConstant: 68)
+        ])
+        let stack = NSStackView(views: [top, historyScroll, composer, options.usageStatusBar])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(stack)
+        for item in stack.arrangedSubviews { item.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true }
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 14),
-            stack.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -14),
-            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 14),
-            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -14),
-            top.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            documentLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            workBar.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            historyScroll.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            historyScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 60),
-            options.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            inputScroll.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            inputScroll.heightAnchor.constraint(equalToConstant: 80),
-            selectionLabel.widthAnchor.constraint(equalTo: stack.widthAnchor)
+            stack.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -12),
+            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 12),
+            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
+            historyScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 60)
         ])
+        NotificationCenter.default.addObserver(self, selector: #selector(indexChanged),
+                                                name: AIWorkIndexStore.changed, object: nil)
         input.delegate = self
         NotificationCenter.default.addObserver(self, selector: #selector(selectionChanged),
                                                 name: UserDefaults.didChangeNotification, object: nil)
@@ -145,6 +164,7 @@ final class AIChatViewController: NSViewController {
             window.hooksOwner = nil
         }
         request?.cancel()
+        retrieval?.cancel()
         summaryRequest?.cancel()
         maintenanceRequest?.cancel()
         fileURLObservation?.invalidate()
@@ -159,7 +179,10 @@ final class AIChatViewController: NSViewController {
     private func makeScroll(textView: NSTextView, editable: Bool) -> NSScrollView {
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
-        scroll.borderType = .bezelBorder
+        scroll.borderType = .noBorder
+        scroll.drawsBackground = false
+        scroll.autohidesScrollers = true
+        textView.drawsBackground = false
         textView.isEditable = editable
         textView.isSelectable = true
         textView.isRichText = false
@@ -193,6 +216,7 @@ final class AIChatViewController: NSViewController {
         inputUndoManager.removeAllActions()
         conversation = AIConversationStore.shared.conversation(for: document)
         input.string = conversation?.draft ?? ""
+        input.needsDisplay = true
         modeControl.selectedSegment = conversation?.mode.rawValue ?? 0
         documentLabel.stringValue = document.displayName
         sendButton.isEnabled = true
@@ -206,6 +230,7 @@ final class AIChatViewController: NSViewController {
             }
         }
         documentLocationChanged()
+        AIWorkIndexStore.prepareDocument(document.fileURL)
     }
 
     /// The shown document changed or got a new file URL (Save As): refresh the row and point an
@@ -242,9 +267,14 @@ final class AIChatViewController: NSViewController {
                 let store = AIEpisodeSummaryStore.shared(for: context.rootURL)
                 resolvedWork = resolved
                 summaryStore = store
-                status = AIWorkContextAssembler(resolved: resolved, store: store)
-                    .status(isGenerating: ownMaintenanceProgress.map { ($0.done, $0.total) },
-                            baseBytes: currentDocument?()?.content.string.utf8.count ?? 0)
+                if let progress = ownMaintenanceProgress {
+                    status = .generating(done: progress.done, total: progress.total)
+                } else if context.config.enabled && !context.config.settingsSources.isEmpty {
+                    let index = AIWorkIndexStore.shared(for: context.rootURL)
+                    status = .indexed(text: index.statusText, running: index.isRunning, failed: index.error != nil)
+                } else {
+                    status = context.config.settingsSources.isEmpty ? .unavailable(reason: .noSources) : .disabled
+                }
             }
         } else {
             resolvedWork = nil
@@ -258,6 +288,8 @@ final class AIChatViewController: NSViewController {
         }
         pushMaintenanceProgress()
     }
+
+    @objc private func indexChanged() { refreshWorkContext() }
 
     /// This window's maintenance progress, only while the shown work is the one being maintained.
     private var ownMaintenanceProgress: (done: Int, total: Int)? {
@@ -341,7 +373,7 @@ final class AIChatViewController: NSViewController {
             refreshWorkContext()
         case .generating:
             return // handled above
-        case .active:
+        case .active, .indexed:
             guard let root = resolvedWork?.context.rootURL else { return }
             let controller = AIWorkContextWindowController.shared(for: root, store: AIEpisodeSummaryStore.shared(for: root))
             controller.currentFile = url
@@ -545,14 +577,15 @@ final class AIChatViewController: NSViewController {
         } else {
             selectionLabel.stringValue = L10n.tr(modeControl.selectedSegment == 1 ? "ai.wholeEdit" : "ai.wholeContext")
         }
-        providerLabel.stringValue = AISettings.provider.title
+        selectionLabel.isHidden = range.length == 0
+        modeControl.toolTip = selectionLabel.stringValue
         if !isSuspended { options.configure(provider: AISettings.provider, tokens: conversation?.tokenUsage[AISettings.provider]) }
     }
 
     /// Order (spec §6.8): fix the question → generate missing summaries → snapshot → prompt → send.
     /// When no summary is needed (the usual case) the snapshot is taken at click time, as before.
     @objc func send() {
-        guard request == nil, summaryRequest == nil, let document = currentDocument?() else { return }
+        guard !preparingIndex, request == nil, summaryRequest == nil, let document = currentDocument?() else { return }
         let conversation = AIConversationStore.shared.conversation(for: document)
         self.conversation = conversation
         documentLabel.stringValue = document.displayName
@@ -562,103 +595,81 @@ final class AIChatViewController: NSViewController {
         let provider = AISettings.provider
         let history = conversation.messages
         refreshWorkContext()
-        let work = requestWork()
-        let episodes = work?.resolved.previousEpisodes ?? []
-        let summarized = work?.summarizedSettings ?? []
-        let jobs = work.map { work -> [AIWorkFile] in
-            let index = work.store.snapshotIndex()
-            return work.store.pending(episodes, isSetting: false, index: index)
-                + work.store.pending(summarized, isSetting: true, index: index)
-        } ?? []
-
-        guard let assembler = work, !jobs.isEmpty else {
-            do {
-                let (prompt, snapshot, skipped) = try makePrompt(document: document, history: history,
-                                                                 question: question, mode: mode, work: work)
-                guard AISettings.executable(for: provider) != nil else {
-                    throw AIError(message: L10n.tr("ai.notInstalled"))
-                }
-                commit(question, to: conversation)
-                noteSkipped(skipped, in: conversation)
-                startRequest(prompt: prompt, snapshot: snapshot, document: document, conversation: conversation,
-                             question: question, mode: mode, provider: provider, token: UUID())
-            } catch { render(status: error.localizedDescription) }
+        if let work = requestWork() {
+            sendWithIndex(work: work, document: document, conversation: conversation,
+                          question: question, mode: mode, history: history, provider: provider)
             return
         }
+        do {
+            let (prompt, snapshot, _) = try makePrompt(document: document, history: history,
+                                                       question: question, mode: mode, work: nil)
+            commit(question, to: conversation)
+            startRequest(prompt: prompt, snapshot: snapshot, document: document, conversation: conversation,
+                         question: question, mode: mode, provider: provider, token: UUID())
+        } catch { render(status: error.localizedDescription) }
+    }
 
+    private func sendWithIndex(work: AIWorkContextAssembler, document: MarkdownDocument,
+                               conversation: AIConversation, question: String, mode: AIChatMode,
+                               history: [AIChatMessage], provider: AIProvider) {
         guard AISettings.executable(for: provider) != nil else { render(status: L10n.tr("ai.notInstalled")); return }
-        // The store queues behind another window's run on the same work (spec §6.3).
-        let store = assembler.store
-        // Committed now so the question shows while waiting; taken back out (and returned to the
-        // input) if summaries fail or are cancelled before the main request is sent.
-        let userIndex = conversation.messages.count
-        commit(question, to: conversation)
-        if mode == .edit, (currentSelection?() ?? NSRange(location: 0, length: 0)).length > 0 {
-            conversation.messages.append(AIChatMessage(role: "status", text: L10n.tr("ai.work.snapshotNote")))
-        }
         let token = UUID()
         generation = token
+        let userIndex = conversation.messages.count
+        commit(question, to: conversation)
+        preparingIndex = true
+        abortPreparation = { [weak self] _ in self?.uncommit(question, at: userIndex, in: conversation) }
         setBusy(true)
-        preparingStore = store
-        showGenerating(done: 0, total: jobs.count)
+        waitingLabel.stringValue = L10n.tr("ai.index.waiting")
         render()
-        abortPreparation = { [weak self] tokensUsed in
-            if tokensUsed > 0 { conversation.tokenUsage[provider, default: 0] += tokensUsed }
-            self?.uncommit(question, at: userIndex, in: conversation)
-        }
-        var completed = 0
-        var finished = false
-        let handle = store.prepare(episodes: episodes, settings: summarized, provider: provider, model: options.selectedModel,
-                      progress: { [weak self] done, total in
-                          completed = done
-                          guard let self = self, self.generation == token else { return }
-                          self.showGenerating(done: done, total: total)
-                      },
-                      completion: { [weak self, weak document] result in
-            finished = true
-            guard let self = self, self.generation == token else { return } // cancel() already accounted
-            // Every summary token counts (spec §6.3), whether the run succeeded or not. A synchronous
-            // completion has no handle yet; then only a success can carry tokens.
-            let spent = self.summaryRequest?.tokensUsed ?? ((try? result.get()) ?? 0)
-            if spent > 0 { conversation.tokenUsage[provider, default: 0] += spent }
-            self.summaryRequest = nil
-            self.abortPreparation = nil
-            self.endPreparing()
-            switch result {
-            case .success:
-                guard let document = document, self.currentDocument?() === document else {
-                    self.uncommit(question, at: userIndex, in: conversation)
-                    return self.failRequest(L10n.tr("ai.noDocument"), question: question, conversation: conversation)
+        let store = AIWorkIndexStore.shared(for: work.resolved.context.rootURL)
+        let model = options.selectedModel
+        store.ensure(context: work.resolved.context) { [weak self, weak document] result in
+            guard let self, self.generation == token, let document, self.currentDocument?() === document else { return }
+            do {
+                let index = try result.get()
+                guard let url = document.fileURL, let latest = AIWorkContext.locate(from: url),
+                      latest == work.resolved.context, latest.config.enabled else {
+                    throw AIError(message: L10n.tr("ai.index.changed"))
                 }
-                self.refreshWorkContext() // leave "요약 생성 중 N/N" for the real status
-                do {
-                    // Snapshot now: the selection and text at the moment summaries finished.
-                    let (prompt, snapshot, skipped) = try self.makePrompt(document: document, history: history,
-                                                                          question: question, mode: mode, work: assembler)
-                    self.noteSkipped(skipped, in: conversation)
-                    self.startRequest(prompt: prompt, snapshot: snapshot, document: document, conversation: conversation,
-                                      question: question, mode: mode, provider: provider, token: token)
-                } catch {
-                    self.uncommit(question, at: userIndex, in: conversation)
-                    self.failRequest(error.localizedDescription, question: question, conversation: conversation)
+                let resolved = AIWorkContextResolver.resolve(latest, currentFile: url)
+                let passages = try index.eligible(for: resolved)
+                let selection = self.currentSelection?() ?? NSRange(location: 0, length: 0)
+                let snapshot = AIEditSnapshot(document: document, selection: selection)
+                let retrieval = AIWorkRetrieval()
+                self.retrieval = retrieval
+                self.waitingLabel.stringValue = L10n.tr("ai.index.searching")
+                retrieval.prepare(passages: passages, title: latest.config.title, currentEpisode: url.lastPathComponent,
+                                  document: snapshot.content.string, question: question, history: history, provider: provider, model: model) { [weak self, weak document] result in
+                    guard let self, self.generation == token else { return }
+                    conversation.tokenUsage[provider, default: 0] += retrieval.tokensUsed
+                    self.retrieval = nil
+                    self.preparingIndex = false
+                    do {
+                        guard let document, self.currentDocument?() === document,
+                              AIWorkContext.locate(from: url) == latest else { throw AIError(message: L10n.tr("ai.index.changed")) }
+                        let payload = try result.get()
+                        let prompt = try AIPrompt.make(snapshot: snapshot, messages: history, request: question,
+                                                      mode: mode, hasSelection: selection.length > 0, work: payload)
+                        self.abortPreparation = nil
+                        if !retrieval.consulted.isEmpty {
+                            conversation.messages.append(AIChatMessage(role: "status", text: L10n.tr("ai.index.sources") + "\n" + retrieval.consulted.joined(separator: "\n")))
+                        }
+                        self.startRequest(prompt: prompt, snapshot: snapshot, document: document, conversation: conversation,
+                                          question: question, mode: mode, provider: provider, token: token)
+                    } catch {
+                        self.abortPreparation?(0)
+                        self.abortPreparation = nil
+                        self.failRequest(error.localizedDescription, question: question, conversation: conversation)
+                    }
                 }
-            case .failure(let error):
-                self.uncommit(question, at: userIndex, in: conversation)
-                let name: String
-                let reason: String
-                if let failure = error as? AISummaryGenerationError {
-                    name = failure.file.relativePath
-                    reason = failure.underlying.localizedDescription
-                } else {
-                    name = completed < jobs.count ? jobs[completed].relativePath : ""
-                    reason = error.localizedDescription
-                }
-                self.failRequest(String(format: L10n.tr("ai.work.summaryFailed"), name, reason),
-                                 question: question, conversation: conversation)
+            } catch {
+                self.preparingIndex = false
+                self.abortPreparation?(0)
+                self.abortPreparation = nil
+                self.failRequest(error.localizedDescription, question: question, conversation: conversation)
             }
-        })
-        // The store may complete synchronously (e.g. an unreadable first file); keep no stale handle.
-        if !finished { summaryRequest = handle } else { abortPreparation = nil; endPreparing() }
+        }
     }
 
     /// Takes a question that was never sent back out of the conversation (with its snapshot note)
@@ -694,6 +705,7 @@ final class AIChatViewController: NSViewController {
     private func commit(_ question: String, to conversation: AIConversation) {
         conversation.messages.append(AIChatMessage(role: "user", text: question))
         input.string = ""
+        input.needsDisplay = true
         conversation.draft = ""
     }
 
@@ -771,7 +783,14 @@ final class AIChatViewController: NSViewController {
     }
 
     @objc func cancel() {
-        let wasPreparing = summaryRequest != nil
+        let wasPreparing = summaryRequest != nil || preparingIndex
+        if let retrieval {
+            conversation?.tokenUsage[AISettings.provider, default: 0] += retrieval.tokensUsed
+            retrieval.cancel()
+        }
+        retrieval = nil
+        if preparingIndex { abortPreparation?(0) }
+        preparingIndex = false
         let wasRequesting = request != nil
         generation = UUID()
         request?.cancel()
@@ -801,16 +820,27 @@ final class AIChatViewController: NSViewController {
         loadingRow.isHidden = !busy
         if busy { responseProgress.startAnimation(nil) }
         else { responseProgress.stopAnimation(nil); waitingLabel.stringValue = L10n.tr("ai.waiting") }
-        sendButton.isEnabled = !busy && currentDocument?() != nil
-        cancelButton.isEnabled = busy
+        sendButton.isEnabled = busy || currentDocument?() != nil
+        updateActionButton()
         modeControl.isEnabled = !busy
+    }
+
+    @objc private func performComposerAction() {
+        if isAwaitingResponse { cancel() } else { send() }
+    }
+
+    private func updateActionButton() {
+        let title = L10n.tr(isAwaitingResponse ? "ai.stop" : "ai.send")
+        sendButton.image = NSImage(systemSymbolName: isAwaitingResponse ? "stop.circle.fill" : "arrow.up.circle.fill",
+                                   accessibilityDescription: title)
+        sendButton.toolTip = title
+        sendButton.setAccessibilityLabel(title)
     }
 
     private func render(status: String? = nil) {
         var messages = conversation?.messages ?? []
         if let status = status { messages.append(AIChatMessage(role: "status", text: status)) }
         transcript.setMessages(messages)
-        providerLabel.stringValue = AISettings.provider.title
         if !isSuspended { options.configure(provider: AISettings.provider, tokens: conversation?.tokenUsage[AISettings.provider]) }
     }
 }

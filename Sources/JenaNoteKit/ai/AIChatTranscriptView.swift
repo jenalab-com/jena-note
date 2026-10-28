@@ -13,8 +13,7 @@ final class AIChatTranscriptView: NSScrollView {
         autohidesScrollers = true
         hasHorizontalScroller = false
         borderType = .noBorder
-        drawsBackground = true
-        backgroundColor = .textBackgroundColor
+        drawsBackground = false
         documentView = canvas
         setAccessibilityLabel(L10n.tr("ai.history"))
     }
@@ -138,8 +137,5 @@ final class AIChatMessageView: NSView {
         let path = NSBezierPath(roundedRect: bubbleFrame.insetBy(dx: 0.5, dy: 0.5), xRadius: 14, yRadius: 14)
         NSColor.controlColor.setFill()
         path.fill()
-        NSColor.separatorColor.setStroke()
-        path.lineWidth = 1
-        path.stroke()
     }
 }
