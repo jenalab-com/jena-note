@@ -6,7 +6,10 @@ final class MarkdownSourceViewController: NSViewController {
     private weak var sourceDocument: MarkdownDocument?
     private var refreshWork: DispatchWorkItem?
 
+    @objc private func applyPaperBackground() { textView.backgroundColor = PaperBackground.currentColor }
+
     override func loadView() {
+        NotificationCenter.default.addObserver(self, selector: #selector(applyPaperBackground), name: PaperBackground.changed, object: nil)
         let description = NSTextField(wrappingLabelWithString: L10n.tr("source.description"))
         description.font = .systemFont(ofSize: 12)
         description.textColor = .secondaryLabelColor
@@ -25,7 +28,7 @@ final class MarkdownSourceViewController: NSViewController {
         textView.usesFindBar = true
         textView.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
         textView.textColor = .labelColor
-        textView.backgroundColor = .textBackgroundColor
+        textView.backgroundColor = PaperBackground.currentColor
         textView.textContainerInset = NSSize(width: 14, height: 14)
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
@@ -43,7 +46,7 @@ final class MarkdownSourceViewController: NSViewController {
         view = stack
     }
 
-    deinit { refreshWork?.cancel() }
+    deinit { refreshWork?.cancel(); NotificationCenter.default.removeObserver(self) }
 
     func show(document: MarkdownDocument) {
         _ = view

@@ -8,7 +8,7 @@ final class PagedHostView: NSView {
     private var armed = true
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.textBackgroundColor.setFill()
+        PaperBackground.currentColor.setFill()
         dirtyRect.fill()
     }
 
@@ -160,8 +160,9 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
+        NotificationCenter.default.addObserver(self, selector: #selector(applyPaperBackground), name: PaperBackground.changed, object: nil)
         scrollView.drawsBackground = true
-        scrollView.backgroundColor = .textBackgroundColor
+        scrollView.backgroundColor = PaperBackground.currentColor
 
         let textContainer = NSTextContainer(containerSize: NSSize(
             width: 0, height: CGFloat.greatestFiniteMagnitude))
@@ -203,6 +204,12 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
     }
 
     // MARK: - Rendering
+    @objc private func applyPaperBackground() {
+        scrollView.backgroundColor = PaperBackground.currentColor
+        func redraw(_ view: NSView) { view.needsDisplay = true; view.subviews.forEach(redraw) }
+        redraw(view)
+    }
+
     private func columnWidthForCurrentSettings() -> CGFloat {
         ReaderMetrics.columnWidth(mode: widthMode, scale: scale, family: fontFamily,
                                   charCount: SettingsManager.shared.readingLineLength,

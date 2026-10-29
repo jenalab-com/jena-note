@@ -4,6 +4,9 @@ import AppKit
 class MarkdownDocument: NSDocument {
 
     let aiIdentity = UUID()
+    var backupStore = DocumentBackupStore.shared
+    private var backupWindow: DocumentBackupWindowController?
+    private var reportedBackupFailure = false
 
     /// 문서 내용의 단일 진실 공급원 (Single Source of Truth)
     var content: NSMutableAttributedString = NSMutableAttributedString()
@@ -19,7 +22,7 @@ class MarkdownDocument: NSDocument {
 
     // MARK: - NSDocument Overrides
 
-    override class var autosavesInPlace: Bool { return true }
+    override class var autosavesInPlace: Bool { SettingsManager.shared.autosaveEnabled }
 
     /// 저장 다이얼로그에 노출할 포맷 목록
     override func writableTypes(for saveOperation: NSDocument.SaveOperationType) -> [String] {
@@ -59,10 +62,58 @@ class MarkdownDocument: NSDocument {
         return data
     }
 
-    override func write(to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType,
-                        originalContentsURL absoluteOriginalContentsURL: URL?) throws {
-        try super.write(to: url, ofType: typeName, for: saveOperation, originalContentsURL: absoluteOriginalContentsURL)
+    override func writeSafely(to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType) throws {
+        guard saveOperation != .autosaveElsewhereOperation else {
+            try super.writeSafely(to: url, ofType: typeName, for: saveOperation)
+            return
+        }
+        var backupError: Error?
+        do {
+            if try !backupStore.hasSnapshots(for: url), FileManager.default.fileExists(atPath: url.path) {
+                try backupStore.record(Data(contentsOf: url), for: url)
+            }
+        } catch { backupError = error }
+        try super.writeSafely(to: url, ofType: typeName, for: saveOperation)
+        do {
+            try backupStore.record(Data(contentsOf: url), for: url,
+                                   automatic: saveOperation == .autosaveInPlaceOperation || saveOperation == .autosaveElsewhereOperation)
+        } catch { backupError = error }
+        if let error = backupError, !reportedBackupFailure {
+            reportedBackupFailure = true
+            DispatchQueue.main.async { [weak self] in
+                self?.presentError(NSError(domain: "JenaNote.Backup", code: 1, userInfo: [NSLocalizedDescriptionKey: L10n.tr("backup.failed"), NSUnderlyingErrorKey: error]))
+            }
+        } else if backupError == nil { reportedBackupFailure = false }
         DispatchQueue.main.async { AIWorkIndexStore.prepareDocument(url) }
+    }
+
+    @objc func showBackups(_ sender: Any?) {
+        guard fileURL != nil else {
+            presentError(AIError(message: L10n.tr("backup.saveFirst"))); return
+        }
+        backupWindow = DocumentBackupWindowController(document: self)
+        backupWindow?.showWindow(nil)
+        backupWindow?.window?.center()
+    }
+
+    func createNamedVersion(_ name: String) throws {
+        guard let url = fileURL else { throw AIError(message: L10n.tr("backup.saveFirst")) }
+        try backupStore.record(data(ofType: fileType ?? "net.daringfireball.markdown"), for: url, name: name)
+    }
+
+    func restoreBackup(_ snapshot: DocumentBackupStore.Snapshot) throws {
+        guard let url = fileURL, snapshot.source == url.standardizedFileURL.path,
+              let text = String(data: snapshot.data, encoding: .utf8) else {
+            throw AIError(message: L10n.tr("backup.invalid"))
+        }
+        let type = fileType ?? (url.pathExtension.lowercased() == "txt" ? "public.plain-text" : "net.daringfireball.markdown")
+        try backupStore.record(data(ofType: type), for: url)
+        try backupStore.record(snapshot.data, for: url, force: true)
+        let restored = isPlainText(type) ? MarkdownSerializer.parsePlainText(text) : MarkdownSerializer.parse(text, baseURL: url.deletingLastPathComponent())
+        undoManager?.beginUndoGrouping()
+        replaceReaderContent(in: NSRange(location: 0, length: content.length), with: restored)
+        undoManager?.endUndoGrouping()
+        undoManager?.setActionName(L10n.tr("backup.restore"))
     }
 
     private func isPlainText(_ typeName: String) -> Bool {

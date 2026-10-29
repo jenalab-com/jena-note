@@ -53,6 +53,8 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
 
         scrollView.documentView = textView
         view = scrollView
+        applyPaperBackground()
+        NotificationCenter.default.addObserver(self, selector: #selector(applyPaperBackground), name: PaperBackground.changed, object: nil)
 
         ruler = PageRulerView(frame: .zero)
         ruler.isHidden = true
@@ -65,6 +67,11 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         NotificationCenter.default.addObserver(
             self, selector: #selector(editorDidScroll(_:)),
             name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
+    }
+
+    @objc private func applyPaperBackground() {
+        scrollView.backgroundColor = PaperBackground.currentColor
+        textView.backgroundColor = PaperBackground.currentColor
     }
 
     deinit {

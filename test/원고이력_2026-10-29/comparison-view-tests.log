@@ -1,0 +1,36 @@
+[0/1] Planning build
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/5] Emitting module JenaNoteKitTests
+[4/5] Compiling JenaNoteKitTests DocumentHistoryTests.swift
+[4/6] Write Objects.LinkFileList
+[5/6] Linking JenaNotePackageTests
+Build complete! (0.96s)
+Test Suite 'Selected tests' started at 2026-10-29 13:38:43.562.
+Test Suite 'JenaNotePackageTests.xctest' started at 2026-10-29 13:38:43.563.
+Test Suite 'DocumentHistoryTests' started at 2026-10-29 13:38:43.563.
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testAlignedComparisonPreservesLineNumbersAndClassifiesChanges]' started.
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testAlignedComparisonPreservesLineNumbersAndClassifiesChanges]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testComparisonDirectionAndBounds]' started.
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testComparisonDirectionAndBounds]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testComparisonReconstructsBothInputsWithRepeatedAndEmptyLines]' started.
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testComparisonReconstructsBothInputsWithRepeatedAndEmptyLines]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testComparisonViewLaysOutBothColumnsAndHighlightsChanges]' started.
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testComparisonViewLaysOutBothColumnsAndHighlightsChanges]' passed (0.128 seconds).
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testHistoryFollowsRenamedFile]' started.
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testHistoryFollowsRenamedFile]' passed (0.006 seconds).
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testLegacyBackupMigrationAndCorruptObjectDetection]' started.
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testLegacyBackupMigrationAndCorruptObjectDetection]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testNamedVersionsShareObjectsAndSurvivePruning]' started.
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testNamedVersionsShareObjectsAndSurvivePruning]' passed (0.008 seconds).
+Test Suite 'DocumentHistoryTests' passed at 2026-10-29 13:38:43.710.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.146 (0.147) seconds
+Test Suite 'JenaNotePackageTests.xctest' passed at 2026-10-29 13:38:43.710.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.146 (0.147) seconds
+Test Suite 'Selected tests' passed at 2026-10-29 13:38:43.710.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.146 (0.148) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
