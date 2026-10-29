@@ -767,6 +767,9 @@ extension EditorWindowController: NSMenuItemValidation {
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         switch menuItem.action {
+        case #selector(manageEndnotes(_:)):
+            guard let doc = document as? MarkdownDocument else { return false }
+            return !isShowingSource && doc.fileType != "public.plain-text" && doc.fileURL?.pathExtension.lowercased() != "txt"
         case #selector(showMarkdownSource(_:)):
             menuItem.state = isShowingSource ? .on : .off
             return document is MarkdownDocument

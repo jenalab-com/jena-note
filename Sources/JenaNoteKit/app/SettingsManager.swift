@@ -23,6 +23,28 @@ final class SettingsManager {
         static let sidebarSortOrder = "jn_sidebarSortOrder"
     }
 
+    static let autosaveIntervals = [30, 60, 180, 300, 600]
+
+    var autosaveEnabled: Bool {
+        get { defaults.object(forKey: "jn_autosaveEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "jn_autosaveEnabled"); applyAutosave() }
+    }
+
+    var autosaveInterval: Int {
+        get {
+            let value = defaults.integer(forKey: "jn_autosaveInterval")
+            return Self.autosaveIntervals.contains(value) ? value : 60
+        }
+        set {
+            defaults.set(Self.autosaveIntervals.contains(newValue) ? newValue : 60, forKey: "jn_autosaveInterval")
+            applyAutosave()
+        }
+    }
+
+    func applyAutosave() {
+        NSDocumentController.shared.autosavingDelay = autosaveEnabled ? Double(autosaveInterval) : 0
+    }
+
     // MARK: - Language
 
     enum Language: String, CaseIterable {

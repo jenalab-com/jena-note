@@ -11,6 +11,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         SettingsManager.shared.applyAppearance()
+        SettingsManager.shared.applyAutosave()
         setupMenu()
     }
 
@@ -86,6 +87,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         let saveAs = fileMenu.addItem(withTitle: L10n.tr("menu.file.saveAs"), action: #selector(NSDocument.saveAs(_:)), keyEquivalent: "s")
         saveAs.keyEquivalentModifierMask = [.command, .shift]
         fileMenu.addItem(withTitle: L10n.tr("menu.file.revert"), action: #selector(NSDocument.revertToSaved(_:)), keyEquivalent: "")
+        fileMenu.addItem(withTitle: L10n.tr("backup.title"), action: #selector(MarkdownDocument.showBackups(_:)), keyEquivalent: "")
 
         // 내보내기 서브메뉴 (Save As 흐름 바깥의 독립 동작)
         fileMenu.addItem(.separator())
@@ -148,6 +150,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         let formatMenuItem = NSMenuItem()
         mainMenu.addItem(formatMenuItem)
         let formatMenu = NSMenu(title: L10n.tr("menu.format"))
+        formatMenu.addItem(withTitle: L10n.tr("note.title"), action: #selector(EditorWindowController.manageEndnotes(_:)), keyEquivalent: "")
         formatMenuItem.submenu = formatMenu
 
         formatMenu.addItem(withTitle: L10n.tr("menu.format.bold"), action: #selector(EditorViewController.toggleBold), keyEquivalent: "b")

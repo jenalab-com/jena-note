@@ -133,6 +133,12 @@ enum MarkdownSerializer {
                 continue
             }
 
+            if let note = DocumentEndnotes.parseDefinition(line) {
+                result.append(DocumentEndnotes.definition(note.id, text: note.text, baseURL: baseURL))
+                i += 1
+                continue
+            }
+
             // Table: 현재 줄이 | 포함하고 다음 줄이 구분선(|---|---|)인 경우
             if isTableDataLine(line) && i + 1 < lines.count && isTableSeparatorLine(lines[i + 1]) {
                 var tableLines: [String] = []
@@ -231,6 +237,13 @@ enum MarkdownSerializer {
                 return "body"
             }()
             let paraText = full.substring(with: paraRange)
+            if let id = paraAttrs[.mdNoteDefinition] as? String, paraText.hasPrefix("[\(id)] ") {
+                let prefixLength = ("[\(id)] " as NSString).length
+                let bodyRange = NSRange(location: pos + prefixLength, length: paraRange.length - prefixLength)
+                output += "[^\(id)]: " + serializeInline(attributed, range: bodyRange) + "\n"
+                pos = paraEnd + 1
+                continue
+            }
 
             // 헤딩은 기본 폰트가 이미 bold — 인라인 직렬화 시 기준 폰트 전달
             let baseFont: NSFont
@@ -369,6 +382,16 @@ enum MarkdownSerializer {
             let clampedEnd = min(effectiveRange.location + effectiveRange.length, end)
             let clampedRange = NSRange(location: clampedStart, length: max(0, clampedEnd - clampedStart))
             let text = (attributed.string as NSString).substring(with: clampedRange)
+
+            if let id = attrs[.mdNoteReference] as? String {
+                let marker = "[\(id)]" as NSString
+                if i + marker.length <= end,
+                   (attributed.string as NSString).substring(with: NSRange(location: i, length: marker.length)) == marker as String {
+                    result += "[^\(id)]"
+                    i += marker.length
+                    continue
+                }
+            }
 
             // 이미지 첨부 — 폭 지정이 있으면 `<img>` 태그, 없으면 `![alt](경로)`로 직렬화.
             // (attachment 문자 U+FFFC를 대체) 경로 없는 첨부는 제외해 깨진 문자가 새어나가지 않게 한다.
@@ -680,6 +703,14 @@ enum MarkdownSerializer {
         ]
 
         while !remaining.isEmpty {
+            if remaining.hasPrefix("[^"), let end = remaining.firstIndex(of: "]") {
+                let id = String(remaining[remaining.index(remaining.startIndex, offsetBy: 2)..<end])
+                if DocumentEndnotes.validID(id) {
+                    result.append(DocumentEndnotes.reference(id, font: baseFont))
+                    remaining = remaining[remaining.index(after: end)...]
+                    continue
+                }
+            }
             // <span style="color: ...">...</span> — 사용자 지정 색상 (가장 먼저 검사)
             if remaining.hasPrefix("<span "),
                let parsed = parseColorSpan(in: remaining, baseFont: baseFont) {
@@ -875,7 +906,7 @@ enum MarkdownSerializer {
 
     // MARK: - Private: Paragraph Styles & Attributes
 
-    private static func bodyAttributes() -> [NSAttributedString.Key: Any] {
+    static func bodyAttributes() -> [NSAttributedString.Key: Any] {
         [.font: MemoFont.body, .foregroundColor: NSColor.labelColor,
          .mdBlockType: "body", .paragraphStyle: bodyParagraphStyle()]
     }

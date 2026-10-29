@@ -1,0 +1,11 @@
+swift build -c release --product JenaNote
+[0/1] Planning build
+Building for production...
+[0/4] Write sources
+[1/4] Write swift-version--58304C5D6DBC2206.txt
+[3/5] Compiling JenaNoteKit AIChatComposerView.swift
+[4/6] Compiling JenaNote main.swift
+[4/6] Write Objects.LinkFileList
+[5/6] Linking JenaNote
+Build of product 'JenaNote' complete! (21.30s)
+✓ 빌드 완료: .build/JenaNote.app

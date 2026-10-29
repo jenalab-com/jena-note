@@ -1,0 +1,56 @@
+[0/1] Planning build
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/17] Compiling JenaNoteKitTests AIChatComposerTests.swift
+[4/17] Compiling JenaNoteKitTests AIWorkContextBarTests.swift
+[5/17] Compiling JenaNoteKitTests AIWorkIndexIntegrationTests.swift
+[6/17] Compiling JenaNoteKitTests AIModeTests.swift
+[7/17] Compiling JenaNoteKitTests AIMetadataTests.swift
+[8/17] Compiling JenaNoteKitTests AIWorkContextEpisodesViewTests.swift
+[9/17] Compiling JenaNoteKitTests MarkdownSourceTests.swift
+[10/17] Compiling JenaNoteKitTests WriterUtilitiesTests.swift
+[11/17] Emitting module JenaNoteKitTests
+[12/17] Compiling JenaNoteKitTests AIWorkContextSourcesViewTests.swift
+[13/17] Compiling JenaNoteKitTests BookmarkLocalizationTests.swift
+[14/17] Compiling JenaNoteKitTests AIWorkContextWindowTests.swift
+[15/17] Compiling JenaNoteKitTests AIEpisodeSummaryStoreTests.swift
+[16/17] Compiling JenaNoteKitTests AIWorkPromptTests.swift
+[16/18] Write Objects.LinkFileList
+[17/18] Linking JenaNotePackageTests
+Build complete! (1.63s)
+Test Suite 'Selected tests' started at 2026-10-29 18:20:58.167.
+Test Suite 'JenaNotePackageTests.xctest' started at 2026-10-29 18:20:58.169.
+Test Suite 'WriterUtilitiesTests' started at 2026-10-29 18:20:58.169.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testAutosavePreferencesApplyToDocumentControllerAndPreserveIntervalWhenDisabled]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testAutosavePreferencesApplyToDocumentControllerAndPreserveIntervalWhenDisabled]' passed (0.050 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testBackupDeduplicatesThrottlesAutosavesAndPrunesOnlyOldSnapshots]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testBackupDeduplicatesThrottlesAutosavesAndPrunesOnlyOldSnapshots]' passed (0.011 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testBackupFailureReportsErrorButStillSavesOriginalDocument]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testBackupFailureReportsErrorButStillSavesOriginalDocument]' passed (0.008 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testEndnoteIDsAvoidOrphanReferencesAndDeletionHandlesSelfReference]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testEndnoteIDsAvoidOrphanReferencesAndDeletionHandlesSelfReference]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testEndnotesRemainInBothExportFormats]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testEndnotesRemainInBothExportFormats]' passed (0.137 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testEndnotesRoundTripEditDeleteAndKeepInlineCodeLiteral]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testEndnotesRoundTripEditDeleteAndKeepInlineCodeLiteral]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testInvalidBackupAndFailureToProtectCurrentTextNeverModifyDocument]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testInvalidBackupAndFailureToProtectCurrentTextNeverModifyDocument]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testNativeColorWellAppliesArbitraryColorAndResetRestoresDefault]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testNativeColorWellAppliesArbitraryColorAndResetRestoresDefault]' passed (0.206 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testPaperPresetsApplyWithoutMutatingMarkdown]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testPaperPresetsApplyWithoutMutatingMarkdown]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testRestorePreservesUnsavedTextAndUndoWithoutOverwritingDisk]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testRestorePreservesUnsavedTextAndUndoWithoutOverwritingDisk]' passed (0.007 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testSafeSaveBacksUpOriginalAndNewVersionUnderRealPath]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testSafeSaveBacksUpOriginalAndNewVersionUnderRealPath]' passed (0.008 seconds).
+Test Suite 'WriterUtilitiesTests' passed at 2026-10-29 18:20:58.608.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.437 (0.438) seconds
+Test Suite 'JenaNotePackageTests.xctest' passed at 2026-10-29 18:20:58.608.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.437 (0.438) seconds
+Test Suite 'Selected tests' passed at 2026-10-29 18:20:58.608.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.437 (0.441) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

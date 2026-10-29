@@ -1,37 +1,24 @@
 import AppKit
 
-// MARK: - Preferences Window Controller
-
 class PreferencesWindowController: NSWindowController {
-
     static let shared = PreferencesWindowController()
-
-    private var languagePopup: NSPopUpButton!
-    private var appearancePopup: NSPopUpButton!
-    private var aiSettingsVC: AISettingsViewController?
+    private let tabs = NSTabViewController()
+    private let languagePopup = NSPopUpButton()
+    private let appearancePopup = NSPopUpButton()
+    private let autosavePopup = NSPopUpButton()
+    private let autosaveCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    private let paperColorWell = NSColorWell()
+    private let resetPaperButton = NSButton()
+    private var labels: [(NSTextField, String)] = []
 
     convenience init() {
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 180),
-            styleMask: [.titled, .closable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = L10n.tr("settings.title")
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 620, height: 500),
+                              styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
-        window.center()
-
         self.init(window: window)
         setupUI()
-        // Keep the existing general settings intact above the AI connection panel.
-        window.setContentSize(NSSize(width: 620, height: 620))
-        if let content = window.contentView {
-            for child in content.subviews { child.frame.origin.y += 440 }
-            let ai = AISettingsViewController()
-            ai.view.frame = NSRect(x: 0, y: 0, width: 620, height: 440)
-            content.addSubview(ai.view)
-            aiSettingsVC = ai
-        }
+        refreshLabels()
+        window.center()
     }
 
     func show() {
@@ -40,123 +27,140 @@ class PreferencesWindowController: NSWindowController {
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
-
     func showAI() {
+        tabs.selectedTabViewItemIndex = 2
         show()
-        window?.makeFirstResponder(aiSettingsVC?.view)
     }
-
-    // MARK: - UI Setup
 
     private func setupUI() {
-        guard let contentView = window?.contentView else { return }
-
-        let padding: CGFloat = 24
-        let labelWidth: CGFloat = 100
-        let controlWidth: CGFloat = 220
-        let rowHeight: CGFloat = 28
-        let spacing: CGFloat = 16
-
-        // Language row
-        let langLabel = NSTextField(labelWithString: L10n.tr("settings.language"))
-        langLabel.font = NSFont.systemFont(ofSize: 13)
-        langLabel.alignment = .right
-        langLabel.frame = NSRect(x: padding, y: 100, width: labelWidth, height: rowHeight)
-        contentView.addSubview(langLabel)
-
-        languagePopup = NSPopUpButton(frame: NSRect(
-            x: padding + labelWidth + spacing,
-            y: 100,
-            width: controlWidth,
-            height: rowHeight
-        ), pullsDown: false)
-
-        for lang in SettingsManager.Language.allCases {
-            languagePopup.addItem(withTitle: lang.displayName)
-            languagePopup.lastItem?.representedObject = lang.rawValue
+        tabs.tabStyle = .segmentedControlOnTop
+        let general = NSViewController(); general.view = NSView()
+        let ui = NSViewController(); ui.view = NSView()
+        for (id, controller) in [("general", general), ("ui", ui), ("ai", AISettingsViewController())] {
+            let item = NSTabViewItem(viewController: controller)
+            item.identifier = id
+            tabs.addTabViewItem(item)
         }
+        window?.contentViewController = tabs
+        window?.setContentSize(NSSize(width: 620, height: 500))
 
-        let currentLang = SettingsManager.shared.language
-        if let idx = SettingsManager.Language.allCases.firstIndex(of: currentLang) {
-            languagePopup.selectItem(at: idx)
+        for language in SettingsManager.Language.allCases {
+            languagePopup.addItem(withTitle: language.displayName)
+            languagePopup.lastItem?.representedObject = language.rawValue
         }
-        languagePopup.target = self
-        languagePopup.action = #selector(languageChanged(_:))
-        contentView.addSubview(languagePopup)
-
-        // Appearance row
-        let appearanceLabel = NSTextField(labelWithString: L10n.tr("settings.appearance"))
-        appearanceLabel.font = NSFont.systemFont(ofSize: 13)
-        appearanceLabel.alignment = .right
-        appearanceLabel.frame = NSRect(x: padding, y: 56, width: labelWidth, height: rowHeight)
-        contentView.addSubview(appearanceLabel)
-
-        appearancePopup = NSPopUpButton(frame: NSRect(
-            x: padding + labelWidth + spacing,
-            y: 56,
-            width: controlWidth,
-            height: rowHeight
-        ), pullsDown: false)
-
-        for mode in SettingsManager.AppearanceMode.allCases {
-            appearancePopup.addItem(withTitle: mode.displayName)
-            appearancePopup.lastItem?.representedObject = mode.rawValue
-        }
-
-        let currentMode = SettingsManager.shared.appearanceMode
-        if let idx = SettingsManager.AppearanceMode.allCases.firstIndex(of: currentMode) {
-            appearancePopup.selectItem(at: idx)
-        }
-        appearancePopup.target = self
-        appearancePopup.action = #selector(appearanceChanged(_:))
-        contentView.addSubview(appearancePopup)
-
-        // Tag labels for refresh
-        langLabel.tag = 1001
-        appearanceLabel.tag = 1002
+        languagePopup.target = self; languagePopup.action = #selector(languageChanged)
+        autosaveCheckbox.target = self; autosaveCheckbox.action = #selector(autosaveChanged)
+        autosavePopup.target = self; autosavePopup.action = #selector(autosaveIntervalChanged)
+        appearancePopup.target = self; appearancePopup.action = #selector(appearanceChanged)
+        let hint = NSTextField(wrappingLabelWithString: "")
+        labels.append((hint, "autosave.hint"))
+        hint.textColor = .secondaryLabelColor
+        hint.font = .systemFont(ofSize: 12)
+        hint.widthAnchor.constraint(equalToConstant: 370).isActive = true
+        installRows([
+            row("settings.language", languagePopup),
+            row("", autosaveCheckbox),
+            row("autosave.interval", autosavePopup),
+            row("", hint)
+        ], in: general.view)
+        paperColorWell.target = self
+        paperColorWell.action = #selector(paperChanged(_:))
+        paperColorWell.isContinuous = true
+        paperColorWell.widthAnchor.constraint(equalToConstant: 64).isActive = true
+        paperColorWell.heightAnchor.constraint(equalToConstant: 28).isActive = true
+        resetPaperButton.target = self
+        resetPaperButton.action = #selector(resetPaper)
+        resetPaperButton.bezelStyle = .rounded
+        let colors = NSStackView(views: [paperColorWell, resetPaperButton])
+        colors.spacing = 12
+        installRows([row("settings.colorMode", appearancePopup), row("paper.title", colors)], in: ui.view)
     }
 
-    // MARK: - Actions
+    private func row(_ key: String, _ control: NSView) -> NSStackView {
+        let label = NSTextField(labelWithString: "")
+        label.alignment = .right
+        if !key.isEmpty { labels.append((label, key)) }
+        label.widthAnchor.constraint(equalToConstant: 110).isActive = true
+        if control is NSPopUpButton { control.widthAnchor.constraint(equalToConstant: 220).isActive = true }
+        let row = NSStackView(views: [label, control])
+        row.alignment = .centerY; row.spacing = 16
+        return row
+    }
+    private func installRows(_ rows: [NSView], in view: NSView) {
+        let stack = NSStackView(views: rows)
+        stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 20
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 28),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24)
+        ])
+    }
 
-    @objc private func languageChanged(_ sender: NSPopUpButton) {
-        guard let raw = sender.selectedItem?.representedObject as? String,
-              let lang = SettingsManager.Language(rawValue: raw) else { return }
-        SettingsManager.shared.language = lang
+    @objc private func languageChanged() {
+        guard let raw = languagePopup.selectedItem?.representedObject as? String,
+              let language = SettingsManager.Language(rawValue: raw) else { return }
+        SettingsManager.shared.language = language
+        // Recreate the AI page so all of its localized controls follow the new language.
+        let old = tabs.tabViewItems[2]
+        tabs.removeTabViewItem(old)
+        let ai = NSTabViewItem(viewController: AISettingsViewController()); ai.identifier = "ai"
+        tabs.addTabViewItem(ai)
         refreshLabels()
-        // Rebuild main menu with new language
         (NSApp.delegate as? AppDelegate)?.rebuildMenu()
     }
-
-    @objc private func appearanceChanged(_ sender: NSPopUpButton) {
-        guard let raw = sender.selectedItem?.representedObject as? String,
+    @objc private func appearanceChanged() {
+        guard let raw = appearancePopup.selectedItem?.representedObject as? String,
               let mode = SettingsManager.AppearanceMode(rawValue: raw) else { return }
         SettingsManager.shared.appearanceMode = mode
-        refreshAppearanceItems()
+        refreshPaperColor()
     }
-
-    // MARK: - Refresh
-
+    @objc private func paperChanged(_ sender: NSColorWell) {
+        PaperBackground.currentColor = sender.color
+    }
+    @objc private func resetPaper() {
+        paperColorWell.deactivate()
+        PaperBackground.selected = .standard
+        refreshPaperColor()
+    }
+    @objc private func autosaveChanged() {
+        SettingsManager.shared.autosaveEnabled = autosaveCheckbox.state == .on
+        refreshAutosaveItems()
+    }
+    @objc private func autosaveIntervalChanged() {
+        guard let seconds = autosavePopup.selectedItem?.representedObject as? Int else { return }
+        SettingsManager.shared.autosaveInterval = seconds
+    }
+    private func refreshPaperColor() {
+        paperColorWell.color = PaperBackground.currentColor
+        paperColorWell.setAccessibilityLabel(L10n.tr("paper.title"))
+        paperColorWell.toolTip = L10n.tr("paper.chooseColor")
+        resetPaperButton.title = L10n.tr("paper.resetColor")
+    }
+    private func refreshAutosaveItems() {
+        autosaveCheckbox.title = L10n.tr("autosave.enabled")
+        autosaveCheckbox.state = SettingsManager.shared.autosaveEnabled ? .on : .off
+        autosavePopup.isEnabled = SettingsManager.shared.autosaveEnabled
+        autosavePopup.removeAllItems()
+        for seconds in SettingsManager.autosaveIntervals {
+            autosavePopup.addItem(withTitle: L10n.tr("autosave.seconds.\(seconds)"))
+            autosavePopup.lastItem?.representedObject = seconds
+        }
+        autosavePopup.selectItem(at: SettingsManager.autosaveIntervals.firstIndex(of: SettingsManager.shared.autosaveInterval) ?? 1)
+    }
     private func refreshLabels() {
         window?.title = L10n.tr("settings.title")
-        guard let contentView = window?.contentView else { return }
-        if let langLabel = contentView.viewWithTag(1001) as? NSTextField {
-            langLabel.stringValue = L10n.tr("settings.language")
-        }
-        if let appearanceLabel = contentView.viewWithTag(1002) as? NSTextField {
-            appearanceLabel.stringValue = L10n.tr("settings.appearance")
-        }
-        refreshAppearanceItems()
-    }
-
-    private func refreshAppearanceItems() {
-        let currentIdx = appearancePopup.indexOfSelectedItem
+        for (label, key) in labels { label.stringValue = L10n.tr(key) }
+        for item in tabs.tabViewItems { item.label = L10n.tr("settings.tab.\(item.identifier as? String ?? "general")") }
+        languagePopup.selectItem(at: SettingsManager.Language.allCases.firstIndex(of: SettingsManager.shared.language) ?? 0)
         appearancePopup.removeAllItems()
         for mode in SettingsManager.AppearanceMode.allCases {
             appearancePopup.addItem(withTitle: mode.displayName)
             appearancePopup.lastItem?.representedObject = mode.rawValue
         }
-        if currentIdx >= 0 && currentIdx < appearancePopup.numberOfItems {
-            appearancePopup.selectItem(at: currentIdx)
-        }
+        appearancePopup.selectItem(at: SettingsManager.AppearanceMode.allCases.firstIndex(of: SettingsManager.shared.appearanceMode) ?? 0)
+        refreshPaperColor()
+        refreshAutosaveItems()
     }
 }
