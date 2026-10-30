@@ -11,6 +11,7 @@ class ReaderToolbar: NSToolbar {
     private weak var sourceButton: NSButton?
     private var appearancePopover: NSPopover?
     private weak var headingControl: NSPopUpButton?
+    private weak var widthControl: NSSegmentedControl?
     private static let itemSource = NSToolbarItem.Identifier("markdownSource")
     private static let itemAppearance = NSToolbarItem.Identifier("appearance")
     private static let itemHeading = NSToolbarItem.Identifier("heading")
@@ -232,6 +233,11 @@ extension ReaderToolbar: NSToolbarDelegate {
         return item
     }
 
+    @objc private func changePaperSize(_ sender: NSPopUpButton) {
+        (target as? EditorWindowController)?.changeDocumentPaperSize(sender)
+        widthControl?.selectedSegment = 1
+    }
+
     @objc private func showAppearance(_ sender: NSButton) {
         let stack = NSStackView()
         stack.orientation = .vertical
@@ -247,6 +253,15 @@ extension ReaderToolbar: NSToolbarDelegate {
             row.spacing = 12
             stack.addArrangedSubview(row)
         }
+        let paper = NSPopUpButton()
+        for size in DocumentPaperSize.allCases {
+            paper.addItem(withTitle: size.title)
+            paper.lastItem?.representedObject = size.rawValue
+        }
+        paper.selectItem(at: DocumentPaperSize.allCases.firstIndex(of: .selected) ?? 0)
+        paper.target = self
+        paper.action = #selector(changePaperSize(_:))
+        stack.insertArrangedSubview(NSStackView(views: [NSTextField(labelWithString: L10n.tr("paperSize.title")), paper]), at: 0)
         let zoom = NSStackView()
         zoom.addArrangedSubview(NSTextField(labelWithString: L10n.tr("toolbar.zoom")))
         for id in [Self.itemFontDown, Self.itemFontUp] {
@@ -259,7 +274,7 @@ extension ReaderToolbar: NSToolbarDelegate {
         controller.view = stack
         let popover = NSPopover()
         popover.contentViewController = controller
-        popover.contentSize = NSSize(width: 320, height: 240)
+        popover.contentSize = NSSize(width: 380, height: 285)
         popover.behavior = .transient
         appearancePopover = popover
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
@@ -309,6 +324,7 @@ extension ReaderToolbar: NSToolbarDelegate {
         for (i, l) in labels.enumerated() { seg.setLabel(l, forSegment: i) }
         seg.trackingMode = .selectOne
         seg.selectedSegment = selected
+        if id == Self.itemWidth { widthControl = seg }
         // 세그먼트는 책임 체인을 안 타므로 target 에 직접 바인딩(FormatToolbar 와 동일 처방).
         seg.target = target
         seg.action = action
