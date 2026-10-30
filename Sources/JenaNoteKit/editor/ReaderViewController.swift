@@ -160,6 +160,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
+        NotificationCenter.default.addObserver(self, selector: #selector(paperSizeChanged), name: DocumentPaperSize.changed, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(applyPaperBackground), name: PaperBackground.changed, object: nil)
         scrollView.drawsBackground = true
         scrollView.backgroundColor = PaperBackground.currentColor
@@ -210,8 +211,29 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         redraw(view)
     }
 
+    @objc private func paperSizeChanged() {
+        widthMode = .book
+        if let host = pagedHost { layoutPaperHost(host) }
+        renderContent()
+    }
+
+    private func layoutPaperHost(_ host: NSView) {
+        defer {
+            pageIndicator?.frame = NSRect(x: 0, y: host.bounds.height - 26, width: host.bounds.width, height: 18)
+        }
+        host.frame = scrollView.bounds
+        guard widthMode == .book, let paper = DocumentPaperSize.selected.points else {
+            host.bounds = NSRect(origin: .zero, size: host.frame.size)
+            return
+        }
+        let scale = min(1, host.frame.width / (paper.width + 48), host.frame.height / (paper.height + 2 * pageVMargin))
+        guard scale > 0 else { return }
+        host.bounds = NSRect(origin: .zero, size: NSSize(width: host.frame.width / scale, height: host.frame.height / scale))
+    }
+
     private func columnWidthForCurrentSettings() -> CGFloat {
-        ReaderMetrics.columnWidth(mode: widthMode, scale: scale, family: fontFamily,
+        if widthMode == .book, let paper = DocumentPaperSize.selected.points { return paper.width }
+        return ReaderMetrics.columnWidth(mode: widthMode, scale: scale, family: fontFamily,
                                   charCount: SettingsManager.shared.readingLineLength,
                                   pageWidthOverride: SettingsManager.shared.readingPageWidth)
     }
@@ -408,6 +430,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
     /// 읽기 단 폭 프리셋 토글. 저장하지 않으며 현재 모드(스크롤/페이징) 양쪽에 반영된다.
     func setWidthMode(_ mode: WidthMode) {
         widthMode = mode
+        if let host = pagedHost { layoutPaperHost(host) }
         renderContent()
     }
     var currentWidthMode: WidthMode { widthMode }
@@ -423,7 +446,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
     func setPageLayout(pageWidth: CGFloat, left: CGFloat, right: CGFloat) {
         let s = SettingsManager.shared
         var widthChanged = false
-        if widthMode == .book, abs(pageWidth - columnWidthForCurrentSettings()) > 0.5 {
+        if widthMode == .book, DocumentPaperSize.selected == .automatic, abs(pageWidth - columnWidthForCurrentSettings()) > 0.5 {
             s.readingPageWidth = pageWidth
             widthChanged = true
         }
@@ -439,7 +462,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
 
     /// 치수자 더블클릭 — 넓힌 폭과 여백을 기본(글자수 폭·여백 0)으로 되돌린다.
     func resetPageLayout() {
-        SettingsManager.shared.readingPageWidth = 0
+        if DocumentPaperSize.selected == .automatic { SettingsManager.shared.readingPageWidth = 0 }
         marginLeft = 0
         marginRight = 0
         SettingsManager.shared.readingPageMarginLeft = 0
@@ -480,16 +503,12 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
             indicator.alignment = .center
             indicator.textColor = .secondaryLabelColor
             indicator.font = NSFont.systemFont(ofSize: 11)
-            indicator.translatesAutoresizingMaskIntoConstraints = false
+            indicator.translatesAutoresizingMaskIntoConstraints = true
             host.addSubview(indicator)
-            NSLayoutConstraint.activate([
-                indicator.centerXAnchor.constraint(equalTo: host.centerXAnchor),
-                indicator.bottomAnchor.constraint(equalTo: host.bottomAnchor, constant: -10)
-            ])
             self.pageIndicator = indicator
             self.pagedHost = host
         }
-        host.frame = scrollView.bounds
+        layoutPaperHost(host)
         scrollView.addSubview(host)
         lastTextBoxSize = .zero     // 강제 rebuild
         rebuildPages()
@@ -539,7 +558,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
     private func pageBoxSize() -> NSSize {
         guard let host = pagedHost else { return .zero }
         return NSSize(width: columnWidthForCurrentSettings(),
-                      height: max(1, host.bounds.height - 2 * pageVMargin))
+                      height: widthMode == .book ? (DocumentPaperSize.selected.points?.height ?? max(1, host.bounds.height - 2 * pageVMargin)) : max(1, host.bounds.height - 2 * pageVMargin))
     }
 
     /// 페이지 컨테이너 한 장의 크기 = 페이지에서 좌·우 여백을 뺀 글 영역.
@@ -721,7 +740,8 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         let maxWidth = ReaderMetrics.maxPageWidth(hostWidth: host.bounds.width, spread: pageXs.count == 2)
         for (ruler, px) in zip(rulerViews, pageXs) {
             ruler.frame = NSRect(x: px, y: rulerTop, width: pageWidth, height: PageRulerView.height)
-            ruler.canGrowPage = widthMode == .book
+            ruler.usesPaperOrigin = widthMode == .book && DocumentPaperSize.selected != .automatic
+            ruler.canGrowPage = widthMode == .book && DocumentPaperSize.selected == .automatic
             ruler.maxPageWidth = maxWidth
             ruler.setMargins(left: margins.left, right: margins.right)
         }
@@ -1005,7 +1025,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
             if needsAnchorApply { applyAnchor() }
             return
         }
-        host.frame = scrollView.bounds
+        layoutPaperHost(host)
         // 페이지 경계는 컨테이너 크기(컬럼 폭 × 페이지 높이)에만 의존한다. 창 폭만 바뀐
         // 리사이즈는 배치·펼침면 판정만 다시 하면 되므로 재분할(비용 큼)을 건너뛴다.
         if textBoxSize() != lastTextBoxSize {

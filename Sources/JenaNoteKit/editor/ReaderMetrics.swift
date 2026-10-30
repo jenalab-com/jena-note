@@ -339,6 +339,7 @@ enum ReaderMetrics {
     /// 저장된 읽기 설정을 그대로 읽어 컬럼 폭을 낸다.
     static func columnWidth(mode: WidthMode) -> CGFloat {
         let s = SettingsManager.shared
+        if mode == .book, let paper = DocumentPaperSize.selected.points { return paper.width }
         return columnWidth(mode: mode, scale: s.readingFontScale,
                            family: s.readingFont, charCount: s.readingLineLength,
                            pageWidthOverride: s.readingPageWidth)

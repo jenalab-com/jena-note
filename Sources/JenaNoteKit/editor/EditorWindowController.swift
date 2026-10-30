@@ -539,6 +539,12 @@ class EditorWindowController: NSWindowController {
         applyReadingPageMode((seg.selectedSegment == 1) ? .paged : .scroll)
     }
 
+    @objc func changeDocumentPaperSize(_ sender: NSPopUpButton) {
+        guard let raw = sender.selectedItem?.representedObject as? String,
+              let size = DocumentPaperSize(rawValue: raw) else { return }
+        DocumentPaperSize.selected = size
+    }
+
     @objc func changeReaderWidth(_ sender: Any?) {
         guard let seg = sender as? NSSegmentedControl else { return }
         let mode: ReaderMetrics.WidthMode = (seg.selectedSegment == 0) ? .mobile : .book

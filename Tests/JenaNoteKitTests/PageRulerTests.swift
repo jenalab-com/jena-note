@@ -7,7 +7,7 @@ final class PageRulerTests: XCTestCase {
     private var saved: [String: Any] = [:]
     private let keys = ["jn_readingPageMode", "jn_readingFontScale", "jn_readingFont",
                         "jn_readingWeight", "jn_readingLineSpacing", "jn_readingLineLength",
-                        "jn_readingPageMarginLeft", "jn_readingPageMarginRight", "jn_readingPageWidth"]
+                        "jn_readingPageMarginLeft", "jn_readingPageMarginRight", "jn_readingPageWidth", "jn_documentPaperSize"]
 
     override func setUp() {
         super.setUp()
@@ -23,6 +23,7 @@ final class PageRulerTests: XCTestCase {
         s.readingPageMarginLeft = 0
         s.readingPageMarginRight = 0
         s.readingPageWidth = 0
+        UserDefaults.standard.removeObject(forKey: "jn_documentPaperSize")
     }
 
     override func tearDown() {
@@ -58,6 +59,64 @@ final class PageRulerTests: XCTestCase {
         reader.view.layoutSubtreeIfNeeded()
         pump()
         return (reader, window)
+    }
+
+    func testPaperDimensionsAndFixedMarginsDoNotResizePaper() {
+        DocumentPaperSize.selected = .a4
+        XCTAssertEqual(ReaderMetrics.columnWidth(mode: .book), 210 * 72 / 25.4, accuracy: 0.01)
+        let ruler = PageRulerView(frame: NSRect(x: 0, y: 0, width: ReaderMetrics.columnWidth(mode: .book), height: 18))
+        ruler.canGrowPage = false
+        ruler.setMargins(left: 30, right: 40)
+        let width = ruler.pageWidth
+        ruler.simulateDrag(handleAtLeft: true, dx: -100)
+        XCTAssertEqual(ruler.pageWidth, width)
+        XCTAssertEqual(ruler.leftMargin, 0)
+        ruler.simulateDrag(handleAtLeft: false, dx: -50)
+        XCTAssertEqual(ruler.pageWidth, width)
+        XCTAssertGreaterThan(ruler.rightMargin, 40)
+        XCTAssertEqual(DocumentPaperSize.b5.millimeters?.width, 176)
+        XCTAssertEqual(DocumentPaperSize.jisB5.millimeters?.width, 182)
+    }
+
+    func testFixedPaperScrollLayoutKeepsWidthAndAsymmetricMargins() {
+        DocumentPaperSize.selected = .b3
+        let editor = EditorViewController()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 700), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentViewController = editor
+        window.setContentSize(NSSize(width: 600, height: 700))
+        window.makeKeyAndOrderFront(nil)
+        window.layoutIfNeeded()
+        pump()
+        defer { window.close() }
+        editor.setReadingLayout(true)
+        editor.setPageMargins(left: 40, right: 80)
+        editor.view.layoutSubtreeIfNeeded()
+        let width = DocumentPaperSize.b3.points!.width
+        XCTAssertEqual(editor.ruler.pageWidth, width, accuracy: 0.01)
+        XCTAssertFalse(editor.ruler.canGrowPage)
+        XCTAssertTrue(editor.ruler.usesPaperOrigin)
+        XCTAssertEqual(editor.textView.textContainer!.containerSize.width, width - 120, accuracy: 0.01)
+        XCTAssertEqual(editor.textView.textContainerOrigin.x - editor.ruler.frame.minX, 40, accuracy: 0.01)
+        editor.resetPageLayout()
+        XCTAssertEqual(editor.ruler.pageWidth, width, accuracy: 0.01)
+        XCTAssertEqual(DocumentPaperSize.selected, .b3)
+        DocumentPaperSize.selected = .automatic
+        XCTAssertTrue(editor.textView.textContainer!.widthTracksTextView)
+    }
+
+    func testPagedPaperRetainsPhysicalSizeInSmallWindow() {
+        DocumentPaperSize.selected = .b3
+        let (reader, window) = makeReader(body(5), width: 600)
+        defer { window.close() }
+        XCTAssertEqual(reader.currentPageWidth, DocumentPaperSize.b3.points!.width, accuracy: 0.01)
+        XCTAssertFalse(reader.visiblePageRulers.isEmpty)
+        XCTAssertTrue(reader.visiblePageRulers.allSatisfy { !$0.canGrowPage && $0.usesPaperOrigin })
+        reader.setPageMargins(left: 50, right: 80)
+        XCTAssertEqual(reader.currentPageWidth, DocumentPaperSize.b3.points!.width, accuracy: 0.01)
+        reader.resetPageLayout()
+        XCTAssertEqual(DocumentPaperSize.selected, .b3)
+        XCTAssertEqual(reader.currentPageMargins.left, 0)
     }
 
     // MARK: - 순수 계산

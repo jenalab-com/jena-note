@@ -56,6 +56,7 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         applyPaperBackground()
         NotificationCenter.default.addObserver(self, selector: #selector(applyPaperBackground), name: PaperBackground.changed, object: nil)
 
+        NotificationCenter.default.addObserver(self, selector: #selector(paperSizeChanged), name: DocumentPaperSize.changed, object: nil)
         ruler = PageRulerView(frame: .zero)
         ruler.isHidden = true
         ruler.onCommitted = { [weak self] w, l, r in self?.setPageLayout(pageWidth: w, left: l, right: r) }
@@ -72,6 +73,12 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
     @objc private func applyPaperBackground() {
         scrollView.backgroundColor = PaperBackground.currentColor
         textView.backgroundColor = PaperBackground.currentColor
+    }
+
+    @objc private func paperSizeChanged() {
+        readingWidthMode = .book
+        updateColumnInset()
+        textView.relayoutImageAttachments()
     }
 
     deinit {
@@ -193,7 +200,7 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
     /// 페이지 폭(책 모드에서만 저장)과 여백을 함께 적용한다.
     func setPageLayout(pageWidth: CGFloat, left: CGFloat, right: CGFloat) {
         let s = SettingsManager.shared
-        if readingWidthMode == .book, abs(pageWidth - ReaderMetrics.columnWidth(mode: .book)) > 0.5 {
+        if readingWidthMode == .book, DocumentPaperSize.selected == .automatic, abs(pageWidth - ReaderMetrics.columnWidth(mode: .book)) > 0.5 {
             s.readingPageWidth = pageWidth
         }
         s.readingPageMarginLeft = max(0, left)
@@ -205,7 +212,7 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
     /// 치수자 더블클릭 — 폭·여백을 기본으로.
     func resetPageLayout() {
         let s = SettingsManager.shared
-        s.readingPageWidth = 0
+        if DocumentPaperSize.selected == .automatic { s.readingPageWidth = 0 }
         s.readingPageMarginLeft = 0
         s.readingPageMarginRight = 0
         updateColumnInset()
@@ -215,9 +222,20 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
     /// 조판이 켜져 있으면 본문 단을 가운데로 좁히고, 꺼져 있으면 기본 여백으로 되돌린다.
     /// 단 = 페이지 폭에서 치수자 여백을 뺀 글 영역. 글 영역을 가운데 두고, 치수자는
     /// 그 글 영역이 자기 여백 안쪽에 오도록 페이지 폭으로 위에 얹는다.
+    private var updatingPageLayout = false
     private func updateColumnInset() {
+        guard !updatingPageLayout else { return }
+        updatingPageLayout = true
+        defer { updatingPageLayout = false }
         let base = EditorTextView.defaultContainerInset
+        let fixed = isReadingLayout && readingWidthMode == .book && DocumentPaperSize.selected != .automatic
+        ruler.usesPaperOrigin = fixed
+        scrollView.hasHorizontalScroller = fixed
+        textView.isHorizontallyResizable = fixed
+        textView.autoresizingMask = fixed ? [] : [.width]
+        textView.textContainer?.widthTracksTextView = !fixed
         guard isReadingLayout else {
+            textView.setFrameSize(NSSize(width: scrollView.contentSize.width, height: textView.frame.height))
             ruler.isHidden = true
             if abs(textView.textContainerInset.width - base.width) > 0.5 {
                 textView.textContainerInset = base
@@ -229,6 +247,20 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         let page = ReaderMetrics.columnWidth(mode: readingWidthMode)
         let margins = ReaderMetrics.storedMargins(pageWidth: page)
         let column = ReaderMetrics.textWidth(pageWidth: page, left: margins.left, right: margins.right)
+        if fixed {
+            let pageX = max(base.width, (available - page) / 2)
+            textView.textContainerInset = NSSize(width: pageX + margins.left, height: base.height)
+            textView.textContainer?.containerSize = NSSize(width: column, height: CGFloat.greatestFiniteMagnitude)
+            textView.setFrameSize(NSSize(width: max(available, pageX + page + base.width), height: textView.frame.height))
+            let top: CGFloat = 8
+            let y = scrollView.isFlipped ? top : scrollView.bounds.height - PageRulerView.height - top
+            ruler.frame = NSRect(x: pageX - scrollView.contentView.bounds.minX, y: y, width: page, height: PageRulerView.height)
+            ruler.canGrowPage = false
+            ruler.setMargins(left: margins.left, right: margins.right)
+            ruler.isHidden = false
+            return
+        }
+        textView.setFrameSize(NSSize(width: available, height: textView.frame.height))
         let side = max(base.width, (available - column) / 2)
         if abs(textView.textContainerInset.width - side) > 0.5 {
             textView.textContainerInset = NSSize(width: side, height: base.height)
@@ -299,6 +331,7 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
     }
 
     @objc private func editorDidScroll(_ note: Notification) {
+        if DocumentPaperSize.selected != .automatic { updateColumnInset() }
         captureAnchor()
     }
 

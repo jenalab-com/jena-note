@@ -26,6 +26,7 @@ final class PageRulerView: NSView {
     var maxPageWidth: CGFloat = .greatestFiniteMagnitude
     /// 바깥으로 끌어 페이지를 넓힐 수 있는지. 모바일 폭처럼 고정 프리셋이면 false.
     var canGrowPage = true
+    var usesPaperOrigin = false { didSet { needsDisplay = true } }
 
     var onMarginsChanging: ((CGFloat, CGFloat) -> Void)?
     /// (페이지 폭, 왼쪽 여백, 오른쪽 여백). 손을 놓을 때 값이 바뀌었으면 한 번.
@@ -82,7 +83,7 @@ final class PageRulerView: NSView {
         border.lineWidth = 1
         border.stroke()
 
-        drawTicks(in: b, origin: textX0)
+        drawTicks(in: b, origin: usesPaperOrigin ? 0 : textX0)
         drawHandle(at: textX0, side: .left)
         drawHandle(at: textX1, side: .right)
     }

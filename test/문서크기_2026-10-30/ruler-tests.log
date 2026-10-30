@@ -1,0 +1,50 @@
+[0/1] Planning build
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/7] Compiling JenaNoteKit ReaderViewController.swift
+[4/7] Emitting module JenaNoteKit
+[4/9] Write Objects.LinkFileList
+[6/9] Linking JenaNote
+[7/9] Applying JenaNote
+[8/9] Linking JenaNotePackageTests
+Build complete! (1.39s)
+Test Suite 'Selected tests' started at 2026-10-30 09:36:21.463.
+Test Suite 'JenaNotePackageTests.xctest' started at 2026-10-30 09:36:21.463.
+Test Suite 'PageRulerTests' started at 2026-10-30 09:36:21.463.
+Test Case '-[JenaNoteKitTests.PageRulerTests testClampKeepsMinimumTextWidthAndYieldsRightFirst]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testClampKeepsMinimumTextWidthAndYieldsRightFirst]' passed (0.033 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testDraggingOutwardGrowsThePageUpToTheLimit]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testDraggingOutwardGrowsThePageUpToTheLimit]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testDragSnapsCommitsOnceAndStopsAtOppositeMargin]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testDragSnapsCommitsOnceAndStopsAtOppositeMargin]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testFixedPaperScrollLayoutKeepsWidthAndAsymmetricMargins]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testFixedPaperScrollLayoutKeepsWidthAndAsymmetricMargins]' passed (0.081 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testGrowingPageInReaderRepaginatesWiderAndDoubleClickResets]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testGrowingPageInReaderRepaginatesWiderAndDoubleClickResets]' passed (0.188 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testNarrowerPageTrimsStoredMarginsOnTheRuler]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testNarrowerPageTrimsStoredMarginsOnTheRuler]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testPagedPaperRetainsPhysicalSizeInSmallWindow]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testPagedPaperRetainsPhysicalSizeInSmallWindow]' passed (0.060 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testPaperDimensionsAndFixedMarginsDoNotResizePaper]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testPaperDimensionsAndFixedMarginsDoNotResizePaper]' passed (0.015 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testScrollEditorShowsFixedRulerAndMarginsNarrowTheColumn]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testScrollEditorShowsFixedRulerAndMarginsNarrowTheColumn]' passed (0.017 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testSinglePageHasOneRulerAndTextSitsInsideMargins]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testSinglePageHasOneRulerAndTextSitsInsideMargins]' passed (0.095 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testSnapRoundsToQuarterCentimeterAndNeverNegative]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testSnapRoundsToQuarterCentimeterAndNeverNegative]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testSpreadHasRulerPerPageAndTheyMoveTogether]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testSpreadHasRulerPerPageAndTheyMoveTogether]' passed (0.140 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testStoredMarginsApplyToFreshReaderAndSurviveMobileWidth]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testStoredMarginsApplyToFreshReaderAndSurviveMobileWidth]' passed (0.067 seconds).
+Test Suite 'PageRulerTests' passed at 2026-10-30 09:36:22.168.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.704 (0.705) seconds
+Test Suite 'JenaNotePackageTests.xctest' passed at 2026-10-30 09:36:22.168.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.704 (0.705) seconds
+Test Suite 'Selected tests' passed at 2026-10-30 09:36:22.168.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.704 (0.705) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
