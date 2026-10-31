@@ -34,11 +34,19 @@ enum ScrollReadingPosition {
         return lm.characterIndexForGlyph(at: glyph)
     }
 
-    /// 주어진 오프셋이 화면 맨 위에 오도록 스크롤한다.
-    static func scroll(textView: NSTextView, to offset: Int) {
+    /// 주어진 오프셋이 화면 맨 위에 오도록 스크롤한다. 적용하지 못했으면 false.
+    ///
+    /// 스토리지가 편집 중(beginEditing 이후, 또는 processEditing 전)이면 레이아웃 매니저는
+    /// 편집 전 글을 기준으로 남아 있어, 줄어든 문자열을 범위 밖에서 읽다 NSRangeException으로
+    /// 앱이 죽는다. 그때는 손대지 않고 호출자가 다음 레이아웃에서 다시 시도하게 한다.
+    @discardableResult
+    static func scroll(textView: NSTextView, to offset: Int) -> Bool {
         guard let lm = textView.layoutManager, let tc = textView.textContainer,
-              let length = textView.textStorage?.length, length > 0 else { return }
-        if offset <= 0 { textView.scroll(.zero); return }
+              let storage = textView.textStorage else { return true }
+        guard storage.editedMask.isEmpty else { return false }
+        let length = storage.length
+        guard length > 0 else { return true }
+        if offset <= 0 { textView.scroll(.zero); return true }
         // 길이 0 범위는 빈 사각형을 주는 경우가 있어 한 글자를 잡아 재본다.
         let loc = min(offset, length - 1)
         lm.ensureLayout(for: tc)
@@ -47,6 +55,7 @@ enum ScrollReadingPosition {
         let rect = lm.boundingRect(forGlyphRange: glyphs, in: tc)
         let y = rect.minY + textView.textContainerOrigin.y
         textView.scroll(NSPoint(x: 0, y: max(0, y)))
+        return true
     }
 
     /// 지금 화면에 보이는 문자 범위.

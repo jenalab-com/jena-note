@@ -244,9 +244,41 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         credits.append(NSAttributedString(string: "@jenalab\n", attributes: labelAttrs))
         credits.append(NSAttributedString(string: "https://www.jenalab.com", attributes: linkAttrs))
 
+        // The link targets the bundled notices folder, so Finder still shows them if the click
+        // is not intercepted; normally `textView(_:clickedOnLink:at:)` opens the in-app window.
+        if let notices = AcknowledgementsWindowController.noticesURL() {
+            var licenseAttrs = linkAttrs
+            licenseAttrs[.link] = notices
+            credits.append(NSAttributedString(string: "\n\n", attributes: labelAttrs))
+            credits.append(NSAttributedString(string: L10n.tr("about.licenses"), attributes: licenseAttrs))
+        }
+
         NSApp.orderFrontStandardAboutPanel(options: [
             .credits: credits
         ])
+        if let notices = AcknowledgementsWindowController.noticesURL() {
+            Self.creditsTextViews(linkingTo: notices).forEach { $0.delegate = self }
+        }
+    }
+
+    /// Text views in open windows whose content links to `url` (the standard About panel's credits).
+    static func creditsTextViews(linkingTo url: URL) -> [NSTextView] {
+        func textViews(in view: NSView) -> [NSTextView] {
+            if let textView = view as? NSTextView { return [textView] }
+            return view.subviews.flatMap(textViews)
+        }
+        return NSApp.windows.compactMap(\.contentView).flatMap(textViews).filter { textView in
+            guard let storage = textView.textStorage else { return false }
+            var found = false
+            storage.enumerateAttribute(.link, in: NSRange(location: 0, length: storage.length)) { value, _, stop in
+                if (value as? URL) == url { found = true; stop.pointee = true }
+            }
+            return found
+        }
+    }
+
+    @objc func showAcknowledgements(_ sender: Any?) {
+        AcknowledgementsWindowController.shared.show()
     }
 
     @objc func showSettings(_ sender: Any?) {
@@ -285,5 +317,14 @@ private class RecentDocumentsMenuDelegate: NSObject, NSMenuDelegate {
             clear.target = NSDocumentController.shared
             menu.addItem(clear)
         }
+    }
+}
+
+extension AppDelegate: NSTextViewDelegate {
+    /// Opens the license notices linked from the About panel inside the app.
+    public func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+        guard let url = link as? URL, url == AcknowledgementsWindowController.noticesURL() else { return false }
+        showAcknowledgements(nil)
+        return true
     }
 }

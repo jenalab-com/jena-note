@@ -23,6 +23,14 @@ class EditorWindowController: NSWindowController {
 
     /// 검색 결과 클릭으로 문서를 여는 중일 때, 스왑 완료 후 실행할 점프.
     private var pendingSearchJump: SearchJump?
+    /// Opens a file for a sidebar swap. Replaceable in tests to control completion order.
+    var documentOpener: (URL, @escaping (NSDocument?, Bool, Error?) -> Void) -> Void = { url, completion in
+        NSDocumentController.shared.openDocument(withContentsOf: url, display: false, completionHandler: completion)
+    }
+    /// The latest sidebar swap request. Cloud-backed files can take seconds to read, so earlier
+    /// requests may complete after later ones; only the latest is applied.
+    private var pendingSwap: (id: Int, url: URL)?
+    private var swapCounter = 0
 
     // MARK: - Unified document layout
 
@@ -737,20 +745,41 @@ extension EditorWindowController: SidebarFileOpener {
         // 문서가 바뀌기 전에 저장 — 콜백 안에서는 self.document 가 이미 새 문서라
         // 이전 문서의 위치가 새 문서 키에 얹히게 된다.
         positionProvider?.flushPositionChange()
-        NSDocumentController.shared.openDocument(withContentsOf: url, display: false) { [weak self] newDoc, alreadyOpen, error in
+        swapCounter += 1
+        let request = (id: swapCounter, url: url.standardizedFileURL)
+        pendingSwap = request
+        documentOpener(url) { [weak self] newDoc, alreadyOpen, error in
             guard let self = self else { return }
-            guard error == nil, let newDoc = newDoc else { return }
-
-            if alreadyOpen {
-                newDoc.showWindows()
+            // 클라우드 드라이브에서 읽는 사이 다른 파일을 눌렀다면 이 결과는 버린다.
+            // 늦게 도착한 문서를 그대로 붙이면 창 하나가 두 문서에 매달리고, 이미 닫은
+            // 이전 문서를 다시 닫게 된다. 최신 요청이 같은 파일이면 그쪽이 이 문서를 받는다.
+            guard self.pendingSwap?.id == request.id else {
+                if let newDoc, !alreadyOpen, newDoc.windowControllers.isEmpty,
+                   newDoc.fileURL?.standardizedFileURL != self.pendingSwap?.url {
+                    newDoc.close()
+                }
+                return
+            }
+            self.pendingSwap = nil
+            guard error == nil, let newDoc = newDoc else {
+                self.pendingSearchJump = nil
+                self.updateSidebarSelection()
+                if let error, (error as NSError).code != NSUserCancelledError { self.presentOpenFailure(error, url: url) }
                 return
             }
 
-            // 기존 윈도우 컨트롤러를 신규 문서로 이관
-            if let oldDoc = oldDoc {
-                oldDoc.removeWindowController(self)
+            if alreadyOpen && !newDoc.windowControllers.isEmpty {
+                newDoc.showWindows()
+                self.updateSidebarSelection()
+                return
+            }
+
+            // 기존 윈도우 컨트롤러를 신규 문서로 이관. 닫을 대상은 지금 이 창이 보여주는 문서다.
+            let shown = self.document as? MarkdownDocument
+            if let current = shown ?? oldDoc, current !== newDoc {
+                current.removeWindowController(self)
                 // 변경 카운트를 초기화하지 않으면 close 시 또 시트가 뜸 — canClose 이후이므로 이미 통과 상태
-                oldDoc.close()
+                current.close()
             }
             newDoc.addWindowController(self)
 
@@ -769,6 +798,16 @@ extension EditorWindowController: SidebarFileOpener {
             self.synchronizeWindowTitleWithDocumentName()
             self.updateSidebarSelection()
         }
+    }
+}
+
+extension EditorWindowController {
+    /// 사이드바에서 연 파일을 읽지 못했을 때(클라우드 내려받기 실패·인코딩 오류 등) 알린다.
+    func presentOpenFailure(_ error: Error, url: URL) {
+        let alert = NSAlert(error: error)
+        alert.messageText = String(format: L10n.tr("open.failed"), url.lastPathComponent)
+        alert.informativeText = error.localizedDescription
+        if let window { alert.beginSheetModal(for: window) } else { alert.runModal() }
     }
 }
 

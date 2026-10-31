@@ -42,7 +42,13 @@ class MarkdownDocument: NSDocument {
 
     /// 열기: 파일 데이터 → NSAttributedString
     override func read(from data: Data, ofType typeName: String) throws {
-        let text = String(data: data, encoding: .utf8) ?? ""
+        // 해석할 수 없는 데이터를 빈 문서로 열면, 그 뒤 자동 저장이 원본을 빈 내용으로 덮어쓴다.
+        // (클라우드 드라이브의 덜 받아진 파일·다른 인코딩 파일) 열기 자체를 실패시킨다.
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw NSError(domain: NSCocoaErrorDomain, code: NSFileReadInapplicableStringEncodingError,
+                          userInfo: [NSStringEncodingErrorKey: String.Encoding.utf8.rawValue,
+                                     NSLocalizedDescriptionKey: L10n.tr("open.notUTF8")])
+        }
         let parsed = isPlainText(typeName) ? MarkdownSerializer.parsePlainText(text)
                                            : MarkdownSerializer.parse(text, baseURL: fileURL?.deletingLastPathComponent())
         content = NSMutableAttributedString(attributedString: parsed)
