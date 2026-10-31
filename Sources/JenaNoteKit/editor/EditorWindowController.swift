@@ -11,6 +11,8 @@ class EditorWindowController: NSWindowController {
     private var lastNotifiedMissingURL: URL?
     private var readerCountWork: DispatchWorkItem?
     private(set) var aiChatVC: AIChatViewController?
+    var proofreadingController: AIProofreadingController?
+    var proofreadingService = AISelectionProofreader()
     private(set) var isAIActive = false
     private var previousMinimumSize: NSSize?
     private(set) var sourcePreview: MarkdownSourceViewController?
@@ -102,6 +104,7 @@ class EditorWindowController: NSWindowController {
     }
 
     deinit {
+        proofreadingController?.cancel()
         readerCountWork?.cancel()
         NotificationCenter.default.removeObserver(self)
     }
@@ -167,6 +170,7 @@ class EditorWindowController: NSWindowController {
     override var document: AnyObject? {
         get { super.document }
         set {
+            if super.document !== newValue { proofreadingController?.cancel() }
             if let old = super.document as? MarkdownDocument, isAIActive {
                 _ = AIConversationStore.shared.conversation(for: old)
             }
@@ -318,6 +322,7 @@ class EditorWindowController: NSWindowController {
     }
 
     @objc private func aiWindowWillClose() {
+        proofreadingController?.cancel()
         sourcePreview?.suspend()
         positionProvider?.flushPositionChange()
         bookmarkPopover?.performClose(nil)
@@ -773,6 +778,8 @@ extension EditorWindowController: NSMenuItemValidation {
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         switch menuItem.action {
+        case #selector(proofreadSelection(_:)):
+            return canProofreadSelection
         case #selector(manageEndnotes(_:)):
             guard let doc = document as? MarkdownDocument else { return false }
             return !isShowingSource && doc.fileType != "public.plain-text" && doc.fileURL?.pathExtension.lowercased() != "txt"

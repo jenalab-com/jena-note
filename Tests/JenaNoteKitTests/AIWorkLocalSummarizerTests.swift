@@ -74,11 +74,12 @@ final class AIWorkLocalSummarizerTests: XCTestCase {
 
     func testCancellingRunningInferencePropagatesToTheModel() {
         let started = expectation(description: "started"), done = expectation(description: "cancelled")
+        let propagated = expectation(description: "model observed cancellation")
         var observedCancellation = false
         let local = AIWorkLocalSummarizer(infer: { _ in
             started.fulfill()
             do { try await Task.sleep(nanoseconds: 5_000_000_000) }
-            catch { observedCancellation = true; throw error }
+            catch { observedCancellation = true; propagated.fulfill(); throw error }
             return "late"
         })
         let cancel = local.generate(passage()) { result in
@@ -87,7 +88,7 @@ final class AIWorkLocalSummarizerTests: XCTestCase {
         }
         wait(for: [started], timeout: 2)
         cancel()
-        wait(for: [done], timeout: 2)
+        wait(for: [done, propagated], timeout: 2)
         XCTAssertTrue(observedCancellation)
     }
 

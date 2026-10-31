@@ -6,12 +6,15 @@ BINARY      = $(BUNDLE)/Contents/MacOS/$(APP_NAME)
 DMG         = $(BUILD_DIR)/$(APP_NAME).dmg
 PKG         = $(BUILD_DIR)/$(APP_NAME)-$(VERSION).pkg
 
-.PHONY: build run install dmg pkg clean test
+.PHONY: build run install dmg pkg clean test prepare-kiwi
 
 run: build
 	@open $(BUNDLE)
 
-build:
+prepare-kiwi:
+	@bash scripts/prepare-kiwi.sh
+
+build: prepare-kiwi
 	swift build -c release --product $(APP_NAME)
 	@mkdir -p $(BUNDLE)/Contents/MacOS
 	@mkdir -p $(BUNDLE)/Contents/Resources
@@ -20,9 +23,11 @@ build:
 	@[ -f Resources/$(APP_NAME).icns ] && cp Resources/$(APP_NAME).icns $(BUNDLE)/Contents/Resources/$(APP_NAME).icns || true
 	@mkdir -p $(BUNDLE)/Contents/Resources/Fonts
 	@cp Resources/Fonts/*.ttf $(BUNDLE)/Contents/Resources/Fonts/
+	@cp -R Sources/JenaNoteKit/Resources/KiwiModel $(BUNDLE)/Contents/Resources/
+	@cp -R Sources/JenaNoteKit/Resources/ThirdParty $(BUNDLE)/Contents/Resources/
 	@echo "✓ 빌드 완료: $(BUNDLE)"
 
-test:
+test: prepare-kiwi
 	swift test
 
 ## ~/Applications 에 설치

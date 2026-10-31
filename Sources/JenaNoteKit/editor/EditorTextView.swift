@@ -1,6 +1,44 @@
 import AppKit
 
 class EditorTextView: NSTextView {
+    private var proofreadingTrackingArea: NSTrackingArea?
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let area = proofreadingTrackingArea { removeTrackingArea(area) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self)
+        addTrackingArea(area); proofreadingTrackingArea = area
+    }
+    override func mouseMoved(with event: NSEvent) {
+        liveProofreading?.hover(at: convert(event.locationInWindow, from: nil))
+        super.mouseMoved(with: event)
+    }
+    override func mouseExited(with event: NSEvent) {
+        liveProofreading?.hoverEnded(); super.mouseExited(with: event)
+    }
+    override func becomeFirstResponder() -> Bool {
+        let result = super.becomeFirstResponder()
+        if result { liveProofreading?.selectionChanged() }
+        return result
+    }
+    override func cancelOperation(_ sender: Any?) {
+        if liveProofreading?.popover?.isShown == true { liveProofreading?.dismissPopover() }
+        else { super.cancelOperation(sender) }
+    }
+
+    private(set) var liveProofreading: LiveProofreadingController?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        window?.acceptsMouseMovedEvents = true
+        liveProofreading?.stop()
+        liveProofreading = window == nil ? nil : LiveProofreadingController(textView: self)
+    }
+
+
+    override func unmarkText() {
+        super.unmarkText()
+        liveProofreading?.schedule()
+    }
 
     // MARK: - Setup
 

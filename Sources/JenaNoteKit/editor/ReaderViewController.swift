@@ -30,6 +30,39 @@ final class PagedHostView: NSView {
 
 /// 본문 방향키는 NSTextView의 커서 이동에 맡기고 Page Up/Down만 페이지를 넘긴다.
 final class PageTextView: NSTextView {
+    private var proofreadingTrackingArea: NSTrackingArea?
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let area = proofreadingTrackingArea { removeTrackingArea(area) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self)
+        addTrackingArea(area); proofreadingTrackingArea = area
+    }
+    override func mouseMoved(with event: NSEvent) {
+        liveProofreading?.hover(at: convert(event.locationInWindow, from: nil))
+        super.mouseMoved(with: event)
+    }
+    override func mouseExited(with event: NSEvent) {
+        liveProofreading?.hoverEnded(); super.mouseExited(with: event)
+    }
+    override func becomeFirstResponder() -> Bool {
+        let result = super.becomeFirstResponder()
+        if result { liveProofreading?.selectionChanged() }
+        return result
+    }
+    override func cancelOperation(_ sender: Any?) {
+        if liveProofreading?.popover?.isShown == true { liveProofreading?.dismissPopover() }
+        else { super.cancelOperation(sender) }
+    }
+
+    private(set) var liveProofreading: LiveProofreadingController?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        window?.acceptsMouseMovedEvents = true
+        liveProofreading?.stop()
+        liveProofreading = window == nil ? nil : LiveProofreadingController(textView: self)
+    }
+
     var onPageKey: ((Bool) -> Void)?
     var onInputFinished: (() -> Void)?
     var onFind: (() -> Void)?
@@ -47,6 +80,7 @@ final class PageTextView: NSTextView {
 
     override func unmarkText() {
         super.unmarkText()
+        liveProofreading?.schedule()
         onInputFinished?()
     }
 
@@ -168,7 +202,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         let textContainer = NSTextContainer(containerSize: NSSize(
             width: 0, height: CGFloat.greatestFiniteMagnitude))
         textContainer.widthTracksTextView = true
-        let layoutManager = NSLayoutManager()
+        let layoutManager = ProofreadingLayoutManager()
         layoutManager.addTextContainer(textContainer)
         let textStorage = NSTextStorage()
         textStorage.addLayoutManager(layoutManager)

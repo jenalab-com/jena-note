@@ -11,7 +11,7 @@
 
 재현(저장소 루트에서, macOS 26 이상 및 Apple Intelligence 준비 상태):
 ```sh
-xcrun swiftc -parse-as-library Sources/JenaNoteKit/ai/AIWorkLocalSummarizer.swift test/FoundationModels_2026-10-28/adapter-smoke.swift -o /tmp/jena-foundation-adapter-smoke
+xcrun swiftc -parse-as-library Sources/JenaNoteKit/ai/AILocalInferenceQueue.swift Sources/JenaNoteKit/ai/AIWorkLocalSummarizer.swift test/FoundationModels_2026-10-28/adapter-smoke.swift -o /tmp/jena-foundation-adapter-smoke
 /tmp/jena-foundation-adapter-smoke
 ```
 
