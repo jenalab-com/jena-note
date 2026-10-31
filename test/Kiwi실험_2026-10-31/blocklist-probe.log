@@ -1,0 +1,56 @@
+typo_add 게←께: 0
+typo_add 지←찌: 0
+typo_add 수←쑤: 0
+typo_add 걸←껄: 0
+typo_add 이←히: 0
+typo_add 히←이: 0
+block ᆯ께/EF: 1
+block ᆯ께/EC: 1
+block 깨끗히/MAG: 2
+block 솔직이/MAG: 1
+block 꼼꼼/MAG: 1
+• 내가 갈께.
+  base           : 나/NP 가/JKS 가/VV ᆯ께/EF ./SF  ⇒ 내가 갈께
+  custom+block   : 나/NP 가/JKS 가/VV ᆯ게/EF* ./SF  ⇒ 내가 갈게
+• 그럴껄 그랬다.
+  base           : 그렇/VA-I ᆯ/ETM 꺼/NNB ᆯ/JKO 그렇/VA-I 었/EP 다/EF ./SF  ⇒ 그럴 껄 그랬다
+  custom+block   : 그렇/VA-I ᆯ/ETM 꺼/NNB ᆯ/JKO 그렇/VA-I 었/EP 다/EF ./SF  ⇒ 그럴 껄 그랬다
+• 올찌 모르겠다.
+  base           : 올찌/NNG 모르/VV 겠/EP 다/EF ./SF  ⇒ 올찌 모르겠다
+  custom+block   : 오/VV ᆯ지/EC* 모르/VV 겠/EP 다/EF ./SF  ⇒ 올지 모르겠다
+• 볼쑤록 좋다.
+  base           : 볼쑤록/NNG 좋/VA 다/EF ./SF  ⇒ 볼쑤록 좋다
+  custom+block   : 보/VV ᆯ수록/EC* 좋/VA 다/EF ./SF  ⇒ 볼수록 좋다
+• 깨끗히 씻었다.
+  base           : 깨끗히/MAG 씻/VV-R 었/EP 다/EF ./SF  ⇒ 깨끗히 씻었다
+  custom+block   : 깨끗이/MAG* 씻/VV-R 었/EP 다/EF ./SF  ⇒ 깨끗이 씻었다
+• 솔직이 말해라.
+  base           : 솔직이/MAG 말/NNG 하/XSV 여라/EF ./SF  ⇒ 솔직이 말하여라
+  custom+block   : 솔직히/MAG* 말/NNG 하/XSV 여라/EF ./SF  ⇒ 솔직히 말하여라
+• 꼼꼼이 살폈다.
+  base           : 꼼꼼/MAG 이/XSM 살피/VV 었/EP 다/EF ./SF  ⇒ 꼼꼼이 살폈다
+  custom+block   : 꼼꼼/XR 이/XSM 살피/VV 었/EP 다/EF ./SF  ⇒ 꼼꼼이 살폈다
+• 선생님께 드렸다.
+  base           : 선생/NNG 님/XSN 께/JKB 드리/VV 었/EP 다/EF ./SF  ⇒ 선생님께 드렸다
+  custom+block   : 선생/NNG 님/XSN 께/JKB 드리/VV 었/EP 다/EF ./SF  ⇒ 선생님께 드렸다
+• 같이 가자.
+  base           : 같이/MAG 가/VV 자/EF ./SF  ⇒ 같이 가자
+  custom+block   : 같이/MAG 가/VV 자/EF ./SF  ⇒ 같이 가자
+• 깨끗이 씻었다.
+  base           : 깨끗이/MAG 씻/VV-R 었/EP 다/EF ./SF  ⇒ 깨끗이 씻었다
+  custom+block   : 깨끗이/MAG 씻/VV-R 었/EP 다/EF ./SF  ⇒ 깨끗이 씻었다
+• 조용히 해라.
+  base           : 조용히/MAG 하/VV 여라/EF ./SF  ⇒ 조용히 하여라
+  custom+block   : 조용히/MAG 하/VV 여라/EF ./SF  ⇒ 조용히 하여라
+• 높이 날았다.
+  base           : 높이/MAG 날/VV 았/EP 다/EF ./SF  ⇒ 높이 날았다
+  custom+block   : 높이/MAG 날/VV 았/EP 다/EF ./SF  ⇒ 높이 날았다
+• 급히 갔다.
+  base           : 급히/MAG 가/VV 았/EP 다/EF ./SF  ⇒ 급히 갔다
+  custom+block   : 급히/MAG 가/VV 았/EP 다/EF ./SF  ⇒ 급히 갔다
+• 이따가 갈게.
+  base           : 이따가/MAG 가/VV ᆯ게/EF ./SF  ⇒ 이따가 갈게
+  custom+block   : 이따가/MAG 가/VV ᆯ게/EF ./SF  ⇒ 이따가 갈게
+• 그럴걸 그랬다.
+  base           : 그렇/VA-I ᆯ/ETM 거/NNB ᆯ/JKO 그렇/VA-I 었/EP 다/EF ./SF  ⇒ 그럴 걸 그랬다
+  custom+block   : 그렇/VA-I ᆯ/ETM 거/NNB ᆯ/JKO 그렇/VA-I 었/EP 다/EF ./SF  ⇒ 그럴 걸 그랬다

@@ -1,0 +1,84 @@
+== E1/E2: app analysis vs kiwi_space-internal analysis, raw kiwi_space, app final ==
+• 그제야 리에느가 빵을 받았다.
+  app     : 그제야/MAG 리에느가/NNG 빵/NNG 을/JKO 받/VV-R 았/EP 다/EF ./SF  [score -57.763786]
+  spaceOpt: 그제야/MAG 리에느/NNP 가/JKS 빵/NNG 을/JKO 받/VV-R 았/EP 다/EF ./SF  [score -53.75319]
+  space r0: 그제야 리에느가 빵을 받았다.
+  space r1: 그제야리에느가빵을 받았다.
+  engine  : 그제야 리에느가 빵을 받았다.
+• 그제야리에느가빵을받았다.
+  app     : 그제야리에느가빵/NNG 을/JKO 받/VV-R 았/EP 다/EF ./SF  [score -62.73362]
+  spaceOpt: 그제야리에느가빵/NNG 을/JKO 받/VV-R 았/EP 다/EF ./SF  [score -54.509445]
+  space r0: 그제야리에느가빵을 받았다.
+  space r1: 그제야리에느가빵을 받았다.
+  engine  : 그제야리에느가빵을 받았다.
+• 리에느가 빵을 받앗다.
+  app     : 리에느가/NNG 빵/NNG 을/JKO 받/VV-R 았/EP(typo 1.0) 다/EF ./SF  [score -53.327255]
+  spaceOpt: 리에느/NNP 가/JKS 빵/NNG 을/JKO 받/VV-R 앗/VV-R 다/EF ./SF  [score -60.82897]
+  space r0: 리에느가 빵을 받 앗다.
+  space r1: 리에느가빵을 받 앗다.
+  engine  : 리에느가 빵을 받았다.
+• 카셀리온이 검을 뽑았다.
+  app     : 카셀리온/NNP 이/JKS 검/NNG 을/JKO 뽑/VV-R 았/EP 다/EF ./SF  [score -51.658424]
+  spaceOpt: 카셀/NNP 리/NNG 온/NNG 이/JKS 검/NNG 을/JKO 뽑/VV-R 았/EP 다/EF ./SF  [score -52.032814]
+  space r0: 카셀 리 온이 검을 뽑았다.
+  space r1: 카셀 리 온이 검을 뽑았다.
+  engine  : 카셀리온이 검을 뽑았다.
+• 엘라드린과 미르세아는 숲으로 들어갔다.
+  app     : 엘라/NNP 드/NNG 린/NNG 과/JC 미르세아/NNP 는/JX 숲/NNG 으로/JKB 들어가/VV 았/EP 다/EF ./SF  [score -78.59277]
+  spaceOpt: 엘라/NNP 드/NNG 린/NNG 과/JC 미르세아/NNP 는/JX 숲/NNG 으로/JKB 들어가/VV 았/EP 다/EF ./SF  [score -71.3728]
+  space r0: 엘라 드 린과 미르세아는 숲으로 들어갔다.
+  space r1: 엘라드린과미르세아는 숲으로 들어갔다.
+  engine  : 엘라드린과 미르세아는 숲으로 들어갔다.
+• 하연은 서준에게 책을 건넸다.
+  app     : 하연/NNP 은/JX 서/NNP 준/NNG 에게/JKB 책/NNG 을/JKO 건네/VV 었/EP 다/EF ./SF  [score -54.661514]
+  spaceOpt: 하연/NNP 은/JX 서/NNP 준/NNG 에게/JKB 책/NNG 을/JKO 건네/VV 었/EP 다/EF ./SF  [score -54.661514]
+  space r0: 하연은 서 준에게 책을 건넸다.
+  space r1: 하연은 서 준에게 책을 건넸다.
+  engine  : 하연은 서준에게 책을 건넸다.
+• 오늘학교에갔다.
+  app     : 오늘/NNG 학교/NNG 에/JKB 가/VV 았/EP 다/EF ./SF  [score -21.22636]
+  spaceOpt: 오늘/NNG 학교/NNG 에/JKB 가/VV 았/EP 다/EF ./SF  [score -21.22636]
+  space r0: 오늘 학교에 갔다.
+  space r1: 오늘 학교에 갔다.
+  engine  : 오늘 학교에 갔다.
+
+== E1b: dialect_cost effect (allowed_dialects=0) ==
+• 그제야 리에느가 빵을 받았다.: identical
+• 그제야리에느가빵을받았다.: identical
+• 리에느가 빵을 받앗다.: identical
+
+== E3: pretokenized 리에느/NNP (UTF-16 offsets) ==
+• 그제야 리에느가 빵을 받았다.
+  app+pt  : 그제야/MAG 리에느/NNP 가/JKS 빵/NNG 을/JKO 받/VV-R 았/EP 다/EF ./SF  [score -37.75319]
+• 그제야리에느가빵을받았다.
+  app+pt  : 그제야/MAG 리에느/NNP 가/JKS 빵/NNG 을/JKO 받/VV-R 았/EP 다/EF ./SF  [score -42.75319]
+• 리에느가 빵을 받앗다.
+  app+pt  : 리에느/NNP 가/JKS 빵/NNG 을/JKO 받/VV-R 았/EP(typo 1.0) 다/EF ./SF  [score -35.360085]
+
+== E4: builder + add_word(NNP) for invented names ==
+  add_word 리에느: 0
+  add_word 카셀리온: 0
+  add_word 엘라드린: 0
+  add_word 미르세아: 0
+  build: 425 ms
+• 그제야 리에느가 빵을 받았다.
+  app     : 그제야/MAG 리에느/NNP 가/JKS 빵/NNG 을/JKO 받/VV-R 았/EP 다/EF ./SF  [score -37.75319]
+  space r1: 그제야 리에느가 빵을 받았다.
+• 그제야리에느가빵을받았다.
+  app     : 그제야/MAG 리에느/NNP 가/JKS 빵/NNG 을/JKO 받/VV-R 았/EP 다/EF ./SF  [score -42.75319]
+  space r1: 그제야 리에느가 빵을 받았다.
+• 리에느가 빵을 받앗다.
+  app     : 리에느/NNP 가/JKS 빵/NNG 을/JKO 받/VV-R 았/EP(typo 1.0) 다/EF ./SF  [score -35.360085]
+  space r1: 리에느가 빵을 받 앗다.
+• 카셀리온이 검을 뽑았다.
+  app     : 카셀리온/NNP 이/JKS 검/NNG 을/JKO 뽑/VV-R 았/EP 다/EF ./SF  [score -24.972574]
+  space r1: 카셀리온이 검을 뽑았다.
+• 엘라드린과 미르세아는 숲으로 들어갔다.
+  app     : 엘라드린/NNP 과/JC 미르세아/NNP 는/JX 숲/NNG 으로/JKB 들어가/VV 았/EP 다/EF ./SF  [score -28.85301]
+  space r1: 엘라드린과 미르세아는 숲으로 들어갔다.
+• 하연은 서준에게 책을 건넸다.
+  app     : 하연/NNP 은/JX 서/NNP 준/NNG 에게/JKB 책/NNG 을/JKO 건네/VV 었/EP 다/EF ./SF  [score -54.661514]
+  space r1: 하연은 서 준에게 책을 건넸다.
+• 오늘학교에갔다.
+  app     : 오늘/NNG 학교/NNG 에/JKB 가/VV 았/EP 다/EF ./SF  [score -21.22636]
+  space r1: 오늘 학교에 갔다.

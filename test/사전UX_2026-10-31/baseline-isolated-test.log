@@ -1,0 +1,82 @@
+[0/1] Planning build
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/7] Compiling JenaNoteKit PersonalDictionaryWindowController.swift
+[4/7] Emitting module JenaNoteKit
+[5/9] Compiling JenaNoteKit AppDelegate.swift
+[6/9] Compiling JenaNoteKit LiveProofreadingController.swift
+[7/61] Compiling JenaNote main.swift
+[8/61] Emitting module JenaNote
+[8/61] Write Objects.LinkFileList
+[10/61] Compiling JenaNoteKitTests SidebarItemOperationsTests.swift
+[11/61] Compiling JenaNoteKitTests SmokeTests.swift
+[12/61] Compiling JenaNoteKitTests TextMetricsTests.swift
+[13/64] Emitting module JenaNoteKitTests
+[14/64] Compiling JenaNoteKitTests ReaderMetricsTests.swift
+[15/64] Compiling JenaNoteKitTests ReaderPageViewLifecycleTests.swift
+[16/64] Compiling JenaNoteKitTests ReadingAnchorTests.swift
+[17/64] Compiling JenaNoteKitTests ReadingProgressStoreTests.swift
+[18/64] Compiling JenaNoteKitTests ReadingSettingsTests.swift
+[19/64] Compiling JenaNoteKitTests SidebarItemCreationTests.swift
+[20/64] Compiling JenaNoteKitTests FileSearcherTests.swift
+[21/64] Compiling JenaNoteKitTests HwpxWriterTests.swift
+[22/64] Compiling JenaNoteKitTests ImageAttachmentTests.swift
+[23/64] Compiling JenaNoteKitTests IncrementalPaginatorTests.swift
+[24/64] Compiling JenaNoteKitTests AIChatComposerTests.swift
+[25/64] Compiling JenaNoteKitTests AIChatLayoutTests.swift
+[26/64] Compiling JenaNoteKitTests AIChatMarkdownTests.swift
+[27/64] Compiling JenaNoteKitTests AIClientTimeoutTests.swift
+[28/64] Compiling JenaNoteKitTests AIWorkContextResolverTests.swift
+[29/64] Compiling JenaNoteKitTests AIWorkContextSourcesViewTests.swift
+[30/64] Compiling JenaNoteKitTests AIWorkContextTests.swift
+[31/64] Compiling JenaNoteKitTests AIWorkContextWindowTests.swift
+[32/64] Compiling JenaNoteKitTests BookmarkLocalizationTests.swift
+[33/64] Compiling JenaNoteKitTests BookmarkStoreTests.swift
+[34/64] Compiling JenaNoteKitTests DocumentHistoryTests.swift
+[35/64] Compiling JenaNoteKitTests DocumentModelBuilderTests.swift
+[36/64] Compiling JenaNoteKitTests DocxWriterTests.swift
+[37/64] Compiling JenaNoteKitTests EditablePagedReaderTests.swift
+[38/64] Compiling JenaNoteKitTests EditorDocumentLoadTests.swift
+[39/64] Compiling JenaNoteKitTests ExternalReloadTests.swift
+[40/64] Compiling JenaNoteKitTests KiwiProofreadingTests.swift
+[41/64] Compiling JenaNoteKitTests LiveProofreadingTests.swift
+[42/64] Compiling JenaNoteKitTests MarkdownSourceTests.swift
+[43/64] Compiling JenaNoteKitTests AIWorkIndexIntegrationTests.swift
+[44/64] Compiling JenaNoteKitTests AIWorkIndexTests.swift
+[45/64] Compiling JenaNoteKitTests AIWorkLocalSummarizerTests.swift
+[46/64] Compiling JenaNoteKitTests AIWorkPromptTests.swift
+[47/64] Compiling JenaNoteKitTests AIWorkContextAssemblerTests.swift
+[48/64] Compiling JenaNoteKitTests AIWorkContextBarTests.swift
+[49/64] Compiling JenaNoteKitTests AIWorkContextEpisodesViewTests.swift
+[50/64] Compiling JenaNoteKitTests AIWorkContextModelTests.swift
+[51/64] Compiling JenaNoteKitTests PageRulerTests.swift
+[52/64] Compiling JenaNoteKitTests PersonalDictionaryTests.swift
+[53/64] Compiling JenaNoteKitTests ReaderLayoutRoundTripTests.swift
+[54/64] Compiling JenaNoteKitTests AIEpisodeSummaryStoreTests.swift
+[55/64] Compiling JenaNoteKitTests AIMetadataTests.swift
+[56/64] Compiling JenaNoteKitTests AIModeTests.swift
+[57/64] Compiling JenaNoteKitTests AIProofreadingTests.swift
+[58/64] Compiling JenaNoteKitTests UnifiedEditorTests.swift
+[59/64] Compiling JenaNoteKitTests WriterUtilitiesTests.swift
+[60/64] Compiling JenaNoteKitTests ZipArchiveTests.swift
+[60/64] Write Objects.LinkFileList
+[61/64] Linking JenaNote
+[62/64] Applying JenaNote
+[63/64] Linking JenaNotePackageTests
+Build complete! (3.90s)
+Test Suite 'Selected tests' started at 2026-10-31 13:08:35.487.
+Test Suite 'JenaNotePackageTests.xctest' started at 2026-10-31 13:08:35.489.
+Test Suite 'PersonalDictionaryTests' started at 2026-10-31 13:08:35.489.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testChangingDocumentWorkRefiltersWithoutNativeRerun]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testChangingDocumentWorkRefiltersWithoutNativeRerun]' passed (0.597 seconds).
+Test Suite 'PersonalDictionaryTests' passed at 2026-10-31 13:08:36.086.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.597 (0.597) seconds
+Test Suite 'JenaNotePackageTests.xctest' passed at 2026-10-31 13:08:36.086.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.597 (0.597) seconds
+Test Suite 'Selected tests' passed at 2026-10-31 13:08:36.086.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.597 (0.599) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

@@ -1,0 +1,85 @@
+Another instance of SwiftPM (PID: 43866) is already running using '/Volumes/Backup/Project/jena/source/jena-note/.build', waiting until that process has finished execution...[0/1] Planning build
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/5] Compiling JenaNoteKitTests PersonalDictionaryTests.swift
+[4/5] Emitting module JenaNoteKitTests
+[4/6] Write Objects.LinkFileList
+[5/6] Linking JenaNotePackageTests
+Build complete! (1.44s)
+Test Suite 'Selected tests' started at 2026-10-31 13:28:32.249.
+Test Suite 'JenaNotePackageTests.xctest' started at 2026-10-31 13:28:32.249.
+Test Suite 'PersonalDictionaryTests' started at 2026-10-31 13:28:32.249.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testBulkDeletionPersistsOnceAndPreservesUncheckedWords]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testBulkDeletionPersistsOnceAndPreservesUncheckedWords]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testChangingDocumentWorkRefiltersWithoutNativeRerun]' started.
+/Volumes/Backup/Project/jena/source/jena-note/Tests/JenaNoteKitTests/PersonalDictionaryTests.swift:121: error: -[JenaNoteKitTests.PersonalDictionaryTests testChangingDocumentWorkRefiltersWithoutNativeRerun] : Asynchronous wait failed: Exceeded timeout of 6 seconds, with unfulfilled expectations: "UI result".
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testChangingDocumentWorkRefiltersWithoutNativeRerun]' failed (6.313 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testCorruptDictionaryAndWriteFailurePreserveOriginalState]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testCorruptDictionaryAndWriteFailurePreserveOriginalState]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDeletionFailureKeepsWordsAndFileIntact]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDeletionFailureKeepsWordsAndFileIntact]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDictionaryChangeRefiltersCachedKiwiResultImmediately]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDictionaryChangeRefiltersCachedKiwiResultImmediately]' passed (0.076 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDictionaryFormDefaultsToCurrentWorkAndPersistsOnlyAfterSave]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDictionaryFormDefaultsToCurrentWorkAndPersistsOnlyAfterSave]' passed (0.157 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testExceptionsOnlySuppressTheirEditsAndRespectWordBoundaries]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testExceptionsOnlySuppressTheirEditsAndRespectWordBoundaries]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testMovingWorkFolderKeepsBookmarkIdentity]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testMovingWorkFolderKeepsBookmarkIdentity]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testPagedPopoverAppliesOnlyItsCandidateWithUndo]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testPagedPopoverAppliesOnlyItsCandidateWithUndo]' passed (0.911 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testPopoverShowsFromFocusAndAppliesOnlyItsCandidateWithUndo]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testPopoverShowsFromFocusAndAppliesOnlyItsCandidateWithUndo]' passed (0.793 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testReaddingDisabledGlobalTermDoesNotSilentlyEnableItEverywhere]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testReaddingDisabledGlobalTermDoesNotSilentlyEnableItEverywhere]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testScopesIsolateSameNamedWorksAndSupportExplicitSharingAndPersistence]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testScopesIsolateSameNamedWorksAndSupportExplicitSharingAndPersistence]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testSelectionSheetUsesSameDictionaryAndUpdatesAfterRegistration]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testSelectionSheetUsesSameDictionaryAndUpdatesAfterRegistration]' passed (0.581 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testSuggestionsApplyOneWordWithoutChangingOtherCorrectionsOrEmoji]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testSuggestionsApplyOneWordWithoutChangingOtherCorrectionsOrEmoji]' passed (0.000 seconds).
+Test Suite 'PersonalDictionaryTests' failed at 2026-10-31 13:28:41.095.
+	 Executed 14 tests, with 1 failure (0 unexpected) in 8.844 (8.845) seconds
+Test Suite 'JenaNotePackageTests.xctest' failed at 2026-10-31 13:28:41.095.
+	 Executed 14 tests, with 1 failure (0 unexpected) in 8.844 (8.846) seconds
+Test Suite 'Selected tests' failed at 2026-10-31 13:28:41.095.
+	 Executed 14 tests, with 1 failure (0 unexpected) in 8.844 (8.846) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+eout of 6 seconds, with unfulfilled expectations: "UI result".
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testChangingDocumentWorkRefiltersWithoutNativeRerun]' failed (6.585 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testCorruptDictionaryAndWriteFailurePreserveOriginalState]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testCorruptDictionaryAndWriteFailurePreserveOriginalState]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDictionaryChangeRefiltersCachedKiwiResultImmediately]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDictionaryChangeRefiltersCachedKiwiResultImmediately]' passed (0.086 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDictionaryFormDefaultsToCurrentWorkAndPersistsOnlyAfterSave]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDictionaryFormDefaultsToCurrentWorkAndPersistsOnlyAfterSave]' passed (0.193 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testExceptionsOnlySuppressTheirEditsAndRespectWordBoundaries]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testExceptionsOnlySuppressTheirEditsAndRespectWordBoundaries]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testMovingWorkFolderKeepsBookmarkIdentity]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testMovingWorkFolderKeepsBookmarkIdentity]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testPagedPopoverAppliesOnlyItsCandidateWithUndo]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testPagedPopoverAppliesOnlyItsCandidateWithUndo]' passed (0.994 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testPopoverShowsFromFocusAndAppliesOnlyItsCandidateWithUndo]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testPopoverShowsFromFocusAndAppliesOnlyItsCandidateWithUndo]' passed (0.817 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testReaddingDisabledGlobalTermDoesNotSilentlyEnableItEverywhere]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testReaddingDisabledGlobalTermDoesNotSilentlyEnableItEverywhere]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testScopesIsolateSameNamedWorksAndSupportExplicitSharingAndPersistence]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testScopesIsolateSameNamedWorksAndSupportExplicitSharingAndPersistence]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testSelectionSheetUsesSameDictionaryAndUpdatesAfterRegistration]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testSelectionSheetUsesSameDictionaryAndUpdatesAfterRegistration]' passed (0.580 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testSuggestionsApplyOneWordWithoutChangingOtherCorrectionsOrEmoji]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testSuggestionsApplyOneWordWithoutChangingOtherCorrectionsOrEmoji]' passed (0.000 seconds).
+Test Suite 'PersonalDictionaryTests' failed at 2026-10-31 13:28:29.841.
+	 Executed 12 tests, with 1 failure (0 unexpected) in 9.265 (9.266) seconds
+Test Suite 'JenaNotePackageTests.xctest' failed at 2026-10-31 13:28:29.841.
+	 Executed 12 tests, with 1 failure (0 unexpected) in 9.265 (9.266) seconds
+Test Suite 'Selected tests' failed at 2026-10-31 13:28:29.841.
+	 Executed 12 tests, with 1 failure (0 unexpected) in 9.265 (9.268) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

@@ -1,0 +1,82 @@
+[0/1] Planning build
+Building for debugging...
+[0/6] Write sources
+[2/6] Write swift-version--58304C5D6DBC2206.txt
+[4/8] Compiling JenaNoteKit PersonalDictionaryWindowController.swift
+[5/8] Emitting module JenaNoteKit
+[6/10] Compiling JenaNoteKit LiveProofreadingController.swift
+[7/10] Compiling JenaNoteKit AppDelegate.swift
+[8/62] Compiling JenaNote main.swift
+[9/62] Emitting module JenaNote
+[9/62] Write Objects.LinkFileList
+[11/62] Compiling JenaNoteKitTests SidebarItemOperationsTests.swift
+[12/62] Compiling JenaNoteKitTests SmokeTests.swift
+[13/62] Compiling JenaNoteKitTests TextMetricsTests.swift
+[14/65] Emitting module JenaNoteKitTests
+[15/65] Compiling JenaNoteKitTests ReaderMetricsTests.swift
+[16/65] Compiling JenaNoteKitTests ReaderPageViewLifecycleTests.swift
+[17/65] Compiling JenaNoteKitTests ReadingAnchorTests.swift
+[17/65] Linking JenaNote
+[19/65] Compiling JenaNoteKitTests BookmarkLocalizationTests.swift
+[20/65] Compiling JenaNoteKitTests BookmarkStoreTests.swift
+[21/65] Compiling JenaNoteKitTests DocumentHistoryTests.swift
+[22/65] Compiling JenaNoteKitTests DocumentModelBuilderTests.swift
+[23/65] Compiling JenaNoteKitTests AIChatComposerTests.swift
+[24/65] Compiling JenaNoteKitTests AIChatLayoutTests.swift
+[25/65] Compiling JenaNoteKitTests AIChatMarkdownTests.swift
+[26/65] Compiling JenaNoteKitTests AIClientTimeoutTests.swift
+[27/65] Compiling JenaNoteKitTests KiwiProofreadingTests.swift
+[28/65] Compiling JenaNoteKitTests LiveProofreadingTests.swift
+[29/65] Compiling JenaNoteKitTests MarkdownSourceTests.swift
+[29/65] Applying JenaNote
+[31/65] Compiling JenaNoteKitTests FileSearcherTests.swift
+[32/65] Compiling JenaNoteKitTests HwpxWriterTests.swift
+[33/65] Compiling JenaNoteKitTests ImageAttachmentTests.swift
+[34/65] Compiling JenaNoteKitTests IncrementalPaginatorTests.swift
+[35/65] Compiling JenaNoteKitTests DocxWriterTests.swift
+[36/65] Compiling JenaNoteKitTests EditablePagedReaderTests.swift
+[37/65] Compiling JenaNoteKitTests EditorDocumentLoadTests.swift
+[38/65] Compiling JenaNoteKitTests ExternalReloadTests.swift
+[39/65] Compiling JenaNoteKitTests ReadingProgressStoreTests.swift
+[40/65] Compiling JenaNoteKitTests ReadingSettingsTests.swift
+[41/65] Compiling JenaNoteKitTests SidebarItemCreationTests.swift
+[42/65] Compiling JenaNoteKitTests AIWorkIndexIntegrationTests.swift
+[43/65] Compiling JenaNoteKitTests AIWorkIndexTests.swift
+[44/65] Compiling JenaNoteKitTests AIWorkLocalSummarizerTests.swift
+[45/65] Compiling JenaNoteKitTests AIWorkPromptTests.swift
+[46/65] Compiling JenaNoteKitTests AIWorkContextAssemblerTests.swift
+[47/65] Compiling JenaNoteKitTests AIWorkContextBarTests.swift
+[48/65] Compiling JenaNoteKitTests AIWorkContextEpisodesViewTests.swift
+[49/65] Compiling JenaNoteKitTests AIWorkContextModelTests.swift
+[50/65] Compiling JenaNoteKitTests UnifiedEditorTests.swift
+[51/65] Compiling JenaNoteKitTests WriterUtilitiesTests.swift
+[52/65] Compiling JenaNoteKitTests ZipArchiveTests.swift
+[53/65] Compiling JenaNoteKitTests AIEpisodeSummaryStoreTests.swift
+[54/65] Compiling JenaNoteKitTests AIMetadataTests.swift
+[55/65] Compiling JenaNoteKitTests AIModeTests.swift
+[56/65] Compiling JenaNoteKitTests AIProofreadingTests.swift
+[57/65] Compiling JenaNoteKitTests AIWorkContextResolverTests.swift
+[58/65] Compiling JenaNoteKitTests AIWorkContextSourcesViewTests.swift
+[59/65] Compiling JenaNoteKitTests AIWorkContextTests.swift
+[60/65] Compiling JenaNoteKitTests AIWorkContextWindowTests.swift
+[61/65] Compiling JenaNoteKitTests PageRulerTests.swift
+[62/65] Compiling JenaNoteKitTests PersonalDictionaryTests.swift
+[63/65] Compiling JenaNoteKitTests ReaderLayoutRoundTripTests.swift
+[63/65] Write Objects.LinkFileList
+[64/65] Linking JenaNotePackageTests
+Build complete! (3.63s)
+Test Suite 'Selected tests' started at 2026-10-31 13:07:59.974.
+Test Suite 'JenaNotePackageTests.xctest' started at 2026-10-31 13:07:59.975.
+Test Suite 'PersonalDictionaryTests' started at 2026-10-31 13:07:59.975.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDictionaryFormDefaultsToCurrentWorkAndPersistsOnlyAfterSave]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDictionaryFormDefaultsToCurrentWorkAndPersistsOnlyAfterSave]' passed (0.273 seconds).
+Test Suite 'PersonalDictionaryTests' passed at 2026-10-31 13:08:00.248.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.273 (0.273) seconds
+Test Suite 'JenaNotePackageTests.xctest' passed at 2026-10-31 13:08:00.248.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.273 (0.273) seconds
+Test Suite 'Selected tests' passed at 2026-10-31 13:08:00.248.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.273 (0.273) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

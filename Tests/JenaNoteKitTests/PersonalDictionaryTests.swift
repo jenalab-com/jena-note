@@ -12,6 +12,34 @@ final class PersonalDictionaryTests: XCTestCase {
         return (PersonalDictionaryStore(fileURL: file), file, DictionaryWorkContext(root: a, title: "같은 제목"), DictionaryWorkContext(root: b, title: "같은 제목"))
     }
 
+    func testBulkDeletionPersistsOnceAndPreservesUncheckedWords() throws {
+        let (store, file, a, _) = try fixture()
+        let first = try store.save(term: "단어 하나", selectedWorks: nil)
+        let second = try store.save(term: "단어 둘", selectedWorks: [store.work(for: a)])
+        let keep = try store.save(term: "남길 단어", selectedWorks: nil)
+        var notifications = 0
+        let observer = NotificationCenter.default.addObserver(forName: PersonalDictionaryStore.changed, object: store, queue: nil) { _ in notifications += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+        try store.remove(ids: [first.id, second.id])
+        XCTAssertEqual(notifications, 1)
+        XCTAssertEqual(store.entries.map(\.id), [keep.id])
+        XCTAssertEqual(PersonalDictionaryStore(fileURL: file).entries.map(\.id), [keep.id])
+        XCTAssertEqual(try store.terms(for: a), ["남길 단어"])
+        try store.remove(ids: [])
+        XCTAssertEqual(notifications, 1)
+    }
+
+    func testDeletionFailureKeepsWordsAndFileIntact() throws {
+        let (store, file, _, _) = try fixture()
+        let word = try store.save(term: "남길 단어", selectedWorks: nil)
+        let before = try Data(contentsOf: file)
+        // A non-directory at the backup path must prevent deletion before state changes.
+        try Data("blocked".utf8).write(to: file.deletingLastPathComponent().appendingPathComponent("Backups"))
+        XCTAssertThrowsError(try store.remove(ids: [word.id]))
+        XCTAssertEqual(store.entries.map(\.id), [word.id])
+        XCTAssertEqual(try Data(contentsOf: file), before)
+    }
+
     func testScopesIsolateSameNamedWorksAndSupportExplicitSharingAndPersistence() throws {
         let (store, file, a, b) = try fixture()
         let wa = store.work(for: a), wb = store.work(for: b)
@@ -211,14 +239,41 @@ final class PersonalDictionaryTests: XCTestCase {
         let content = try XCTUnwrap(controller.window?.contentView)
         content.layoutSubtreeIfNeeded()
         let buttons = descendants(content).compactMap { $0 as? NSButton }
-        let all = try XCTUnwrap(buttons.first { $0.title == L10n.tr("dictionary.all") })
-        XCTAssertEqual(all.state, .off)
-        try XCTUnwrap(buttons.first { $0.title == L10n.tr("dictionary.save") }).performClick(nil)
+        let scope = try XCTUnwrap(descendants(content).compactMap { $0 as? NSPopUpButton }.first { $0.identifier?.rawValue == "dictionary.scope" })
+        XCTAssertTrue(scope.titleOfSelectedItem?.contains(L10n.tr("dictionary.currentWork")) == true)
+        XCTAssertFalse(buttons.contains { $0.title == L10n.tr("dictionary.enabled") })
+        let save = try XCTUnwrap(buttons.first { $0.identifier?.rawValue == "dictionary.save" })
+        save.performClick(nil)
         XCTAssertEqual(try store.terms(for: a), ["서쥰"])
         XCTAssertTrue(try store.terms(for: b).isEmpty)
+        XCTAssertFalse(save.isEnabled)
+        XCTAssertEqual(save.title, L10n.tr("dictionary.registerAction"))
+        let field = try XCTUnwrap(descendants(content).compactMap { $0 as? NSTextField }.first { $0.identifier?.rawValue == "dictionary.term" })
+        field.stringValue = "새로운 용어"
+        controller.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification, object: field))
+        XCTAssertTrue(save.isEnabled)
+        XCTAssertEqual(store.entries.count, 1, "Typing a draft must not register it")
+        scope.selectItem(at: 0)
+        save.performClick(nil)
+        XCTAssertEqual(try store.terms(for: b), ["새로운 용어"])
+        XCTAssertTrue(store.entries.allSatisfy(\.enabled))
+        XCTAssertEqual(scope.indexOfSelectedItem, 0, "Keep the scope for consecutive registrations")
+        XCTAssertEqual(field.stringValue, "")
+        let table = try XCTUnwrap(descendants(content).compactMap { $0 as? NSTableView }.first)
+        let delete = try XCTUnwrap(descendants(content).compactMap { $0 as? NSButton }.first { $0.identifier?.rawValue == "dictionary.delete" })
+        XCTAssertFalse(delete.isEnabled)
+        for row in 0..<2 {
+            let checkbox = try XCTUnwrap(table.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSButton)
+            checkbox.performClick(nil)
+        }
+        XCTAssertTrue(delete.isEnabled)
         if let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) {
             content.cacheDisplay(in: content.bounds, to: bitmap)
             try bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "/tmp/jena-personal-dictionary.png"))
         }
+        delete.performClick(nil)
+        XCTAssertTrue(store.entries.isEmpty)
+        XCTAssertTrue(try store.terms(for: a).isEmpty)
+        XCTAssertFalse(delete.isEnabled)
     }
 }

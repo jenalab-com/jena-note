@@ -1,0 +1,70 @@
+[0/1] Planning build
+Building for debugging...
+[0/6] Write sources
+[2/6] Write swift-version--58304C5D6DBC2206.txt
+[4/8] Emitting module JenaNoteKit
+[5/8] Compiling JenaNoteKit KiwiProofreadingEngine.swift
+[6/12] Compiling JenaNoteKit EditorTextView.swift
+[7/12] Compiling JenaNoteKit LiveProofreadingController.swift
+[8/12] Compiling JenaNoteKit AISelectionProofreader.swift
+[9/12] Compiling JenaNoteKit ReaderViewController.swift
+[9/14] Write Objects.LinkFileList
+[11/16] Compiling JenaNoteKitTests KiwiProofreadingTests.swift
+[12/16] Emitting module JenaNoteKitTests
+[12/16] Write Objects.LinkFileList
+[13/16] Linking JenaNote
+[14/16] Applying JenaNote
+[15/16] Linking JenaNotePackageTests
+Build complete! (2.71s)
+Test Suite 'Selected tests' started at 2026-10-31 14:08:34.557.
+Test Suite 'JenaNotePackageTests.xctest' started at 2026-10-31 14:08:34.557.
+Test Suite 'KiwiProofreadingTests' started at 2026-10-31 14:08:34.557.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testCorrectSentenceWithUnfamiliarNameHasNoTooltipSuggestion]' started.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testCorrectSentenceWithUnfamiliarNameHasNoTooltipSuggestion]' passed (0.768 seconds).
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testDefaultProofreadingDoesNotWaitForWorkSummary]' started.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testDefaultProofreadingDoesNotWaitForWorkSummary]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testDictionarySuppressesRuleCorrectionWithoutHidingOtherErrors]' started.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testDictionarySuppressesRuleCorrectionWithoutHidingOtherErrors]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testMissingModelFailsWithoutAnyFallback]' started.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testMissingModelFailsWithoutAnyFallback]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testNameProtectionLeavesFollowingSentenceSpacingEditable]' started.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testNameProtectionLeavesFollowingSentenceSpacingEditable]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testNativeCorrectionsPreserveNamesAndLayout]' started.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testNativeCorrectionsPreserveNamesAndLayout]' passed (0.008 seconds).
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testRepeatedChecksReuseModelAndReportWarmLatency]' started.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testRepeatedChecksReuseModelAndReportWarmLatency]' passed (0.007 seconds).
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testRulesPreserveValidWordsAndDoNotReplaceNameSubstrings]' started.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testRulesPreserveValidWordsAndDoNotReplaceNameSubstrings]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testSpacingCannotRewriteCharactersOrSplitProtectedWords]' started.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testSpacingCannotRewriteCharactersOrSplitProtectedWords]' passed (0.000 seconds).
+Test Suite 'KiwiProofreadingTests' passed at 2026-10-31 14:08:35.344.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.786 (0.787) seconds
+Test Suite 'JenaNotePackageTests.xctest' passed at 2026-10-31 14:08:35.344.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.786 (0.787) seconds
+Test Suite 'Selected tests' passed at 2026-10-31 14:08:35.344.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.786 (0.787) seconds
+Kiwi sample: "그제야 리에느가 빵을 받았다." → "그제야 리에느가 빵을 받았다.", 0.4839897155761719 ms
+Kiwi sample: "😀 그제야 리에느가 빵을 받았다." → "😀 그제야 리에느가 빵을 받았다.", 0.39696693420410156 ms
+Kiwi sample: "나는 학교 에 갔다." → "나는 학교에 갔다.", 0.28502941131591797 ms
+Kiwi sample: "오랫만에 친구를 만났다." → "오랜만에 친구를 만났다.", 0.8989572525024414 ms
+Kiwi sample: "몇일 동안 기다렸다." → "며칠 동안 기다렸다.", 0.6240606307983398 ms
+Kiwi sample: "몇 일 동안 기다렸다." → "며칠 동안 기다렸다.", 0.5350112915039062 ms
+Kiwi sample: "이건 않되요." → "이건 안 돼요.", 0.3139972686767578 ms
+Kiwi sample: "서준은학교에갔다." → "서준은 학교에 갔다.", 0.37300586700439453 ms
+Kiwi sample: "오늘  학교에갔다." → "오늘 학교에 갔다.", 0.2390146255493164 ms
+Kiwi sample: "오늘학교에갔다." → "오늘 학교에 갔다.", 0.2601146697998047 ms
+Kiwi sample: "회의가 끝낫습니다." → "회의가 끝났습니다.", 0.31697750091552734 ms
+Kiwi sample: "안녕 하세요." → "안녕하세요.", 0.2180337905883789 ms
+Kiwi sample: "오늘학교에갓다." → "오늘 학교에 갔다.", 0.2599954605102539 ms
+Kiwi sample: "선섕님" → "선생님", 0.13899803161621094 ms
+Kiwi sample: "하연은 서준에게 책을 건넸다." → "하연은 서준에게 책을 건넸다.", 1.2519359588623047 ms
+Kiwi sample: "  오늘학교에갔다.\r\n\r\n\t안녕 하세요.  😀" → "  오늘 학교에 갔다.\r\n\r\n\t안녕하세요. 😀", 0.4839897155761719 ms
+Kiwi sample: "  오늘학교에갔다.  " → "  오늘 학교에 갔다.  ", 0.2429485321044922 ms
+Kiwi sample: "   " → "   ", 0.013947486877441406 ms
+Kiwi sample: "Hello world!" → "Hello world!", 0.0940561294555664 ms
+Kiwi sample: "https://example.com/a?q=1 😀" → "https://example.com/a?q=1 😀", 0.0909566879272461 ms
+Kiwi warm 30 checks: median 0.20301342010498047 ms, p95 0.3349781036376953 ms, max 0.3679990768432617 ms
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
