@@ -1,0 +1,25 @@
+== hdiutil verify
+hdiutil: verify: checksum of ".build/JenaNote.dmg" is VALID
+== contents
+Applications
+JenaNote.app
+/Applications
+== version
+1.8.0
+1.8.0
+13.0
+== arch
+arm64
+== codesign
+/tmp/jn-dmg.nUWL/JenaNote.app: valid on disk
+/tmp/jn-dmg.nUWL/JenaNote.app: satisfies its Designated Requirement
+== executable sha256 (dmg vs signed local app)
+74785d00f46c66d0a476f9e7ecf0c5d2a68e325f8d05777f8c5da196a3d1c795
+74785d00f46c66d0a476f9e7ecf0c5d2a68e325f8d05777f8c5da196a3d1c795
+== resources
+0.24.1
+      10
+detached
+== dmg
+106684066 bytes
+f43e537b20fe14841058ab2c3b9533a3a04aba68438c348486fd6b633120f779  .build/JenaNote.dmg

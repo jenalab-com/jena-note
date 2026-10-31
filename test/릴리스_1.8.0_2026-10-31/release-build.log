@@ -1,0 +1,8 @@
+swift build -c release --product JenaNote
+Building for production...
+[0/2] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'JenaNote' complete! (0.10s)
+✓ 빌드 완료: .build/JenaNote.app
+.build/JenaNote.app: replacing existing signature
+.build/JenaNote.app: valid on disk
+.build/JenaNote.app: satisfies its Designated Requirement
