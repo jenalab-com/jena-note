@@ -1,0 +1,29 @@
+[0/1] Planning build
+Building for debugging...
+[0/6] Write sources
+[2/6] Write swift-version--58304C5D6DBC2206.txt
+[4/8] Emitting module JenaNoteKit
+[5/8] Compiling JenaNoteKit PersonalDictionaryWindowController.swift
+[5/10] Write Objects.LinkFileList
+[6/12] Linking JenaNote
+[7/12] Applying JenaNote
+[9/12] Compiling JenaNoteKitTests PersonalDictionaryTests.swift
+[10/12] Emitting module JenaNoteKitTests
+[10/12] Write Objects.LinkFileList
+[11/12] Linking JenaNotePackageTests
+Build complete! (4.28s)
+Test Suite 'Selected tests' started at 2026-10-31 13:22:32.336.
+Test Suite 'JenaNotePackageTests.xctest' started at 2026-10-31 13:22:32.338.
+Test Suite 'PersonalDictionaryTests' started at 2026-10-31 13:22:32.338.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDictionaryFormDefaultsToCurrentWorkAndPersistsOnlyAfterSave]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDictionaryFormDefaultsToCurrentWorkAndPersistsOnlyAfterSave]' passed (0.798 seconds).
+Test Suite 'PersonalDictionaryTests' passed at 2026-10-31 13:22:33.137.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.798 (0.799) seconds
+Test Suite 'JenaNotePackageTests.xctest' passed at 2026-10-31 13:22:33.137.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.798 (0.799) seconds
+Test Suite 'Selected tests' passed at 2026-10-31 13:22:33.137.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.798 (0.801) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

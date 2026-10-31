@@ -104,6 +104,20 @@ final class PersonalDictionaryStore {
                          workIDs: !previous.enabled ? item.workIDs : (previous.workIDs == nil || item.workIDs == nil ? nil : Array(Set(previous.workIDs! + item.workIDs!))), enabled: enabled)
             next.entries[index] = item
         } else { next.entries.append(item) }
+        try persist(next)
+        return item
+    }
+
+    func remove(ids: Set<UUID>) throws {
+        dispatchPrecondition(condition: .onQueue(.main))
+        guard loadError == nil else { throw AIError(message: L10n.tr("dictionary.corrupt")) }
+        var next = state
+        next.entries.removeAll { ids.contains($0.id) }
+        guard next.entries.count != state.entries.count else { return }
+        try persist(next)
+    }
+
+    private func persist(_ next: State) throws {
         let directory = fileURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         if FileManager.default.fileExists(atPath: fileURL.path) {
@@ -115,6 +129,5 @@ final class PersonalDictionaryStore {
         try encoder.encode(next).write(to: fileURL, options: .atomic)
         state = next
         NotificationCenter.default.post(name: Self.changed, object: self)
-        return item
     }
 }
