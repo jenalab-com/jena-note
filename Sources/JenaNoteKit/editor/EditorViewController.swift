@@ -311,7 +311,8 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
 
     private func applyAnchor() {
         guard view.bounds.height > 0 else { return }
-        ScrollReadingPosition.scroll(textView: textView, to: anchorOffset)
+        // 스토리지 편집 중이면 적용을 미루고, 다음 viewDidLayout에서 다시 시도한다.
+        guard ScrollReadingPosition.scroll(textView: textView, to: anchorOffset) else { return }
         needsAnchorApply = false
     }
 
