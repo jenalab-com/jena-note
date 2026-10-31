@@ -17,7 +17,10 @@ json 55f93686c01528224f448c19128836e7df245f72
 mimalloc fbd8b99c2b828428947d70fdc046bb55609be93e
 streamvbyte 862c2e7a4c39717b5a6e590c8a784bcd7924b20b
 
-Native framework SHA-256:
-450236d499ed150d39deded4ec1676b607dcd8bfe111806cb9a8b450870f1384
+Native framework: built locally from the vendored source snapshot.
+Kiwi source commit: 724d00718f527bac3f8aef2f6ae3b6523b2aae74
+Build recipe: scripts/build-kiwi.sh (macOS arm64 + x86_64, mimalloc ON, cpuinfo OFF).
+Source/dependency manifest: Vendor/Kiwi/upstream.json.
+The cpuinfo license is retained for reference; cpuinfo is not linked in this build.
 Model archive SHA-256:
 50d163e1af817444ef21f7ec5ea07ef69fb347282d57a6b49260f2039d4dc346

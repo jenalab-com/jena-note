@@ -73,7 +73,7 @@ Finder에서 앱을 **우클릭(또는 Control+클릭) → 열기 → 열기**.
 
 ## 소스에서 빌드
 
-Swift 5.7+ 툴체인(Xcode 또는 Command Line Tools)이 필요합니다. 첫 빌드에서는 버전·체크섬을 고정한 Kiwi 네이티브 라이브러리와 모델을 다운로드합니다. 모델은 앱에 약 104MB를 추가하며, 실행 중에는 네트워크를 사용하지 않습니다. `make build`와 `make test`는 모델을 자동 준비합니다. `swift build`·`swift test`를 직접 실행할 때는 먼저 `bash scripts/prepare-kiwi.sh`를 실행하세요.
+Swift 5.7+와 Xcode가 필요합니다. Kiwi 소스는 `Vendor/Kiwi/source/`에서 직접 확인·수정할 수 있으며, 로컬 XCFramework를 참조합니다. 최초 준비는 CMake 설치 후 `make bootstrap-kiwi`로 수행합니다(모델이 없을 때만 고정 버전·체크섬으로 다운로드). 이후 `make build`와 `make test`는 네트워크 없이 준비 상태를 검사하고 로컬 라이브러리를 사용합니다. 소스 수정 후에는 `make rebuild-kiwi`를 실행하세요. 모델 약 104MB는 앱에 포함되며 실행 중 다운로드는 없습니다. 도구 설치·오프라인 복사·소스 안내는 [Kiwi 개발 안내](Vendor/Kiwi/README.md)를 참고하세요. `swift build`·`swift test` 직접 호출 전에는 `make prepare-kiwi`가 필요합니다.
 
 ```bash
 git clone https://github.com/jenalab-com/jena-note.git

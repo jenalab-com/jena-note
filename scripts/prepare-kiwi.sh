@@ -1,29 +1,24 @@
 #!/bin/bash
-# Build-time only. Never downloads models from the running application.
+# Offline preflight only. Downloads and C++ rebuilds are explicit developer actions.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-version=0.24.1
-checksum=50d163e1af817444ef21f7ec5ea07ef69fb347282d57a6b49260f2039d4dc346
-destination=Sources/JenaNoteKit/Resources/KiwiModel
-if [ -d "$destination" ]; then
-    if [ "$(cat "$destination/VERSION" 2>/dev/null || true)" = "$version" ] && [ -s "$destination/cong.mdl" ] && [ -s "$destination/sj.morph" ]; then
-        exit 0
-    fi
-    echo "Existing Kiwi model is incomplete or has another version: $destination. Preserve it and inspect before replacing." >&2
+framework=Vendor/Kiwi/Kiwi.xcframework
+if [ ! -f "$framework/Info.plist" ] || [ ! -f "$framework/SOURCE_SHA256" ]; then
+    echo "Local Kiwi library is missing. Run make bootstrap-kiwi once; see Vendor/Kiwi/README.md." >&2
     exit 1
 fi
-mkdir -p .build/kiwi-downloads
-archive=".build/kiwi-downloads/kiwi_model_v${version}_base.tgz"
-if [ ! -f "$archive" ]; then
-    download=$(mktemp .build/kiwi-downloads/download.XXXXXX)
-    curl --fail --location --retry 3 --output "$download" "https://github.com/bab2min/Kiwi/releases/download/v${version}/kiwi_model_v${version}_base.tgz"
-    printf '%s  %s\n' "$checksum" "$download" | shasum -a 256 --check
-    mv "$download" "$archive"
+if [ "$(cat "$framework/SOURCE_SHA256")" != "$(bash scripts/kiwi-source-hash.sh)" ]; then
+    echo "Kiwi source/build configuration changed. Run make rebuild-kiwi to apply it." >&2
+    exit 1
 fi
-printf '%s  %s\n' "$checksum" "$archive" | shasum -a 256 --check
-staging=$(mktemp -d .build/kiwi-downloads/extract.XXXXXX)
-tar -xzf "$archive" -C "$staging"
-printf '%s\n' "$version" > "$staging/models/cong/base/VERSION"
-mkdir -p "$(dirname "$destination")"
-mv "$staging/models/cong/base" "$destination"
-echo "Kiwi $version model prepared ($destination)"
+model=Sources/JenaNoteKit/Resources/KiwiModel
+if [ "$(cat "$model/VERSION" 2>/dev/null || true)" != "0.24.1" ]; then
+    echo "Kiwi model is missing or incompatible. Run bash scripts/fetch-kiwi-model.sh explicitly." >&2
+    exit 1
+fi
+for file in combiningRule.txt cong.mdl default.dict dialect.dict extract.mdl multi.dict nounchr.mdl sj.morph typo.dict; do
+    if [ ! -s "$model/$file" ]; then
+        echo "Kiwi model is incomplete: $model/$file. Restore the pinned model before building." >&2
+        exit 1
+    fi
+done

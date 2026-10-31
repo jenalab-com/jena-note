@@ -1,0 +1,46 @@
+{
+  "repository": "https://github.com/bab2min/Kiwi",
+  "version": "0.24.1",
+  "commit": "724d00718f527bac3f8aef2f6ae3b6523b2aae74",
+  "dependencies": {
+    "cpp-btree": "226ce3aed24702bef1b03dba4b3cb55bc0bf31dd",
+    "mimalloc": "fbd8b99c2b828428947d70fdc046bb55609be93e",
+    "streamvbyte": "862c2e7a4c39717b5a6e590c8a784bcd7924b20b",
+    "eigen": "3147391d946bb4b6c68edd901f2add6ac1f31f8c",
+    "json": "55f93686c01528224f448c19128836e7df245f72"
+  },
+  "source_selection": [
+    "CMakeLists.txt",
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "CONTRIBUTING.md",
+    "src",
+    "include",
+    "docs",
+    "tools",
+    "ModelGenerator",
+    "bindings/swift"
+  ],
+  "dependency_selection": {
+    "cpp-btree": [
+      "*"
+    ],
+    "mimalloc": [
+      "*"
+    ],
+    "streamvbyte": [
+      "*"
+    ],
+    "eigen": [
+      "Eigen",
+      "COPYING*",
+      "README*"
+    ],
+    "json": [
+      "include",
+      "LICENSE*",
+      "README*"
+    ]
+  }
+}

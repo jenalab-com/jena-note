@@ -1,0 +1,152 @@
+#!/bin/bash
+set -e
+
+# Build script for creating XCFramework for iOS and macOS
+# This script builds the Kiwi library for multiple platforms and architectures
+# and combines them into a single XCFramework
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+SWIFT_DIR="$PROJECT_ROOT/bindings/swift"
+BUILD_DIR="$SWIFT_DIR/build"
+XCFRAMEWORK_DIR="$SWIFT_DIR/xcframework"
+
+# Clean previous builds
+echo "Cleaning previous builds..."
+rm -rf "$BUILD_DIR"
+rm -rf "$XCFRAMEWORK_DIR"
+
+mkdir -p "$BUILD_DIR"
+mkdir -p "$XCFRAMEWORK_DIR"
+
+# Function to build for a specific platform
+build_platform() {
+    local PLATFORM=$1
+    local SDK=$2
+    local ARCHS=$3
+    local DEPLOYMENT_TARGET=$4
+    local BUILD_SUBDIR=$5
+    
+    echo "Building for $PLATFORM ($ARCHS)..."
+    
+    local PLATFORM_BUILD_DIR="$BUILD_DIR/$BUILD_SUBDIR"
+    mkdir -p "$PLATFORM_BUILD_DIR"
+    
+    cd "$PLATFORM_BUILD_DIR"
+    
+    cmake "$PROJECT_ROOT" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_SYSTEM_NAME=$PLATFORM \
+        -DCMAKE_OSX_SYSROOT=$SDK \
+        -DCMAKE_OSX_ARCHITECTURES="$ARCHS" \
+        -DCMAKE_OSX_DEPLOYMENT_TARGET=$DEPLOYMENT_TARGET \
+        -DKIWI_BUILD_DYNAMIC=OFF \
+        -DKIWI_BUILD_CLI=OFF \
+        -DKIWI_BUILD_EVALUATOR=OFF \
+        -DKIWI_BUILD_MODEL_BUILDER=OFF \
+        -DKIWI_BUILD_TEST=OFF \
+        -DKIWI_JAVA_BINDING=OFF \
+        -DKIWI_USE_MIMALLOC=ON \
+        -DKIWI_USE_CPUINFO=OFF \
+        -GXcode
+    
+    cmake --build . --config Release
+    
+    # Use find to locate the library because Xcode puts it in different places 
+    # depending on the platform (e.g., Release-iphoneos, Release-iphonesimulator, Release)
+    local LIB_FILE=$(find . -name "libkiwi_static.a" | grep "Release" | head -n 1)
+    if [ -z "$LIB_FILE" ]; then
+        echo "Error: libkiwi_static.a not found in $PLATFORM_BUILD_DIR"
+        exit 1
+    fi
+    cp "$LIB_FILE" "$PLATFORM_BUILD_DIR/libkiwi.a"
+    echo "✓ Built $PLATFORM ($ARCHS)"
+}
+
+# Create a framework from one or more single-architecture builds.
+# Each architecture is configured separately because the arch-specific sources and definitions
+# (e.g. NEON kernels and KIWI_ARCH_ARM64) are chosen per configuration; they are merged with lipo here.
+make_framework() {
+    local BUILD_SUBDIR=$1
+    shift
+    
+    local PLATFORM_BUILD_DIR="$BUILD_DIR/$BUILD_SUBDIR"
+    mkdir -p "$PLATFORM_BUILD_DIR"
+    cd "$PLATFORM_BUILD_DIR"
+    
+    # Create framework structure
+    local FRAMEWORK_DIR="$PLATFORM_BUILD_DIR/Kiwi.framework"
+    mkdir -p "$FRAMEWORK_DIR/Headers"
+    
+    # Copy library
+    local LIBS=()
+    for SUB in "$@"; do
+        LIBS+=("$BUILD_DIR/$SUB/libkiwi.a")
+    done
+    if [ ${#LIBS[@]} -eq 1 ]; then
+        cp "${LIBS[0]}" "$FRAMEWORK_DIR/Kiwi"
+    else
+        lipo -create "${LIBS[@]}" -output "$FRAMEWORK_DIR/Kiwi"
+    fi
+    
+    # Copy headers
+    cp "$PROJECT_ROOT/include/kiwi/capi.h" "$FRAMEWORK_DIR/Headers/"
+    cp "$PROJECT_ROOT/include/kiwi/Macro.h" "$FRAMEWORK_DIR/Headers/"
+    
+    # Create module map
+    mkdir -p "$FRAMEWORK_DIR/Modules"
+    cat > "$FRAMEWORK_DIR/Modules/module.modulemap" << EOF
+framework module Kiwi {
+    umbrella header "capi.h"
+    export *
+    module * { export * }
+}
+EOF
+    
+    echo "✓ Created $BUILD_SUBDIR framework"
+}
+
+# Build for iOS Device (arm64)
+build_platform "iOS" "iphoneos" "arm64" "12.0" "ios-arm64-lib"
+make_framework "ios-arm64" "ios-arm64-lib"
+
+# Build for iOS Simulator (arm64 + x86_64)
+build_platform "iOS" "iphonesimulator" "arm64" "12.0" "ios-simulator-arm64"
+build_platform "iOS" "iphonesimulator" "x86_64" "12.0" "ios-simulator-x86_64"
+make_framework "ios-simulator" "ios-simulator-arm64" "ios-simulator-x86_64"
+
+# Build for macOS (arm64 + x86_64 universal)
+build_platform "Darwin" "macosx" "arm64" "10.14" "macos-arm64"
+build_platform "Darwin" "macosx" "x86_64" "10.14" "macos-x86_64"
+make_framework "macos" "macos-arm64" "macos-x86_64"
+
+# Create XCFramework
+echo "Creating XCFramework..."
+xcodebuild -create-xcframework \
+    -framework "$BUILD_DIR/ios-arm64/Kiwi.framework" \
+    -framework "$BUILD_DIR/ios-simulator/Kiwi.framework" \
+    -framework "$BUILD_DIR/macos/Kiwi.framework" \
+    -output "$XCFRAMEWORK_DIR/Kiwi.xcframework"
+
+echo "✓ XCFramework created at $XCFRAMEWORK_DIR/Kiwi.xcframework"
+
+# Create zip file for distribution
+echo "Creating zip archive..."
+cd "$XCFRAMEWORK_DIR"
+zip -r -y Kiwi.xcframework.zip Kiwi.xcframework
+
+# Calculate checksum for Swift Package Manager
+CHECKSUM=$(swift package compute-checksum Kiwi.xcframework.zip 2>/dev/null || echo "N/A")
+echo "Checksum: $CHECKSUM"
+
+echo ""
+echo "Build complete!"
+echo "XCFramework location: $XCFRAMEWORK_DIR/Kiwi.xcframework"
+echo "Zip archive: $XCFRAMEWORK_DIR/Kiwi.xcframework.zip"
+echo ""
+echo "To use with Swift Package Manager binaryTarget:"
+echo "  .binaryTarget("
+echo "      name: \"CKiwi\","
+echo "      url: \"<RELEASE_URL>/Kiwi.xcframework.zip\","
+echo "      checksum: \"$CHECKSUM\""
+echo "  )"
