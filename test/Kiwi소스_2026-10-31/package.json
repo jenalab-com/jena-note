@@ -1,0 +1,244 @@
+{
+  "dependencies" : [
+
+  ],
+  "manifest_display_name" : "JenaNote",
+  "name" : "JenaNote",
+  "path" : "/Volumes/Backup/Project/jena/source/jena-note",
+  "platforms" : [
+    {
+      "name" : "macos",
+      "version" : "11.0"
+    }
+  ],
+  "products" : [
+    {
+      "name" : "JenaNote",
+      "targets" : [
+        "JenaNote"
+      ],
+      "type" : {
+        "executable" : null
+      }
+    }
+  ],
+  "targets" : [
+    {
+      "c99name" : "Kiwi",
+      "module_type" : "BinaryTarget",
+      "name" : "Kiwi",
+      "path" : "Vendor/Kiwi/Kiwi.xcframework",
+      "product_memberships" : [
+        "JenaNote"
+      ],
+      "sources" : [
+
+      ],
+      "type" : "binary"
+    },
+    {
+      "c99name" : "JenaNoteKitTests",
+      "module_type" : "SwiftTarget",
+      "name" : "JenaNoteKitTests",
+      "path" : "Tests/JenaNoteKitTests",
+      "sources" : [
+        "AIChatComposerTests.swift",
+        "AIChatLayoutTests.swift",
+        "AIChatMarkdownTests.swift",
+        "AIClientTimeoutTests.swift",
+        "AIEpisodeSummaryStoreTests.swift",
+        "AIMetadataTests.swift",
+        "AIModeTests.swift",
+        "AIProofreadingTests.swift",
+        "AIWorkContextAssemblerTests.swift",
+        "AIWorkContextBarTests.swift",
+        "AIWorkContextEpisodesViewTests.swift",
+        "AIWorkContextModelTests.swift",
+        "AIWorkContextResolverTests.swift",
+        "AIWorkContextSourcesViewTests.swift",
+        "AIWorkContextTests.swift",
+        "AIWorkContextWindowTests.swift",
+        "AIWorkIndexIntegrationTests.swift",
+        "AIWorkIndexTests.swift",
+        "AIWorkLocalSummarizerTests.swift",
+        "AIWorkPromptTests.swift",
+        "BookmarkLocalizationTests.swift",
+        "BookmarkStoreTests.swift",
+        "DocumentHistoryTests.swift",
+        "DocumentModelBuilderTests.swift",
+        "DocxWriterTests.swift",
+        "EditablePagedReaderTests.swift",
+        "EditorDocumentLoadTests.swift",
+        "ExternalReloadTests.swift",
+        "FileSearcherTests.swift",
+        "HwpxWriterTests.swift",
+        "ImageAttachmentTests.swift",
+        "IncrementalPaginatorTests.swift",
+        "KiwiProofreadingTests.swift",
+        "LiveProofreadingTests.swift",
+        "MarkdownSourceTests.swift",
+        "PageRulerTests.swift",
+        "PersonalDictionaryTests.swift",
+        "ReaderLayoutRoundTripTests.swift",
+        "ReaderMetricsTests.swift",
+        "ReaderPageViewLifecycleTests.swift",
+        "ReadingAnchorTests.swift",
+        "ReadingProgressStoreTests.swift",
+        "ReadingSettingsTests.swift",
+        "SidebarItemCreationTests.swift",
+        "SidebarItemOperationsTests.swift",
+        "SmokeTests.swift",
+        "TextMetricsTests.swift",
+        "UnifiedEditorTests.swift",
+        "WriterUtilitiesTests.swift",
+        "ZipArchiveTests.swift"
+      ],
+      "target_dependencies" : [
+        "JenaNoteKit"
+      ],
+      "type" : "test"
+    },
+    {
+      "c99name" : "JenaNoteKit",
+      "module_type" : "SwiftTarget",
+      "name" : "JenaNoteKit",
+      "path" : "Sources/JenaNoteKit",
+      "product_memberships" : [
+        "JenaNote"
+      ],
+      "resources" : [
+        {
+          "path" : "/Volumes/Backup/Project/jena/source/jena-note/Sources/JenaNoteKit/Resources/KiwiModel",
+          "rule" : {
+            "copy" : {
+
+            }
+          }
+        },
+        {
+          "path" : "/Volumes/Backup/Project/jena/source/jena-note/Sources/JenaNoteKit/Resources/ThirdParty",
+          "rule" : {
+            "copy" : {
+
+            }
+          }
+        }
+      ],
+      "sources" : [
+        "ai/AIChatComposerView.swift",
+        "ai/AIChatMarkdown.swift",
+        "ai/AIChatOptionsView.swift",
+        "ai/AIChatTranscriptView.swift",
+        "ai/AIChatViewController.swift",
+        "ai/AIClient.swift",
+        "ai/AIConversation.swift",
+        "ai/AIEpisodeSummaryStore.swift",
+        "ai/AILocalInferenceQueue.swift",
+        "ai/AIMetadata.swift",
+        "ai/AIProcess.swift",
+        "ai/AIProofreadingController.swift",
+        "ai/AIProvider.swift",
+        "ai/AISelectionProofreader.swift",
+        "ai/AISettingsViewController.swift",
+        "ai/AITerminal.swift",
+        "ai/AIWorkContext.swift",
+        "ai/AIWorkContextAssembler.swift",
+        "ai/AIWorkContextBar.swift",
+        "ai/AIWorkContextEpisodesView.swift",
+        "ai/AIWorkContextFoldersView.swift",
+        "ai/AIWorkContextModel.swift",
+        "ai/AIWorkContextResolver.swift",
+        "ai/AIWorkContextSourceRowViews.swift",
+        "ai/AIWorkContextSourcesView.swift",
+        "ai/AIWorkContextWindowController.swift",
+        "ai/AIWorkIndex.swift",
+        "ai/AIWorkIndexStore.swift",
+        "ai/AIWorkIndexView.swift",
+        "ai/AIWorkLocalSummarizer.swift",
+        "ai/AIWorkPayload.swift",
+        "ai/AIWorkRetrieval.swift",
+        "app/AppDelegate.swift",
+        "app/HelpWindowController.swift",
+        "app/Localization.swift",
+        "app/PreferencesWindowController.swift",
+        "app/SettingsManager.swift",
+        "document/DocumentBackupStore.swift",
+        "document/DocumentBackupWindowController.swift",
+        "document/DocumentEndnotes.swift",
+        "document/DocumentHistoryChangeMap.swift",
+        "document/DocumentHistoryComparisonView.swift",
+        "document/DocumentHistoryDiff.swift",
+        "document/MarkdownDocument.swift",
+        "document/MarkdownSerializer.swift",
+        "document/SyntaxHighlighter.swift",
+        "editor/BookmarkListViewController.swift",
+        "editor/BookmarkStore.swift",
+        "editor/DocumentPaperSize.swift",
+        "editor/EditorTextView.swift",
+        "editor/EditorViewController.swift",
+        "editor/EditorWindowController+Formatting.swift",
+        "editor/EditorWindowController+Proofreading.swift",
+        "editor/EditorWindowController.swift",
+        "editor/EndnoteEditorView.swift",
+        "editor/FormatCommands.swift",
+        "editor/IncrementalPaginator.swift",
+        "editor/MarkdownSourceViewController.swift",
+        "editor/PageRulerView.swift",
+        "editor/PaperBackground.swift",
+        "editor/ReaderMetrics.swift",
+        "editor/ReaderViewController.swift",
+        "editor/ReadingAnchor.swift",
+        "editor/ReadingPosition.swift",
+        "editor/ReadingProgressStore.swift",
+        "editor/TextMetrics.swift",
+        "export/DocumentModel.swift",
+        "export/DocumentModelBuilder.swift",
+        "export/DocxWriter.swift",
+        "export/ExportController.swift",
+        "export/HwpxWriter.swift",
+        "export/XMLEscape.swift",
+        "export/ZipArchive.swift",
+        "proofreading/KiwiProofreadingEngine.swift",
+        "proofreading/KoreanOrthographyRules.swift",
+        "proofreading/LiveProofreadingController.swift",
+        "proofreading/PersonalDictionaryStore.swift",
+        "proofreading/PersonalDictionaryWindowController.swift",
+        "proofreading/ProofreadingAnnotations.swift",
+        "proofreading/ProofreadingLayoutManager.swift",
+        "proofreading/ProofreadingPopoverController.swift",
+        "proofreading/ProofreadingSuggestion.swift",
+        "sidebar/FileSearcher.swift",
+        "sidebar/FolderBookmarksStore.swift",
+        "sidebar/FolderWatcher.swift",
+        "sidebar/ImagePreviewOutlineView.swift",
+        "sidebar/SidebarItemCreation.swift",
+        "sidebar/SidebarItemOperations.swift",
+        "sidebar/SidebarViewController.swift",
+        "statusbar/StatusBarView.swift",
+        "toolbar/FormatToolbar.swift",
+        "toolbar/ReaderToolbar.swift"
+      ],
+      "target_dependencies" : [
+        "Kiwi"
+      ],
+      "type" : "library"
+    },
+    {
+      "c99name" : "JenaNote",
+      "module_type" : "SwiftTarget",
+      "name" : "JenaNote",
+      "path" : "Sources/JenaNote",
+      "product_memberships" : [
+        "JenaNote"
+      ],
+      "sources" : [
+        "main.swift"
+      ],
+      "target_dependencies" : [
+        "JenaNoteKit"
+      ],
+      "type" : "executable"
+    }
+  ],
+  "tools_version" : "5.7"
+}

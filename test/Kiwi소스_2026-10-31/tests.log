@@ -1,0 +1,1289 @@
+Building for debugging...
+[0/15] /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-validation/arm64-apple-macosx/debug/JenaNotePackageTests.derived/runner.swift
+[1/15] Write sources
+[1/15] Copying libkiwi.a
+[3/15] Write sources
+[3/15] Write JenaNote-entitlement.plist
+[5/15] Write sources
+[7/15] Copying KiwiModel
+[8/15] Copying ThirdParty
+[9/15] Write swift-version--58304C5D6DBC2206.txt
+[11/103] Emitting module JenaNoteKit
+[12/109] Compiling JenaNoteKit ProofreadingSuggestion.swift
+[13/109] Compiling JenaNoteKit FileSearcher.swift
+[14/109] Compiling JenaNoteKit FolderBookmarksStore.swift
+[15/109] Compiling JenaNoteKit FolderWatcher.swift
+[16/109] Compiling JenaNoteKit ImagePreviewOutlineView.swift
+[17/109] Compiling JenaNoteKit SidebarItemCreation.swift
+[18/109] Compiling JenaNoteKit LiveProofreadingController.swift
+[19/109] Compiling JenaNoteKit PersonalDictionaryStore.swift
+[20/109] Compiling JenaNoteKit PersonalDictionaryWindowController.swift
+[21/109] Compiling JenaNoteKit ProofreadingAnnotations.swift
+[22/109] Compiling JenaNoteKit ProofreadingLayoutManager.swift
+[23/109] Compiling JenaNoteKit ProofreadingPopoverController.swift
+[24/109] Compiling JenaNoteKit AIEpisodeSummaryStore.swift
+[25/109] Compiling JenaNoteKit AILocalInferenceQueue.swift
+[26/109] Compiling JenaNoteKit AIMetadata.swift
+[27/109] Compiling JenaNoteKit AIProcess.swift
+[28/109] Compiling JenaNoteKit AIProofreadingController.swift
+[29/109] Compiling JenaNoteKit AIProvider.swift
+[30/109] Compiling JenaNoteKit AISelectionProofreader.swift
+[31/109] Compiling JenaNoteKit IncrementalPaginator.swift
+[32/109] Compiling JenaNoteKit MarkdownSourceViewController.swift
+[33/109] Compiling JenaNoteKit PageRulerView.swift
+[34/109] Compiling JenaNoteKit PaperBackground.swift
+[35/109] Compiling JenaNoteKit ReaderMetrics.swift
+[36/109] Compiling JenaNoteKit ReaderViewController.swift
+[37/109] Compiling JenaNoteKit ReadingAnchor.swift
+[38/109] Compiling JenaNoteKit AISettingsViewController.swift
+[39/109] Compiling JenaNoteKit AITerminal.swift
+[40/109] Compiling JenaNoteKit AIWorkContext.swift
+[41/109] Compiling JenaNoteKit AIWorkContextAssembler.swift
+[42/109] Compiling JenaNoteKit AIWorkContextBar.swift
+[43/109] Compiling JenaNoteKit AIWorkContextEpisodesView.swift
+[44/109] Compiling JenaNoteKit AIWorkContextFoldersView.swift
+[45/109] Compiling JenaNoteKit PreferencesWindowController.swift
+[46/109] Compiling JenaNoteKit SettingsManager.swift
+[47/109] Compiling JenaNoteKit DocumentBackupStore.swift
+[48/109] Compiling JenaNoteKit DocumentBackupWindowController.swift
+[49/109] Compiling JenaNoteKit DocumentEndnotes.swift
+[50/109] Compiling JenaNoteKit DocumentHistoryChangeMap.swift
+[51/109] Compiling JenaNoteKit DocumentHistoryComparisonView.swift
+[52/109] Compiling JenaNoteKit AIChatComposerView.swift
+[53/109] Compiling JenaNoteKit AIChatMarkdown.swift
+[54/109] Compiling JenaNoteKit AIChatOptionsView.swift
+[55/109] Compiling JenaNoteKit AIChatTranscriptView.swift
+[56/109] Compiling JenaNoteKit AIChatViewController.swift
+[57/109] Compiling JenaNoteKit AIClient.swift
+[58/109] Compiling JenaNoteKit AIConversation.swift
+[59/109] Compiling JenaNoteKit SidebarItemOperations.swift
+[60/109] Compiling JenaNoteKit SidebarViewController.swift
+[61/109] Compiling JenaNoteKit StatusBarView.swift
+[62/109] Compiling JenaNoteKit FormatToolbar.swift
+[63/109] Compiling JenaNoteKit ReaderToolbar.swift
+[64/109] Compiling JenaNoteKit resource_bundle_accessor.swift
+[65/109] Compiling JenaNoteKit DocumentHistoryDiff.swift
+[66/109] Compiling JenaNoteKit MarkdownDocument.swift
+[67/109] Compiling JenaNoteKit MarkdownSerializer.swift
+[68/109] Compiling JenaNoteKit SyntaxHighlighter.swift
+[69/109] Compiling JenaNoteKit BookmarkListViewController.swift
+[70/109] Compiling JenaNoteKit BookmarkStore.swift
+[71/109] Compiling JenaNoteKit DocumentPaperSize.swift
+[72/109] Compiling JenaNoteKit ReadingPosition.swift
+[73/109] Compiling JenaNoteKit ReadingProgressStore.swift
+[74/109] Compiling JenaNoteKit TextMetrics.swift
+[75/109] Compiling JenaNoteKit DocumentModel.swift
+[76/109] Compiling JenaNoteKit DocumentModelBuilder.swift
+[77/109] Compiling JenaNoteKit DocxWriter.swift
+[78/109] Compiling JenaNoteKit AIWorkContextModel.swift
+[79/109] Compiling JenaNoteKit AIWorkContextResolver.swift
+[80/109] Compiling JenaNoteKit AIWorkContextSourceRowViews.swift
+[81/109] Compiling JenaNoteKit AIWorkContextSourcesView.swift
+[82/109] Compiling JenaNoteKit AIWorkContextWindowController.swift
+[83/109] Compiling JenaNoteKit AIWorkIndex.swift
+[84/109] Compiling JenaNoteKit AIWorkIndexStore.swift
+[85/109] Compiling JenaNoteKit ExportController.swift
+[86/109] Compiling JenaNoteKit HwpxWriter.swift
+[87/109] Compiling JenaNoteKit XMLEscape.swift
+[88/109] Compiling JenaNoteKit ZipArchive.swift
+[89/109] Compiling JenaNoteKit KiwiProofreadingEngine.swift
+[90/109] Compiling JenaNoteKit KoreanOrthographyRules.swift
+[91/109] Compiling JenaNoteKit AIWorkIndexView.swift
+[92/109] Compiling JenaNoteKit AIWorkLocalSummarizer.swift
+[93/109] Compiling JenaNoteKit AIWorkPayload.swift
+[94/109] Compiling JenaNoteKit AIWorkRetrieval.swift
+[95/109] Compiling JenaNoteKit AppDelegate.swift
+[96/109] Compiling JenaNoteKit HelpWindowController.swift
+[97/109] Compiling JenaNoteKit Localization.swift
+[98/109] Compiling JenaNoteKit EditorTextView.swift
+[99/109] Compiling JenaNoteKit EditorViewController.swift
+[100/109] Compiling JenaNoteKit EditorWindowController+Formatting.swift
+[101/109] Compiling JenaNoteKit EditorWindowController+Proofreading.swift
+[102/109] Compiling JenaNoteKit EditorWindowController.swift
+[103/109] Compiling JenaNoteKit EndnoteEditorView.swift
+[104/109] Compiling JenaNoteKit FormatCommands.swift
+[105/159] Compiling JenaNote main.swift
+[106/159] Emitting module JenaNote
+[106/159] Write Objects.LinkFileList
+[107/159] Linking JenaNote
+[108/159] Applying JenaNote
+[110/159] Emitting module JenaNoteKitTests
+[111/162] Compiling JenaNoteKitTests ReaderMetricsTests.swift
+[112/162] Compiling JenaNoteKitTests ReaderPageViewLifecycleTests.swift
+[113/162] Compiling JenaNoteKitTests ReadingAnchorTests.swift
+[114/162] Compiling JenaNoteKitTests KiwiProofreadingTests.swift
+[115/162] Compiling JenaNoteKitTests LiveProofreadingTests.swift
+[116/162] Compiling JenaNoteKitTests MarkdownSourceTests.swift
+[117/162] Compiling JenaNoteKitTests AIWorkContextResolverTests.swift
+[118/162] Compiling JenaNoteKitTests AIWorkContextSourcesViewTests.swift
+[119/162] Compiling JenaNoteKitTests AIWorkContextTests.swift
+[120/162] Compiling JenaNoteKitTests AIWorkContextWindowTests.swift
+[121/162] Compiling JenaNoteKitTests ReadingProgressStoreTests.swift
+[122/162] Compiling JenaNoteKitTests ReadingSettingsTests.swift
+[123/162] Compiling JenaNoteKitTests SidebarItemCreationTests.swift
+[124/162] Compiling JenaNoteKitTests FileSearcherTests.swift
+[125/162] Compiling JenaNoteKitTests HwpxWriterTests.swift
+[126/162] Compiling JenaNoteKitTests ImageAttachmentTests.swift
+[127/162] Compiling JenaNoteKitTests IncrementalPaginatorTests.swift
+[128/162] Compiling JenaNoteKitTests UnifiedEditorTests.swift
+[129/162] Compiling JenaNoteKitTests WriterUtilitiesTests.swift
+[130/162] Compiling JenaNoteKitTests ZipArchiveTests.swift
+[131/162] Compiling JenaNoteKitTests BookmarkLocalizationTests.swift
+[132/162] Compiling JenaNoteKitTests BookmarkStoreTests.swift
+[133/162] Compiling JenaNoteKitTests DocumentHistoryTests.swift
+[134/162] Compiling JenaNoteKitTests DocumentModelBuilderTests.swift
+[135/162] Compiling JenaNoteKitTests AIWorkIndexIntegrationTests.swift
+[136/162] Compiling JenaNoteKitTests AIWorkIndexTests.swift
+[137/162] Compiling JenaNoteKitTests AIWorkLocalSummarizerTests.swift
+[138/162] Compiling JenaNoteKitTests AIWorkPromptTests.swift
+[139/162] Compiling JenaNoteKitTests SidebarItemOperationsTests.swift
+[140/162] Compiling JenaNoteKitTests SmokeTests.swift
+[141/162] Compiling JenaNoteKitTests TextMetricsTests.swift
+[142/162] Compiling JenaNoteKitTests PageRulerTests.swift
+[143/162] Compiling JenaNoteKitTests PersonalDictionaryTests.swift
+[144/162] Compiling JenaNoteKitTests ReaderLayoutRoundTripTests.swift
+[145/162] Compiling JenaNoteKitTests AIWorkContextAssemblerTests.swift
+[146/162] Compiling JenaNoteKitTests AIWorkContextBarTests.swift
+[147/162] Compiling JenaNoteKitTests AIWorkContextEpisodesViewTests.swift
+[148/162] Compiling JenaNoteKitTests AIWorkContextModelTests.swift
+[149/162] Compiling JenaNoteKitTests DocxWriterTests.swift
+[150/162] Compiling JenaNoteKitTests EditablePagedReaderTests.swift
+[151/162] Compiling JenaNoteKitTests EditorDocumentLoadTests.swift
+[152/162] Compiling JenaNoteKitTests ExternalReloadTests.swift
+[153/162] Compiling JenaNoteKitTests AIChatComposerTests.swift
+[154/162] Compiling JenaNoteKitTests AIChatLayoutTests.swift
+[155/162] Compiling JenaNoteKitTests AIChatMarkdownTests.swift
+[156/162] Compiling JenaNoteKitTests AIClientTimeoutTests.swift
+[157/162] Compiling JenaNoteKitTests AIEpisodeSummaryStoreTests.swift
+[158/162] Compiling JenaNoteKitTests AIMetadataTests.swift
+[159/162] Compiling JenaNoteKitTests AIModeTests.swift
+[160/162] Compiling JenaNoteKitTests AIProofreadingTests.swift
+[161/164] Compiling JenaNotePackageTests runner.swift
+[162/164] Emitting module JenaNotePackageTests
+[162/164] Write Objects.LinkFileList
+[163/164] Linking JenaNotePackageTests
+Build complete! (16.50s)
+Test Suite 'All tests' started at 2026-10-31 14:29:35.267.
+Test Suite 'JenaNotePackageTests.xctest' started at 2026-10-31 14:29:35.268.
+Test Suite 'AIChatComposerTests' started at 2026-10-31 14:29:35.268.
+Test Case '-[JenaNoteKitTests.AIChatComposerTests testComposerContainsAllControlsAndFitsNarrowAndWidePanels]' started.
+Test Case '-[JenaNoteKitTests.AIChatComposerTests testComposerContainsAllControlsAndFitsNarrowAndWidePanels]' passed (0.520 seconds).
+Test Case '-[JenaNoteKitTests.AIChatComposerTests testKoreanCompositionConfirmationNeverSubmits]' started.
+Test Case '-[JenaNoteKitTests.AIChatComposerTests testKoreanCompositionConfirmationNeverSubmits]' passed (0.032 seconds).
+Test Case '-[JenaNoteKitTests.AIChatComposerTests testReturnSubmitsOnceAndShiftReturnInsertsNewline]' started.
+Test Case '-[JenaNoteKitTests.AIChatComposerTests testReturnSubmitsOnceAndShiftReturnInsertsNewline]' passed (0.001 seconds).
+Test Suite 'AIChatComposerTests' passed at 2026-10-31 14:29:35.822.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.553 (0.553) seconds
+Test Suite 'AIChatLayoutTests' started at 2026-10-31 14:29:35.822.
+Test Case '-[JenaNoteKitTests.AIChatLayoutTests testLongMessagesReflowWhenPanelWidthChangesWithoutLosingText]' started.
+Test Case '-[JenaNoteKitTests.AIChatLayoutTests testLongMessagesReflowWhenPanelWidthChangesWithoutLosingText]' passed (0.012 seconds).
+Test Case '-[JenaNoteKitTests.AIChatLayoutTests testSplitDividerAllowsResizeUpToDoubleInitialWidthAndRestoresWidth]' started.
+Test Case '-[JenaNoteKitTests.AIChatLayoutTests testSplitDividerAllowsResizeUpToDoubleInitialWidthAndRestoresWidth]' passed (0.465 seconds).
+Test Case '-[JenaNoteKitTests.AIChatLayoutTests testUserBubbleIsOnRightAndAIHasNoBoxOnLeft]' started.
+Test Case '-[JenaNoteKitTests.AIChatLayoutTests testUserBubbleIsOnRightAndAIHasNoBoxOnLeft]' passed (0.003 seconds).
+Test Suite 'AIChatLayoutTests' passed at 2026-10-31 14:29:36.302.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.480 (0.481) seconds
+Test Suite 'AIChatMarkdownTests' started at 2026-10-31 14:29:36.302.
+Test Case '-[JenaNoteKitTests.AIChatMarkdownTests testAssistantRendersMarkdownAndPreservesRawConversation]' started.
+Test Case '-[JenaNoteKitTests.AIChatMarkdownTests testAssistantRendersMarkdownAndPreservesRawConversation]' passed (0.012 seconds).
+Test Case '-[JenaNoteKitTests.AIChatMarkdownTests testCodeAndTableLayoutReflowsInsideSidebar]' started.
+Test Case '-[JenaNoteKitTests.AIChatMarkdownTests testCodeAndTableLayoutReflowsInsideSidebar]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIChatMarkdownTests testImagesRetainDescriptionWithoutLoadingAndNonWebLinksRemainText]' started.
+Test Case '-[JenaNoteKitTests.AIChatMarkdownTests testImagesRetainDescriptionWithoutLoadingAndNonWebLinksRemainText]' passed (0.000 seconds).
+Test Suite 'AIChatMarkdownTests' passed at 2026-10-31 14:29:36.319.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.017 (0.017) seconds
+Test Suite 'AIClientTimeoutTests' started at 2026-10-31 14:29:36.319.
+Test Case '-[JenaNoteKitTests.AIClientTimeoutTests testArgumentsUnchangedByTimeout]' started.
+Test Case '-[JenaNoteKitTests.AIClientTimeoutTests testArgumentsUnchangedByTimeout]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIClientTimeoutTests testTimeoutConstants]' started.
+Test Case '-[JenaNoteKitTests.AIClientTimeoutTests testTimeoutConstants]' passed (0.000 seconds).
+Test Suite 'AIClientTimeoutTests' passed at 2026-10-31 14:29:36.319.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'AIEpisodeSummaryStoreTests' started at 2026-10-31 14:29:36.319.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testCancellingOneCallerDoesNotCancelOther]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testCancellingOneCallerDoesNotCancelOther]' passed (0.009 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testCancelStopsQueue]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testCancelStopsQueue]' passed (0.027 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testChangedSourceBecomesStaleAndRegenerates]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testChangedSourceBecomesStaleAndRegenerates]' passed (0.019 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testFailureStopsAndKeepsEarlierSummaries]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testFailureStopsAndKeepsEarlierSummaries]' passed (0.008 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testGenerationObserverFiresOnStartStoreAndFinish]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testGenerationObserverFiresOnStartStoreAndFinish]' passed (0.039 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testInterruptedRewriteReadsAsMissingNotManual]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testInterruptedRewriteReadsAsMissingNotManual]' passed (0.044 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testManualEditFreezesSummary]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testManualEditFreezesSummary]' passed (0.009 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testMissingThenReadyAfterPrepare]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testMissingThenReadyAfterPrepare]' passed (0.006 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testNoPendingFilesMakesNoCalls]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testNoPendingFilesMakesNoCalls]' passed (0.052 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testRegenerateForceOverwritesManual]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testRegenerateForceOverwritesManual]' passed (0.128 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testRegenerateRefusesDirtyOpenSummary]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testRegenerateRefusesDirtyOpenSummary]' passed (0.038 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testRenamedEpisodeIsMissingAndOrphanKept]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testRenamedEpisodeIsMissingAndOrphanKept]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testRetryResumesFromFailedFile]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testRetryResumesFromFailedFile]' passed (0.023 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testRoundTripThroughPlainTextDoesNotFlagManual]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testRoundTripThroughPlainTextDoesNotFlagManual]' passed (0.007 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testSecondPrepareQueuesBehindAndSameEpisodeSummarizedOnce]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testSecondPrepareQueuesBehindAndSameEpisodeSummarizedOnce]' passed (0.014 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testSettingsSummaryUsesSettingsSubfolder]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testSettingsSummaryUsesSettingsSubfolder]' passed (0.008 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testSharedRegistryReturnsSameInstancePerRoot]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testSharedRegistryReturnsSameInstancePerRoot]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testStateSweepLoadsIndexOnce]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testStateSweepLoadsIndexOnce]' passed (0.013 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testSymlinkedJenanoteFolderBlocksSummaryReadAndWrite]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testSymlinkedJenanoteFolderBlocksSummaryReadAndWrite]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testSymlinkedSummaryIsNotRead]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testSymlinkedSummaryIsNotRead]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testTokensUsedAccumulatesOnHandleEvenAfterFailure]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testTokensUsedAccumulatesOnHandleEvenAfterFailure]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testUnchangedSourceSkipsGeneration]' started.
+Test Case '-[JenaNoteKitTests.AIEpisodeSummaryStoreTests testUnchangedSourceSkipsGeneration]' passed (0.005 seconds).
+Test Suite 'AIEpisodeSummaryStoreTests' passed at 2026-10-31 14:29:36.798.
+	 Executed 22 tests, with 0 failures (0 unexpected) in 0.469 (0.479) seconds
+Test Suite 'AIMetadataTests' started at 2026-10-31 14:29:36.798.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testClaudeControlExchangeKeepsModelListWhenUsageIsUnsupported]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testClaudeControlExchangeKeepsModelListWhenUsageIsUnsupported]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIMetadataTests testClaudeUsesActualPeriodsAndDoesNotInventDisabledMonthlyUsage]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testClaudeUsesActualPeriodsAndDoesNotInventDisabledMonthlyUsage]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.AIMetadataTests testClientSendsSelectedModelAndReportsTokens]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testClientSendsSelectedModelAndReportsTokens]' passed (0.369 seconds).
+Test Case '-[JenaNoteKitTests.AIMetadataTests testCodexPrimaryCanBeWeeklyAndMultipleBucketsAreNotLost]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testCodexPrimaryCanBeWeeklyAndMultipleBucketsAreNotLost]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.AIMetadataTests testCompactUsageMatchesSingleLineWithModelScope]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testCompactUsageMatchesSingleLineWithModelScope]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIMetadataTests testInteractiveMetadataHandshakeWaitsForResponsesWithoutInference]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testInteractiveMetadataHandshakeWaitsForResponsesWithoutInference]' passed (0.378 seconds).
+Test Case '-[JenaNoteKitTests.AIMetadataTests testLoaderIsInsideScrollableConversationAfterLastMessage]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testLoaderIsInsideScrollableConversationAfterLastMessage]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIMetadataTests testModelIsPassedAsSingleArgumentAndProviderPreferenceIsSeparate]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testModelIsPassedAsSingleArgumentAndProviderPreferenceIsSeparate]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.AIMetadataTests testResetCountdownFormatsDaysHoursAndMinutes]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testResetCountdownFormatsDaysHoursAndMinutes]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIMetadataTests testTokenAccountingDoesNotDoubleCountCachedOrReasoningTokens]' started.
+Test Case '-[JenaNoteKitTests.AIMetadataTests testTokenAccountingDoesNotDoubleCountCachedOrReasoningTokens]' passed (0.000 seconds).
+Test Suite 'AIMetadataTests' passed at 2026-10-31 14:29:37.555.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.756 (0.757) seconds
+Test Suite 'AIModeTests' started at 2026-10-31 14:29:37.555.
+Test Case '-[JenaNoteKitTests.AIModeTests testAIForcesScrollAndRestoresPagedPreferenceWithoutChangingDocument]' started.
+Test Case '-[JenaNoteKitTests.AIModeTests testAIForcesScrollAndRestoresPagedPreferenceWithoutChangingDocument]' passed (0.141 seconds).
+Test Case '-[JenaNoteKitTests.AIModeTests testAttachmentCannotBeReplacedByPlainText]' started.
+Test Case '-[JenaNoteKitTests.AIModeTests testAttachmentCannotBeReplacedByPlainText]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIModeTests testCancellationFinishesWhenAChildRetainsPipes]' started.
+Test Case '-[JenaNoteKitTests.AIModeTests testCancellationFinishesWhenAChildRetainsPipes]' passed (1.143 seconds).
+Test Case '-[JenaNoteKitTests.AIModeTests testChatDirectEditUsesCLIResponseAndDocumentUndo]' started.
+Test Case '-[JenaNoteKitTests.AIModeTests testChatDirectEditUsesCLIResponseAndDocumentUndo]' passed (0.789 seconds).
+Test Case '-[JenaNoteKitTests.AIModeTests testConversationsFollowFilesAndSeparateUnsavedNotes]' started.
+Test Case '-[JenaNoteKitTests.AIModeTests testConversationsFollowFilesAndSeparateUnsavedNotes]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.AIModeTests testGrokOnlyAcceptsCompletedJSONResponse]' started.
+Test Case '-[JenaNoteKitTests.AIModeTests testGrokOnlyAcceptsCompletedJSONResponse]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIModeTests testGrokProfileIsPassedToChildWithoutReplacingUserHome]' started.
+Test Case '-[JenaNoteKitTests.AIModeTests testGrokProfileIsPassedToChildWithoutReplacingUserHome]' passed (0.027 seconds).
+Test Case '-[JenaNoteKitTests.AIModeTests testLargeRewriteStopsBeforeExpensiveDiff]' started.
+Test Case '-[JenaNoteKitTests.AIModeTests testLargeRewriteStopsBeforeExpensiveDiff]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.AIModeTests testMalformedEditsAndProviderErrorsCannotBecomeDocumentText]' started.
+Test Case '-[JenaNoteKitTests.AIModeTests testMalformedEditsAndProviderErrorsCannotBecomeDocumentText]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIModeTests testProcessDrainsBothPipesAndPassesPromptLiterally]' started.
+Test Case '-[JenaNoteKitTests.AIModeTests testProcessDrainsBothPipesAndPassesPromptLiterally]' passed (0.023 seconds).
+Test Case '-[JenaNoteKitTests.AIModeTests testProcessTimeoutAndPrelaunchCancellationFinish]' started.
+Test Case '-[JenaNoteKitTests.AIModeTests testProcessTimeoutAndPrelaunchCancellationFinish]' passed (1.170 seconds).
+Test Case '-[JenaNoteKitTests.AIModeTests testPromptContainsCurrentDocumentSelectionAndOnlyItsHistory]' started.
+Test Case '-[JenaNoteKitTests.AIModeTests testPromptContainsCurrentDocumentSelectionAndOnlyItsHistory]' passed (0.010 seconds).
+Test Case '-[JenaNoteKitTests.AIModeTests testSelectedUnicodeEditPreservesOutsideFormattingAndUndo]' started.
+Test Case '-[JenaNoteKitTests.AIModeTests testSelectedUnicodeEditPreservesOutsideFormattingAndUndo]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.AIModeTests testSeparatedEditsKeepBoldTextBetweenThem]' started.
+Test Case '-[JenaNoteKitTests.AIModeTests testSeparatedEditsKeepBoldTextBetweenThem]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.AIModeTests testSettingsRecheckRequiresAnActualSuccessfulResponse]' started.
+Test Case '-[JenaNoteKitTests.AIModeTests testSettingsRecheckRequiresAnActualSuccessfulResponse]' passed (0.527 seconds).
+Test Case '-[JenaNoteKitTests.AIModeTests testShellQuoteDoesNotInterpolatePath]' started.
+Test Case '-[JenaNoteKitTests.AIModeTests testShellQuoteDoesNotInterpolatePath]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIModeTests testSnapshotRejectsAnotherDocumentAndTextOrStyleChanges]' started.
+Test Case '-[JenaNoteKitTests.AIModeTests testSnapshotRejectsAnotherDocumentAndTextOrStyleChanges]' passed (0.000 seconds).
+Test Suite 'AIModeTests' passed at 2026-10-31 14:29:41.393.
+	 Executed 17 tests, with 0 failures (0 unexpected) in 3.836 (3.838) seconds
+Test Suite 'AIProofreadingEditorTests' started at 2026-10-31 14:29:41.393.
+Test Case '-[JenaNoteKitTests.AIProofreadingEditorTests testComparisonDoesNotEditUntilApplyAndOneUndoRestoresOriginalWithFormatting]' started.
+Test Case '-[JenaNoteKitTests.AIProofreadingEditorTests testComparisonDoesNotEditUntilApplyAndOneUndoRestoresOriginalWithFormatting]' passed (0.757 seconds).
+Test Case '-[JenaNoteKitTests.AIProofreadingEditorTests testNoSelectionDisablesInspectionAndCancelLeavesSourceUnchanged]' started.
+Test Case '-[JenaNoteKitTests.AIProofreadingEditorTests testNoSelectionDisablesInspectionAndCancelLeavesSourceUnchanged]' passed (0.730 seconds).
+Test Case '-[JenaNoteKitTests.AIProofreadingEditorTests testPagedSelectionUsesDocumentRangeAndChangedDocumentRejectsApplication]' started.
+Test Case '-[JenaNoteKitTests.AIProofreadingEditorTests testPagedSelectionUsesDocumentRangeAndChangedDocumentRejectsApplication]' passed (0.073 seconds).
+Test Case '-[JenaNoteKitTests.AIProofreadingEditorTests testUnchangedResultDoesNotEnableApply]' started.
+Test Case '-[JenaNoteKitTests.AIProofreadingEditorTests testUnchangedResultDoesNotEnableApply]' passed (0.725 seconds).
+Test Suite 'AIProofreadingEditorTests' passed at 2026-10-31 14:29:43.678.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 2.285 (2.285) seconds
+Test Suite 'AIProofreadingTests' started at 2026-10-31 14:29:43.678.
+Test Case '-[JenaNoteKitTests.AIProofreadingTests testEmptyCorrectionIsAFailureNotADeletionSuggestion]' started.
+Test Case '-[JenaNoteKitTests.AIProofreadingTests testEmptyCorrectionIsAFailureNotADeletionSuggestion]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIProofreadingTests testInteractiveRequestPassesQueuedSummariesWithoutInterruptingCurrentJob]' started.
+Test Case '-[JenaNoteKitTests.AIProofreadingTests testInteractiveRequestPassesQueuedSummariesWithoutInterruptingCurrentJob]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIProofreadingTests testProofreadingQueueWaitCountsTowardTimeoutAndNeverCallsModelAfterExpiry]' started.
+Test Case '-[JenaNoteKitTests.AIProofreadingTests testProofreadingQueueWaitCountsTowardTimeoutAndNeverCallsModelAfterExpiry]' passed (0.023 seconds).
+Test Case '-[JenaNoteKitTests.AIProofreadingTests testSelectionLimitsAndUnavailableModelDoNotInvokeInference]' started.
+Test Case '-[JenaNoteKitTests.AIProofreadingTests testSelectionLimitsAndUnavailableModelDoNotInvokeInference]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIProofreadingTests testTimeoutReportsImmediatelyButDoesNotOverlapUncooperativeInference]' started.
+Test Case '-[JenaNoteKitTests.AIProofreadingTests testTimeoutReportsImmediatelyButDoesNotOverlapUncooperativeInference]' passed (0.033 seconds).
+Test Suite 'AIProofreadingTests' passed at 2026-10-31 14:29:43.739.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.061 (0.061) seconds
+Test Suite 'AIWorkContextAssemblerTests' started at 2026-10-31 14:29:43.739.
+Test Case '-[JenaNoteKitTests.AIWorkContextAssemblerTests testDisabledStatus]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextAssemblerTests testDisabledStatus]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextAssemblerTests testLocateResultSurfacesCorruptConfig]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextAssemblerTests testLocateResultSurfacesCorruptConfig]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextAssemblerTests testOutsideWritingFolderStatus]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextAssemblerTests testOutsideWritingFolderStatus]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextAssemblerTests testPayloadIncludesSettingsSummariesAndPreviousEpisode]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextAssemblerTests testPayloadIncludesSettingsSummariesAndPreviousEpisode]' passed (0.013 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextAssemblerTests testStatusCountsReadySummaries]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextAssemblerTests testStatusCountsReadySummaries]' passed (0.012 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextAssemblerTests testSummarizedSettingUsesSummaryText]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextAssemblerTests testSummarizedSettingUsesSummaryText]' passed (0.007 seconds).
+Test Suite 'AIWorkContextAssemblerTests' passed at 2026-10-31 14:29:43.787.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.047 (0.047) seconds
+Test Suite 'AIWorkContextBarTests' started at 2026-10-31 14:29:43.787.
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testAppearanceForEachStatusMatchesTable]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testAppearanceForEachStatusMatchesTable]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testAutomaticPreparationTabIsDefaultAndCancellingChatLeavesSharedIndexAlive]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testAutomaticPreparationTabIsDefaultAndCancellingChatLeavesSharedIndexAlive]' passed (0.073 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testCorruptBackupFailureDoesNotOpenFirstSetup]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testCorruptBackupFailureDoesNotOpenFirstSetup]' passed (0.015 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testDetailCarriesNumbersNotSentence]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testDetailCarriesNumbersNotSentence]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testFormatBytes]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testFormatBytes]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testIndexingRowOpensSettingsWithoutCancellingSharedPreparation]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testIndexingRowOpensSettingsWithoutCancellingSharedPreparation]' passed (0.067 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testOpenWorkWindowRoutesByStatus]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testOpenWorkWindowRoutesByStatus]' passed (0.452 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testOverLimitDistinguishesSettingsOverFromTrimmable]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testOverLimitDistinguishesSettingsOverFromTrimmable]' passed (0.020 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testPanelDeinitClearsWindowProgress]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testPanelDeinitClearsWindowProgress]' passed (0.199 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testPanelProgressReachesWindowWhileAlive]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testPanelProgressReachesWindowWhileAlive]' passed (0.122 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testRowClickAndButtonClickFireSameAction]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testRowClickAndButtonClickFireSameAction]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testSavingUntitledDocumentIntoWorkRefreshesRow]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testSavingUntitledDocumentIntoWorkRefreshesRow]' passed (0.039 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testUnsavedDocumentDisablesSetupButton]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testUnsavedDocumentDisablesSetupButton]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testUpdateShowsTextAndKeepsStatus]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testUpdateShowsTextAndKeepsStatus]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testWindowRegenerateUsesWindowStoreAfterDocumentSwitch]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testWindowRegenerateUsesWindowStoreAfterDocumentSwitch]' passed (0.414 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testWorkContextSitsInsideComposerAboveInput]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextBarTests testWorkContextSitsInsideComposerAboveInput]' passed (0.016 seconds).
+Test Suite 'AIWorkContextBarTests' passed at 2026-10-31 14:29:45.211.
+	 Executed 16 tests, with 0 failures (0 unexpected) in 1.423 (1.424) seconds
+Test Suite 'AIWorkContextEpisodesViewTests' started at 2026-10-31 14:29:45.211.
+Test Case '-[JenaNoteKitTests.AIWorkContextEpisodesViewTests testHintWithoutPreviousEpisodeAndOpenErrorClearedByNextAction]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextEpisodesViewTests testHintWithoutPreviousEpisodeAndOpenErrorClearedByNextAction]' passed (0.114 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextEpisodesViewTests testOpenDisabledWhenSummaryMissing]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextEpisodesViewTests testOpenDisabledWhenSummaryMissing]' passed (0.077 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextEpisodesViewTests testOpenSummaryRefusesSymlinkedLeaf]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextEpisodesViewTests testOpenSummaryRefusesSymlinkedLeaf]' passed (0.088 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextEpisodesViewTests testRefreshButtonTogglesToCancelWhileGenerating]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextEpisodesViewTests testRefreshButtonTogglesToCancelWhileGenerating]' passed (0.111 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextEpisodesViewTests testRemakeManualAsksThenRegenerates]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextEpisodesViewTests testRemakeManualAsksThenRegenerates]' passed (0.074 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextEpisodesViewTests testRemakeManualCancelledDoesNothing]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextEpisodesViewTests testRemakeManualCancelledDoesNothing]' passed (0.069 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextEpisodesViewTests testRemakeStaleRegeneratesWithoutConfirm]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextEpisodesViewTests testRemakeStaleRegeneratesWithoutConfirm]' passed (0.067 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextEpisodesViewTests testRowsShowStateTextAndTags]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextEpisodesViewTests testRowsShowStateTextAndTags]' passed (0.109 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextEpisodesViewTests testWindowRerendersWhenStoreGenerates]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextEpisodesViewTests testWindowRerendersWhenStoreGenerates]' passed (0.088 seconds).
+Test Suite 'AIWorkContextEpisodesViewTests' passed at 2026-10-31 14:29:46.009.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.797 (0.798) seconds
+Test Suite 'AIWorkContextModelTests' started at 2026-10-31 14:29:46.009.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testAddingFirstSourceEnablesContext]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testAddingFirstSourceEnablesContext]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testAddingSourceRejectsOutsideRootAndRoot]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testAddingSourceRejectsOutsideRootAndRoot]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testBudgetFactLineIncludesPreviousEpisodeWhenPresent]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testBudgetFactLineIncludesPreviousEpisodeWhenPresent]' passed (0.010 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testBudgetFactLineUnderAndOverLimit]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testBudgetFactLineUnderAndOverLimit]' passed (0.009 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testBudgetFactLineWhenTrimmingDropsPreviousEpisode]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testBudgetFactLineWhenTrimmingDropsPreviousEpisode]' passed (0.009 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testBudgetSegmentsSumToContextByteCount]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testBudgetSegmentsSumToContextByteCount]' passed (0.042 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testConfigWithoutDisabledByUserKeyStillDecodes]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testConfigWithoutDisabledByUserKeyStillDecodes]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testEpisodeRowsCarryStoreState]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testEpisodeRowsCarryStoreState]' passed (0.009 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testEpisodeStateLabelWording]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testEpisodeStateLabelWording]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testFolderPreviewSkipsHiddenAndLimits]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testFolderPreviewSkipsHiddenAndLimits]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testFoldersDraftFromSuggestionAndApply]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testFoldersDraftFromSuggestionAndApply]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testLargeFileThresholdAndInvalidPathsLine]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testLargeFileThresholdAndInvalidPathsLine]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testOverlappingSourcesDedupeFilesOnly]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testOverlappingSourcesDedupeFilesOnly]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testRemovingLastSourceDisablesButKeepsChoices]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testRemovingLastSourceDisablesButKeepsChoices]' passed (0.007 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testSettingRowsReflectExclusionsAndSummarized]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testSettingRowsReflectExclusionsAndSummarized]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testSortedBySizeThenName]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testSortedBySizeThenName]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testSourceRowsCountFilesAndBytes]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testSourceRowsCountFilesAndBytes]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testToggleIncludedMovesPathInExcludedSettings]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testToggleIncludedMovesPathInExcludedSettings]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testToggleSummarizedMovesPathInSummarizedSettings]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextModelTests testToggleSummarizedMovesPathInSummarizedSettings]' passed (0.002 seconds).
+Test Suite 'AIWorkContextModelTests' passed at 2026-10-31 14:29:46.138.
+	 Executed 19 tests, with 0 failures (0 unexpected) in 0.128 (0.129) seconds
+Test Suite 'AIWorkContextResolverTests' started at 2026-10-31 14:29:46.138.
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testCurrentFileOutsideWritingFolder]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testCurrentFileOutsideWritingFolder]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testEpisodesExcludeFilesUnderSettingsSources]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testEpisodesExcludeFilesUnderSettingsSources]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testEpisodesSortedByRelativePathNaturally]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testEpisodesSortedByRelativePathNaturally]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testExcludedSettingsSplitOut]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testExcludedSettingsSplitOut]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testFirstEpisodeHasNoPrevious]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testFirstEpisodeHasNoPrevious]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testIncludePreviousEpisodeFalseDropsFullText]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testIncludePreviousEpisodeFalseDropsFullText]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testInvalidWritingFolderYieldsSettingsOnly]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testInvalidWritingFolderYieldsSettingsOnly]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testPreviousEpisodesStopBeforeCurrent]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testPreviousEpisodesStopBeforeCurrent]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testReadSettingTextPrefersOpenDocument]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testReadSettingTextPrefersOpenDocument]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testReadTextNormalizesCRLF]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testReadTextNormalizesCRLF]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testSettingsFileSourceIsSingleFile]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testSettingsFileSourceIsSingleFile]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testSettingsRecursiveSkipHiddenAndNonText]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testSettingsRecursiveSkipHiddenAndNonText]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testSymlinkInWritingFolderIgnored]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testSymlinkInWritingFolderIgnored]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testUnreadableFileIsSkipped]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextResolverTests testUnreadableFileIsSkipped]' passed (0.005 seconds).
+Test Suite 'AIWorkContextResolverTests' passed at 2026-10-31 14:29:46.198.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 0.059 (0.060) seconds
+Test Suite 'AIWorkContextSourcesViewTests' started at 2026-10-31 14:29:46.198.
+Test Case '-[JenaNoteKitTests.AIWorkContextSourcesViewTests testAddFolderOutsideRootShowsErrorAndDoesNotSave]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextSourcesViewTests testAddFolderOutsideRootShowsErrorAndDoesNotSave]' passed (0.063 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextSourcesViewTests testEmptySourcesShowsPlaceholderAndDisablesList]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextSourcesViewTests testEmptySourcesShowsPlaceholderAndDisablesList]' passed (0.033 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextSourcesViewTests testRenderListsSourcesAndFilesSortedBySize]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextSourcesViewTests testRenderListsSourcesAndFilesSortedBySize]' passed (0.037 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextSourcesViewTests testSummarySegmentUpdatesSummarizedSettings]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextSourcesViewTests testSummarySegmentUpdatesSummarizedSettings]' passed (0.052 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextSourcesViewTests testToggleIncludeUpdatesBarAndFactImmediately]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextSourcesViewTests testToggleIncludeUpdatesBarAndFactImmediately]' passed (0.048 seconds).
+Test Suite 'AIWorkContextSourcesViewTests' passed at 2026-10-31 14:29:46.431.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.233 (0.234) seconds
+Test Suite 'AIWorkContextTests' started at 2026-10-31 14:29:46.431.
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testContainsRejectsDotDotThroughSymlink]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testContainsRejectsDotDotThroughSymlink]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testContainsRejectsSymlinkEscape]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testContainsRejectsSymlinkEscape]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testCorruptFileThrowsCorrupt]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testCorruptFileThrowsCorrupt]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testInvalidWritingFolderIsIgnoredNotWidened]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testInvalidWritingFolderIsIgnoredNotWidened]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testLoadAndSaveRoundTrip]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testLoadAndSaveRoundTrip]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testLoadTreatsEmptyWritingFolderAsRoot]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testLoadTreatsEmptyWritingFolderAsRoot]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testLocateFindsNearestContextWithinSixLevels]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testLocateFindsNearestContextWithinSixLevels]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testLocateSkipsFilesInsideJenanoteFolder]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testLocateSkipsFilesInsideJenanoteFolder]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testRejectsEscapingPaths]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testRejectsEscapingPaths]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testSuggestionFindsSettingsSiblingCaseInsensitive]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testSuggestionFindsSettingsSiblingCaseInsensitive]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testSuggestionResolvesSymlinkedParentForNewFile]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testSuggestionResolvesSymlinkedParentForNewFile]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testSuggestionWithoutSettingsFolderUsesParent]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testSuggestionWithoutSettingsFolderUsesParent]' passed (0.007 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testSymlinkedContextFileIsRejected]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testSymlinkedContextFileIsRejected]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testSymlinkedJenanoteFolderIsRejected]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testSymlinkedJenanoteFolderIsRejected]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testValidateRejectsRootAsSettingsSource]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testValidateRejectsRootAsSettingsSource]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testValidateRequiresSourcesInsideRoot]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextTests testValidateRequiresSourcesInsideRoot]' passed (0.001 seconds).
+Test Suite 'AIWorkContextTests' passed at 2026-10-31 14:29:46.472.
+	 Executed 16 tests, with 0 failures (0 unexpected) in 0.040 (0.041) seconds
+Test Suite 'AIWorkContextWindowTests' started at 2026-10-31 14:29:46.472.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testChangeRootRefusesWhenTargetHasContext]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testChangeRootRefusesWhenTargetHasContext]' passed (0.027 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testChangeRootReloadsDiskBeforeMoving]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testChangeRootReloadsDiskBeforeMoving]' passed (0.036 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testClosingCommitsPendingTitleEdit]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testClosingCommitsPendingTitleEdit]' passed (0.040 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testClosingFirstSetupWithoutSourcesSavesNothing]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testClosingFirstSetupWithoutSourcesSavesNothing]' passed (0.036 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testClosingFirstSetupWithValidSuggestionSaves]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testClosingFirstSetupWithValidSuggestionSaves]' passed (0.039 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testEnableSwitchCannotEnableWithoutSources]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testEnableSwitchCannotEnableWithoutSources]' passed (0.023 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testEpisodesActionsDisabledWhileProvisional]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testEpisodesActionsDisabledWhileProvisional]' passed (0.053 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testFirstSetupDoesNotWriteUntilValidChange]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testFirstSetupDoesNotWriteUntilValidChange]' passed (0.047 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testFirstSetupUsesExistingContextAtSuggestedRoot]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testFirstSetupUsesExistingContextAtSuggestedRoot]' passed (0.030 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testFoldersTabRejectsWritingFolderOutsideRoot]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testFoldersTabRejectsWritingFolderOutsideRoot]' passed (0.025 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testMutateSavesImmediatelyAndNotifies]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testMutateSavesImmediatelyAndNotifies]' passed (0.035 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testSharedReturnsSameControllerPerRoot]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testSharedReturnsSameControllerPerRoot]' passed (0.042 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testWindowReloadsConfigBeforeMutating]' started.
+Test Case '-[JenaNoteKitTests.AIWorkContextWindowTests testWindowReloadsConfigBeforeMutating]' passed (0.034 seconds).
+Test Suite 'AIWorkContextWindowTests' passed at 2026-10-31 14:29:46.939.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.466 (0.467) seconds
+Test Suite 'AIWorkIndexIntegrationTests' started at 2026-10-31 14:29:46.939.
+Test Case '-[JenaNoteKitTests.AIWorkIndexIntegrationTests testChatAnswersWhileBackgroundSummaryNeverCompletes]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexIntegrationTests testChatAnswersWhileBackgroundSummaryNeverCompletes]' passed (0.967 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexIntegrationTests testChatUsesLocalIndexThenRetrievesEvidenceAndAnswersThroughCLIAdapter]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexIntegrationTests testChatUsesLocalIndexThenRetrievesEvidenceAndAnswersThroughCLIAdapter]' passed (1.011 seconds).
+Test Suite 'AIWorkIndexIntegrationTests' passed at 2026-10-31 14:29:48.917.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 1.978 (1.978) seconds
+Test Suite 'AIWorkIndexTests' started at 2026-10-31 14:29:48.917.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testAutomaticEvidenceFitsWithoutRequiringAuthorToExcludeFiles]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testAutomaticEvidenceFitsWithoutRequiringAuthorToExcludeFiles]' passed (0.032 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testCancellationRejectsLateResultAndPreservesQuestionIndependentIndex]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testCancellationRejectsLateResultAndPreservesQuestionIndependentIndex]' passed (0.010 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testCancellingDuringLocalSearchDoesNotStartAProviderOrDeliverLateEvidence]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testCancellingDuringLocalSearchDoesNotStartAProviderOrDeliverLateEvidence]' passed (0.208 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testConcurrentPrepareDoesNotDuplicateModelCalls]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testConcurrentPrepareDoesNotDuplicateModelCalls]' passed (0.008 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testFailedPassageIsCachedUntilExplicitRetryAndSuccessfulPassagesAreKept]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testFailedPassageIsCachedUntilExplicitRetryAndSuccessfulPassagesAreKept]' passed (0.010 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testFailurePreservesCompletedChunksAndRetryResumes]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testFailurePreservesCompletedChunksAndRetryResumes]' passed (0.008 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testFastSummariesBatchWholeIndexWritesAndFlushAtCompletion]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testFastSummariesBatchWholeIndexWritesAndFlushAtCompletion]' passed (0.019 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testFutureFilesAreIndexedButNeverEnterCatalogSearchOrEvidence]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testFutureFilesAreIndexedButNeverEnterCatalogSearchOrEvidence]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testLargeCorpusPrimesFirstRetrievalWithRelevantOriginalBeyondFirstCatalogPage]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testLargeCorpusPrimesFirstRetrievalWithRelevantOriginalBeyondFirstCatalogPage]' passed (0.017 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testLargeKoreanFileIsLosslesslyChunkedWithBoundedUnicodeAndLines]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testLargeKoreanFileIsLosslesslyChunkedWithBoundedUnicodeAndLines]' passed (0.041 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testLegacyIndexIsRebuiltWithoutTouchingManualSummaries]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testLegacyIndexIsRebuiltWithoutTouchingManualSummaries]' passed (0.009 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testLocalSearchFindsLateSourceIn4312UnsummarizedPassages]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testLocalSearchFindsLateSourceIn4312UnsummarizedPassages]' passed (0.337 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testMalformedRetrievalCommandDoesNotExecuteAnything]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testMalformedRetrievalCommandDoesNotExecuteAnything]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testOpenDocumentAndPreviousChapterAreSummarizedBeforeOtherFiles]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testOpenDocumentAndPreviousChapterAreSummarizedBeforeOtherFiles]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testPersistentCacheReusesUnchangedContentAndRefreshesOnlyChangedFile]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testPersistentCacheReusesUnchangedContentAndRefreshesOnlyChangedFile]' passed (0.012 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testQuestionPriorityAppliesAfterCurrentInferenceWithoutCancellingIt]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testQuestionPriorityAppliesAfterCurrentInferenceWithoutCancellingIt]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testSearchSnapshotDoesNotWaitForOrCancelBackgroundInference]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testSearchSnapshotDoesNotWaitForOrCancelBackgroundInference]' passed (0.007 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testSearchSnapshotReusesOnlyUnchangedCacheAndHonorsCurrentExclusions]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testSearchSnapshotReusesOnlyUnchangedCacheAndHonorsCurrentExclusions]' passed (0.006 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testSearchThenReadReturnsOriginalEvidenceAndCannotReadUnknownIDs]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testSearchThenReadReturnsOriginalEvidenceAndCannotReadUnknownIDs]' passed (0.007 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testSmallCorpusUsesOriginalsWithoutAnyRetrievalModelCalls]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testSmallCorpusUsesOriginalsWithoutAnyRetrievalModelCalls]' passed (0.004 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testSymlinkAndExcludedSourcesNeverIndexed]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testSymlinkAndExcludedSourcesNeverIndexed]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testUnavailableModelUsesPersistedExcerptsAndUpgradesWhenReady]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testUnavailableModelUsesPersistedExcerptsAndUpgradesWhenReady]' passed (0.014 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testUnfinishedCatalogUsesOriginalPreviewWithoutPretendingSummaryIsComplete]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testUnfinishedCatalogUsesOriginalPreviewWithoutPretendingSummaryIsComplete]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testWhitespacePassageNeverBlocksPreparationOrCallsTheModel]' started.
+Test Case '-[JenaNoteKitTests.AIWorkIndexTests testWhitespacePassageNeverBlocksPreparationOrCallsTheModel]' passed (0.005 seconds).
+Test Suite 'AIWorkIndexTests' passed at 2026-10-31 14:29:49.696.
+	 Executed 24 tests, with 0 failures (0 unexpected) in 0.777 (0.779) seconds
+Test Suite 'AIWorkLocalSummarizerTests' started at 2026-10-31 14:29:49.696.
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testCancellingRunningInferencePropagatesToTheModel]' started.
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testCancellingRunningInferencePropagatesToTheModel]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testEmptyResponseIsAnExcerptNotAFalseSuccessfulSummary]' started.
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testEmptyResponseIsAnExcerptNotAFalseSuccessfulSummary]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testLocalSuccessAndFailurePreserveProvenanceAndOriginal]' started.
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testLocalSuccessAndFailurePreserveProvenanceAndOriginal]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testMultipleWorksShareSequentialInferenceAndCancelledQueueEntryIsSkipped]' started.
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testMultipleWorksShareSequentialInferenceAndCancelledQueueEntryIsSkipped]' passed (0.050 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testTimeoutFallsBackButExplicitCancellationDoesNotPublishSummary]' started.
+Test Case '-[JenaNoteKitTests.AIWorkLocalSummarizerTests testTimeoutFallsBackButExplicitCancellationDoesNotPublishSummary]' passed (0.025 seconds).
+Test Suite 'AIWorkLocalSummarizerTests' passed at 2026-10-31 14:29:49.772.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.076 (0.076) seconds
+Test Suite 'AIWorkPromptTests' started at 2026-10-31 14:29:49.772.
+Test Case '-[JenaNoteKitTests.AIWorkPromptTests testBudgetThresholds]' started.
+Test Case '-[JenaNoteKitTests.AIWorkPromptTests testBudgetThresholds]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkPromptTests testFitDropsOldestSummariesFirst]' started.
+Test Case '-[JenaNoteKitTests.AIWorkPromptTests testFitDropsOldestSummariesFirst]' passed (0.007 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkPromptTests testFitDropsPreviousEpisodeAfterSummaries]' started.
+Test Case '-[JenaNoteKitTests.AIWorkPromptTests testFitDropsPreviousEpisodeAfterSummaries]' passed (0.008 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkPromptTests testFitNeverDropsSettings]' started.
+Test Case '-[JenaNoteKitTests.AIWorkPromptTests testFitNeverDropsSettings]' passed (0.008 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkPromptTests testPayloadWithNoPreviousEpisodes]' started.
+Test Case '-[JenaNoteKitTests.AIWorkPromptTests testPayloadWithNoPreviousEpisodes]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkPromptTests testPromptWithoutWorkIsByteIdenticalToLegacy]' started.
+Test Case '-[JenaNoteKitTests.AIWorkPromptTests testPromptWithoutWorkIsByteIdenticalToLegacy]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkPromptTests testPromptWithWorkContainsKeysAndInstruction]' started.
+Test Case '-[JenaNoteKitTests.AIWorkPromptTests testPromptWithWorkContainsKeysAndInstruction]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.AIWorkPromptTests testSummaryPromptShape]' started.
+Test Case '-[JenaNoteKitTests.AIWorkPromptTests testSummaryPromptShape]' passed (0.005 seconds).
+Test Suite 'AIWorkPromptTests' passed at 2026-10-31 14:29:49.801.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.029 (0.029) seconds
+Test Suite 'BookmarkLocalizationTests' started at 2026-10-31 14:29:49.801.
+Test Case '-[JenaNoteKitTests.BookmarkLocalizationTests testAllBookmarkKeysTranslatedInEveryLanguage]' started.
+Test Case '-[JenaNoteKitTests.BookmarkLocalizationTests testAllBookmarkKeysTranslatedInEveryLanguage]' passed (0.001 seconds).
+Test Suite 'BookmarkLocalizationTests' passed at 2026-10-31 14:29:49.803.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'BookmarkStoreTests' started at 2026-10-31 14:29:49.803.
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testAddsAndReadsBack]' started.
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testAddsAndReadsBack]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testBookmarksAreKeyedPerDocument]' started.
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testBookmarksAreKeyedPerDocument]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testDropsOldestBeyondPerDocumentLimit]' started.
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testDropsOldestBeyondPerDocumentLimit]' passed (0.016 seconds).
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testIgnoresDuplicateOffset]' started.
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testIgnoresDuplicateOffset]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testKeepsDocumentOrderRegardlessOfInsertionOrder]' started.
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testKeepsDocumentOrderRegardlessOfInsertionOrder]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testPathIsStandardizedBeforeKeying]' started.
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testPathIsStandardizedBeforeKeying]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testRemoveAllClearsDocument]' started.
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testRemoveAllClearsDocument]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testRemoveInRangeOnEmptyDocumentIsFalse]' started.
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testRemoveInRangeOnEmptyDocumentIsFalse]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testRemoveInRangeReportsFalseWhenNothingHit]' started.
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testRemoveInRangeReportsFalseWhenNothingHit]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testRemovesBookmarksInsideVisibleRange]' started.
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testRemovesBookmarksInsideVisibleRange]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testRemovesSingleBookmarkByOffset]' started.
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testRemovesSingleBookmarkByOffset]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testSurvivesNewStoreInstance]' started.
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testSurvivesNewStoreInstance]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testUnknownDocumentIsEmpty]' started.
+Test Case '-[JenaNoteKitTests.BookmarkStoreTests testUnknownDocumentIsEmpty]' passed (0.000 seconds).
+Test Suite 'BookmarkStoreTests' passed at 2026-10-31 14:29:49.831.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.028 (0.028) seconds
+Test Suite 'DocumentHistoryTests' started at 2026-10-31 14:29:49.831.
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testAlignedComparisonPreservesLineNumbersAndClassifiesChanges]' started.
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testAlignedComparisonPreservesLineNumbersAndClassifiesChanges]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testChangeMapShowsWholeDocumentAndSelectsNearestChange]' started.
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testChangeMapShowsWholeDocumentAndSelectsNearestChange]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testComparisonDirectionAndBounds]' started.
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testComparisonDirectionAndBounds]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testComparisonReconstructsBothInputsWithRepeatedAndEmptyLines]' started.
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testComparisonReconstructsBothInputsWithRepeatedAndEmptyLines]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testComparisonViewLaysOutBothColumnsAndHighlightsChanges]' started.
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testComparisonViewLaysOutBothColumnsAndHighlightsChanges]' passed (0.013 seconds).
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testHistoryFollowsRenamedFile]' started.
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testHistoryFollowsRenamedFile]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testLegacyBackupMigrationAndCorruptObjectDetection]' started.
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testLegacyBackupMigrationAndCorruptObjectDetection]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testNamedVersionsShareObjectsAndSurvivePruning]' started.
+Test Case '-[JenaNoteKitTests.DocumentHistoryTests testNamedVersionsShareObjectsAndSurvivePruning]' passed (0.008 seconds).
+Test Suite 'DocumentHistoryTests' passed at 2026-10-31 14:29:49.863.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.031 (0.031) seconds
+Test Suite 'DocumentModelBuilderTests' started at 2026-10-31 14:29:49.863.
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testBlockquote]' started.
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testBlockquote]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testCodeBlockMerged]' started.
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testCodeBlockMerged]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testHeadingLevels]' started.
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testHeadingLevels]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testHorizontalRule]' started.
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testHorizontalRule]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testImageFailsGracefullyWithoutBaseURL]' started.
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testImageFailsGracefullyWithoutBaseURL]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testImageLoadsBinaryWhenBaseURLPresent]' started.
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testImageLoadsBinaryWhenBaseURLPresent]' passed (0.026 seconds).
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testInlineColorAndLink]' started.
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testInlineColorAndLink]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testOrderedList]' started.
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testOrderedList]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testParagraphInlineFormatting]' started.
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testParagraphInlineFormatting]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testTableGrid]' started.
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testTableGrid]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testUnorderedList]' started.
+Test Case '-[JenaNoteKitTests.DocumentModelBuilderTests testUnorderedList]' passed (0.000 seconds).
+Test Suite 'DocumentModelBuilderTests' passed at 2026-10-31 14:29:49.892.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.029 (0.029) seconds
+Test Suite 'DocxWriterTests' started at 2026-10-31 14:29:49.892.
+Test Case '-[JenaNoteKitTests.DocxWriterTests testComprehensiveDocxParsesWithTextutil]' started.
+Test Case '-[JenaNoteKitTests.DocxWriterTests testComprehensiveDocxParsesWithTextutil]' passed (0.065 seconds).
+Test Case '-[JenaNoteKitTests.DocxWriterTests testDocxIsValidZip]' started.
+Test Case '-[JenaNoteKitTests.DocxWriterTests testDocxIsValidZip]' passed (0.066 seconds).
+Test Case '-[JenaNoteKitTests.DocxWriterTests testHeadingAndParagraph]' started.
+Test Case '-[JenaNoteKitTests.DocxWriterTests testHeadingAndParagraph]' passed (0.067 seconds).
+Test Case '-[JenaNoteKitTests.DocxWriterTests testImageEmbedAndRelationship]' started.
+Test Case '-[JenaNoteKitTests.DocxWriterTests testImageEmbedAndRelationship]' passed (0.071 seconds).
+Test Case '-[JenaNoteKitTests.DocxWriterTests testInlineColorAndCode]' started.
+Test Case '-[JenaNoteKitTests.DocxWriterTests testInlineColorAndCode]' passed (0.064 seconds).
+Test Case '-[JenaNoteKitTests.DocxWriterTests testLinkCreatesRelationship]' started.
+Test Case '-[JenaNoteKitTests.DocxWriterTests testLinkCreatesRelationship]' passed (0.065 seconds).
+Test Case '-[JenaNoteKitTests.DocxWriterTests testTableCells]' started.
+Test Case '-[JenaNoteKitTests.DocxWriterTests testTableCells]' passed (0.061 seconds).
+Test Suite 'DocxWriterTests' passed at 2026-10-31 14:29:50.351.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.459 (0.459) seconds
+Test Suite 'EditablePagedReaderTests' started at 2026-10-31 14:29:50.351.
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testBookmarkOffsetsFollowInsertionsAndDeletions]' started.
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testBookmarkOffsetsFollowInsertionsAndDeletions]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testDocumentOwnedUndoSurvivesReaderRemovalAndRedo]' started.
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testDocumentOwnedUndoSurvivesReaderRemovalAndRedo]' passed (0.060 seconds).
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testDocumentReplacementCancelsOldPaginationAndOldText]' started.
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testDocumentReplacementCancelsOldPaginationAndOldText]' passed (0.216 seconds).
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testEmptyDocumentAndDeleteAllRemainEditable]' started.
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testEmptyDocumentAndDeleteAllRemainEditable]' passed (0.093 seconds).
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testFontResizeKeepsEditingCaretOnItsNewPage]' started.
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testFontResizeKeepsEditingCaretOnItsNewPage]' passed (0.071 seconds).
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testLongDocumentDoesNotRepaginateToEndOnTyping]' started.
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testLongDocumentDoesNotRepaginateToEndOnTyping]' passed (0.145 seconds).
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testMarkedTextSurvivesLayoutAndCommitsWithoutModeSwitch]' started.
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testMarkedTextSurvivesLayoutAndCommitsWithoutModeSwitch]' passed (0.110 seconds).
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testPasteAcrossPageBoundaryKeepsCaretInVisiblePage]' started.
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testPasteAcrossPageBoundaryKeepsCaretInVisiblePage]' passed (0.079 seconds).
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testReaderBoldDoesNotTurnNewBodyTextIntoMarkdownBold]' started.
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testReaderBoldDoesNotTurnNewBodyTextIntoMarkdownBold]' passed (0.052 seconds).
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testRealDocumentWindowSavesAndUndoesAcrossReadingModes]' started.
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testRealDocumentWindowSavesAndUndoesAcrossReadingModes]' passed (0.235 seconds).
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testRepeatedLocalEditsMatchFreshPagination]' started.
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testRepeatedLocalEditsMatchFreshPagination]' passed (2.184 seconds).
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testTypingKeepsPageAndTextSystemAndPublishesCleanContent]' started.
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testTypingKeepsPageAndTextSystemAndPublishesCleanContent]' passed (0.063 seconds).
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testUndoDuringCompositionDoesNotOverwriteFollowingText]' started.
+Test Case '-[JenaNoteKitTests.EditablePagedReaderTests testUndoDuringCompositionDoesNotOverwriteFollowingText]' passed (0.041 seconds).
+Test Suite 'EditablePagedReaderTests' passed at 2026-10-31 14:29:53.707.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 3.354 (3.356) seconds
+Test Suite 'EditorDocumentLoadTests' started at 2026-10-31 14:29:53.707.
+Test Case '-[JenaNoteKitTests.EditorDocumentLoadTests testHangulBoldSurvivesTextStorage]' started.
+Test Case '-[JenaNoteKitTests.EditorDocumentLoadTests testHangulBoldSurvivesTextStorage]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.EditorDocumentLoadTests testKnownIssue_HangulItalicLostThroughTextStorage]' started.
+Test Case '-[JenaNoteKitTests.EditorDocumentLoadTests testKnownIssue_HangulItalicLostThroughTextStorage]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.EditorDocumentLoadTests testLoadContentKeepsReadingLayoutApplied]' started.
+Test Case '-[JenaNoteKitTests.EditorDocumentLoadTests testLoadContentKeepsReadingLayoutApplied]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.EditorDocumentLoadTests testLoadContentReplacesPreviousDocument]' started.
+Test Case '-[JenaNoteKitTests.EditorDocumentLoadTests testLoadContentReplacesPreviousDocument]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.EditorDocumentLoadTests testLoadContentWorksWithoutWindow]' started.
+Test Case '-[JenaNoteKitTests.EditorDocumentLoadTests testLoadContentWorksWithoutWindow]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.EditorDocumentLoadTests testStyledEditorStillYieldsCleanMarkdown]' started.
+Test Case '-[JenaNoteKitTests.EditorDocumentLoadTests testStyledEditorStillYieldsCleanMarkdown]' passed (0.001 seconds).
+Test Suite 'EditorDocumentLoadTests' passed at 2026-10-31 14:29:53.713.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.006 (0.007) seconds
+Test Suite 'ExternalReloadTests' started at 2026-10-31 14:29:53.713.
+Test Case '-[JenaNoteKitTests.ExternalReloadTests testDoesNotClobberUnsavedEdits]' started.
+Test Case '-[JenaNoteKitTests.ExternalReloadTests testDoesNotClobberUnsavedEdits]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.ExternalReloadTests testReloadsCleanDocumentWhenFileChangesOnDisk]' started.
+Test Case '-[JenaNoteKitTests.ExternalReloadTests testReloadsCleanDocumentWhenFileChangesOnDisk]' passed (0.016 seconds).
+Test Case '-[JenaNoteKitTests.ExternalReloadTests testSkipsReloadWhenFileUnchanged]' started.
+Test Case '-[JenaNoteKitTests.ExternalReloadTests testSkipsReloadWhenFileUnchanged]' passed (0.001 seconds).
+Test Suite 'ExternalReloadTests' passed at 2026-10-31 14:29:53.734.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.020 (0.020) seconds
+Test Suite 'FileSearcherTests' started at 2026-10-31 14:29:53.734.
+Test Case '-[JenaNoteKitTests.FileSearcherTests testBasicMatchWithLineNumberAndOrdinal]' started.
+Test Case '-[JenaNoteKitTests.FileSearcherTests testBasicMatchWithLineNumberAndOrdinal]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.FileSearcherTests testCaseInsensitiveMatch]' started.
+Test Case '-[JenaNoteKitTests.FileSearcherTests testCaseInsensitiveMatch]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.FileSearcherTests testEmptyOrWhitespaceQueryReturnsNothing]' started.
+Test Case '-[JenaNoteKitTests.FileSearcherTests testEmptyOrWhitespaceQueryReturnsNothing]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.FileSearcherTests testLargeFileSkipped]' started.
+Test Case '-[JenaNoteKitTests.FileSearcherTests testLargeFileSkipped]' passed (0.020 seconds).
+Test Case '-[JenaNoteKitTests.FileSearcherTests testLocatorCaseInsensitive]' started.
+Test Case '-[JenaNoteKitTests.FileSearcherTests testLocatorCaseInsensitive]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.FileSearcherTests testLocatorFindsNthOccurrence]' started.
+Test Case '-[JenaNoteKitTests.FileSearcherTests testLocatorFindsNthOccurrence]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.FileSearcherTests testLocatorReturnsNilWhenMissing]' started.
+Test Case '-[JenaNoteKitTests.FileSearcherTests testLocatorReturnsNilWhenMissing]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.FileSearcherTests testNonMarkdownFilesIgnored]' started.
+Test Case '-[JenaNoteKitTests.FileSearcherTests testNonMarkdownFilesIgnored]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.FileSearcherTests testOrdinalCountsAcrossLinesAndWithinLine]' started.
+Test Case '-[JenaNoteKitTests.FileSearcherTests testOrdinalCountsAcrossLinesAndWithinLine]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.FileSearcherTests testSnippetShortLinePassthrough]' started.
+Test Case '-[JenaNoteKitTests.FileSearcherTests testSnippetShortLinePassthrough]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.FileSearcherTests testSnippetTrimsLeadingWhitespace]' started.
+Test Case '-[JenaNoteKitTests.FileSearcherTests testSnippetTrimsLeadingWhitespace]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.FileSearcherTests testSnippetWindowsLongLineAroundMatch]' started.
+Test Case '-[JenaNoteKitTests.FileSearcherTests testSnippetWindowsLongLineAroundMatch]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.FileSearcherTests testTruncationAtMaxTotalHits]' started.
+Test Case '-[JenaNoteKitTests.FileSearcherTests testTruncationAtMaxTotalHits]' passed (0.001 seconds).
+Test Suite 'FileSearcherTests' passed at 2026-10-31 14:29:53.760.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.026 (0.026) seconds
+Test Suite 'HwpxWriterTests' started at 2026-10-31 14:29:53.760.
+Test Case '-[JenaNoteKitTests.HwpxWriterTests testGenerateComprehensiveSample]' started.
+Test Case '-[JenaNoteKitTests.HwpxWriterTests testGenerateComprehensiveSample]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.HwpxWriterTests testHeaderContainsCharPrWithBoldAndColor]' started.
+Test Case '-[JenaNoteKitTests.HwpxWriterTests testHeaderContainsCharPrWithBoldAndColor]' passed (0.007 seconds).
+Test Case '-[JenaNoteKitTests.HwpxWriterTests testHwpxIsValidZip]' started.
+Test Case '-[JenaNoteKitTests.HwpxWriterTests testHwpxIsValidZip]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.HwpxWriterTests testMimetypeIsFirstEntry]' started.
+Test Case '-[JenaNoteKitTests.HwpxWriterTests testMimetypeIsFirstEntry]' passed (0.025 seconds).
+Test Case '-[JenaNoteKitTests.HwpxWriterTests testSectionContainsText]' started.
+Test Case '-[JenaNoteKitTests.HwpxWriterTests testSectionContainsText]' passed (0.023 seconds).
+Test Case '-[JenaNoteKitTests.HwpxWriterTests testTableFlattenedAndImageSkipped]' started.
+Test Case '-[JenaNoteKitTests.HwpxWriterTests testTableFlattenedAndImageSkipped]' passed (0.067 seconds).
+Test Suite 'HwpxWriterTests' passed at 2026-10-31 14:29:53.887.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.126 (0.126) seconds
+Test Suite 'ImageAttachmentTests' started at 2026-10-31 14:29:53.887.
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testLargeImageScaledToContainerWidth]' started.
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testLargeImageScaledToContainerWidth]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testLinkNotConfusedWithImage]' started.
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testLinkNotConfusedWithImage]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testNoWidthFallsBackToMarkdown]' started.
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testNoWidthFallsBackToMarkdown]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testParseImgTagPreservesWidth]' started.
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testParseImgTagPreservesWidth]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testParsePreservesImagePathAndAlt]' started.
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testParsePreservesImagePathAndAlt]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testRoundTripImageMixedWithText]' started.
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testRoundTripImageMixedWithText]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testRoundTripImageOnly]' started.
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testRoundTripImageOnly]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testRoundTripImageWithEmptyAlt]' started.
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testRoundTripImageWithEmptyAlt]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testRoundTripSizedImage]' started.
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testRoundTripSizedImage]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testRoundTripSizedImageNoAlt]' started.
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testRoundTripSizedImageNoAlt]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testSmallImageKeepsOriginalSize]' started.
+Test Case '-[JenaNoteKitTests.ImageAttachmentTests testSmallImageKeepsOriginalSize]' passed (0.000 seconds).
+Test Suite 'ImageAttachmentTests' passed at 2026-10-31 14:29:53.888.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'IncrementalPaginatorTests' started at 2026-10-31 14:29:53.888.
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testCharacterSeekOnlyCalculatesThroughTarget]' started.
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testCharacterSeekOnlyCalculatesThroughTarget]' passed (0.047 seconds).
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testDeletionAcrossPageBoundaryMatchesFreshLayout]' started.
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testDeletionAcrossPageBoundaryMatchesFreshLayout]' passed (0.183 seconds).
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testEmptyDocumentCanGrowAndShrinkWithoutDiscardingContainers]' started.
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testEmptyDocumentCanGrowAndShrinkWithoutDiscardingContainers]' passed (0.019 seconds).
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testInsertionReusesNetworkAndMatchesFreshLayout]' started.
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testInsertionReusesNetworkAndMatchesFreshLayout]' passed (0.191 seconds).
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testInvalidationInsideStorageEditingDoesNotRequestLayout]' started.
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testInvalidationInsideStorageEditingDoesNotRequestLayout]' passed (0.091 seconds).
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testOversizedAttachmentMakesProgress]' started.
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testOversizedAttachmentMakesProgress]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testOversizedLineMakesProgress]' started.
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testOversizedLineMakesProgress]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testParagraphStyleEditReflowsFromParagraphStart]' started.
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testParagraphStyleEditReflowsFromParagraphStart]' passed (0.147 seconds).
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testRepeatedEditsBeforeIdlePassUseTheEarliestInvalidatedPage]' started.
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testRepeatedEditsBeforeIdlePassUseTheEarliestInvalidatedPage]' passed (0.201 seconds).
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testTrailingNewlineHasAnInsertionPointContainer]' started.
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testTrailingNewlineHasAnInsertionPointContainer]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testVisiblePagesDoNotComputeTheEntireDocument]' started.
+Test Case '-[JenaNoteKitTests.IncrementalPaginatorTests testVisiblePagesDoNotComputeTheEntireDocument]' passed (0.006 seconds).
+Test Suite 'IncrementalPaginatorTests' passed at 2026-10-31 14:29:54.775.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.885 (0.886) seconds
+Test Suite 'KiwiProofreadingTests' started at 2026-10-31 14:29:54.775.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testCorrectSentenceWithUnfamiliarNameHasNoTooltipSuggestion]' started.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testCorrectSentenceWithUnfamiliarNameHasNoTooltipSuggestion]' passed (0.010 seconds).
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testDefaultProofreadingDoesNotWaitForWorkSummary]' started.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testDefaultProofreadingDoesNotWaitForWorkSummary]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testDictionarySuppressesRuleCorrectionWithoutHidingOtherErrors]' started.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testDictionarySuppressesRuleCorrectionWithoutHidingOtherErrors]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testMissingModelFailsWithoutAnyFallback]' started.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testMissingModelFailsWithoutAnyFallback]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testNameProtectionLeavesFollowingSentenceSpacingEditable]' started.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testNameProtectionLeavesFollowingSentenceSpacingEditable]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testNativeCorrectionsPreserveNamesAndLayout]' started.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testNativeCorrectionsPreserveNamesAndLayout]' passed (0.008 seconds).
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testRepeatedChecksReuseModelAndReportWarmLatency]' started.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testRepeatedChecksReuseModelAndReportWarmLatency]' passed (0.007 seconds).
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testRulesPreserveValidWordsAndDoNotReplaceNameSubstrings]' started.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testRulesPreserveValidWordsAndDoNotReplaceNameSubstrings]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testSpacingCannotRewriteCharactersOrSplitProtectedWords]' started.
+Test Case '-[JenaNoteKitTests.KiwiProofreadingTests testSpacingCannotRewriteCharactersOrSplitProtectedWords]' passed (0.000 seconds).
+Test Suite 'KiwiProofreadingTests' passed at 2026-10-31 14:29:54.804.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.029 (0.030) seconds
+Test Suite 'LiveProofreadingTests' started at 2026-10-31 14:29:54.804.
+Test Case '-[JenaNoteKitTests.LiveProofreadingTests testAnnotationsDoNotChangeStorageOrUndoAndClearAfterCorrection]' started.
+Test Case '-[JenaNoteKitTests.LiveProofreadingTests testAnnotationsDoNotChangeStorageOrUndoAndClearAfterCorrection]' passed (0.049 seconds).
+Test Case '-[JenaNoteKitTests.LiveProofreadingTests testChunksRespectNativeLimitsAndUnicodeBoundaries]' started.
+Test Case '-[JenaNoteKitTests.LiveProofreadingTests testChunksRespectNativeLimitsAndUnicodeBoundaries]' passed (0.006 seconds).
+Test Case '-[JenaNoteKitTests.LiveProofreadingTests testLateResultsCannotAnnotateChangedText]' started.
+Test Case '-[JenaNoteKitTests.LiveProofreadingTests testLateResultsCannotAnnotateChangedText]' passed (0.039 seconds).
+Test Case '-[JenaNoteKitTests.LiveProofreadingTests testMarkedTextDefersCheckingUntilCompositionEnds]' started.
+Test Case '-[JenaNoteKitTests.LiveProofreadingTests testMarkedTextDefersCheckingUntilCompositionEnds]' passed (0.130 seconds).
+Test Case '-[JenaNoteKitTests.LiveProofreadingTests testOnlyChangedSourceCharactersAreMarked]' started.
+Test Case '-[JenaNoteKitTests.LiveProofreadingTests testOnlyChangedSourceCharactersAreMarked]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.LiveProofreadingTests testPagedEditorAutomaticallyChecksWithoutSelection]' started.
+Test Case '-[JenaNoteKitTests.LiveProofreadingTests testPagedEditorAutomaticallyChecksWithoutSelection]' passed (0.596 seconds).
+Test Case '-[JenaNoteKitTests.LiveProofreadingTests testScrollingEditorAutomaticallyChecksWithoutSelection]' started.
+Test Case '-[JenaNoteKitTests.LiveProofreadingTests testScrollingEditorAutomaticallyChecksWithoutSelection]' passed (0.589 seconds).
+Test Suite 'LiveProofreadingTests' passed at 2026-10-31 14:29:56.214.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 1.409 (1.410) seconds
+Test Suite 'MarkdownSourceTests' started at 2026-10-31 14:29:56.214.
+Test Case '-[JenaNoteKitTests.MarkdownSourceTests testCodeFormattingRemainsMonospacedAfterDisplayStylingAndRoundTrip]' started.
+Test Case '-[JenaNoteKitTests.MarkdownSourceTests testCodeFormattingRemainsMonospacedAfterDisplayStylingAndRoundTrip]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.MarkdownSourceTests testSourceFollowsUnifiedEditsUndoAndClosesWithDocumentWindow]' started.
+Test Case '-[JenaNoteKitTests.MarkdownSourceTests testSourceFollowsUnifiedEditsUndoAndClosesWithDocumentWindow]' passed (0.691 seconds).
+Test Case '-[JenaNoteKitTests.MarkdownSourceTests testSourceReplacesTheDocumentPaneAndRestoresBothLayouts]' started.
+Test Case '-[JenaNoteKitTests.MarkdownSourceTests testSourceReplacesTheDocumentPaneAndRestoresBothLayouts]' passed (0.252 seconds).
+Test Case '-[JenaNoteKitTests.MarkdownSourceTests testSourceShowsCurrentSaveRepresentationWithoutEditingDocument]' started.
+Test Case '-[JenaNoteKitTests.MarkdownSourceTests testSourceShowsCurrentSaveRepresentationWithoutEditingDocument]' passed (0.013 seconds).
+Test Case '-[JenaNoteKitTests.MarkdownSourceTests testSourceTracksDocumentSwitchAndAIUsesDocumentCoordinates]' started.
+Test Case '-[JenaNoteKitTests.MarkdownSourceTests testSourceTracksDocumentSwitchAndAIUsesDocumentCoordinates]' passed (0.152 seconds).
+Test Case '-[JenaNoteKitTests.MarkdownSourceTests testToolbarSeparatesSourceAndInlineCodeAndRequiresSelection]' started.
+Test Case '-[JenaNoteKitTests.MarkdownSourceTests testToolbarSeparatesSourceAndInlineCodeAndRequiresSelection]' passed (0.002 seconds).
+Test Suite 'MarkdownSourceTests' passed at 2026-10-31 14:29:57.326.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 1.112 (1.112) seconds
+Test Suite 'PageRulerTests' started at 2026-10-31 14:29:57.326.
+Test Case '-[JenaNoteKitTests.PageRulerTests testClampKeepsMinimumTextWidthAndYieldsRightFirst]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testClampKeepsMinimumTextWidthAndYieldsRightFirst]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testDraggingOutwardGrowsThePageUpToTheLimit]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testDraggingOutwardGrowsThePageUpToTheLimit]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testDragSnapsCommitsOnceAndStopsAtOppositeMargin]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testDragSnapsCommitsOnceAndStopsAtOppositeMargin]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testFixedPaperScrollLayoutKeepsWidthAndAsymmetricMargins]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testFixedPaperScrollLayoutKeepsWidthAndAsymmetricMargins]' passed (0.089 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testGrowingPageInReaderRepaginatesWiderAndDoubleClickResets]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testGrowingPageInReaderRepaginatesWiderAndDoubleClickResets]' passed (0.205 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testNarrowerPageTrimsStoredMarginsOnTheRuler]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testNarrowerPageTrimsStoredMarginsOnTheRuler]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testPagedPaperRetainsPhysicalSizeInSmallWindow]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testPagedPaperRetainsPhysicalSizeInSmallWindow]' passed (0.109 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testPaperDimensionsAndFixedMarginsDoNotResizePaper]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testPaperDimensionsAndFixedMarginsDoNotResizePaper]' passed (0.016 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testScrollEditorShowsFixedRulerAndMarginsNarrowTheColumn]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testScrollEditorShowsFixedRulerAndMarginsNarrowTheColumn]' passed (0.012 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testSinglePageHasOneRulerAndTextSitsInsideMargins]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testSinglePageHasOneRulerAndTextSitsInsideMargins]' passed (0.101 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testSnapRoundsToQuarterCentimeterAndNeverNegative]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testSnapRoundsToQuarterCentimeterAndNeverNegative]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testSpreadHasRulerPerPageAndTheyMoveTogether]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testSpreadHasRulerPerPageAndTheyMoveTogether]' passed (0.148 seconds).
+Test Case '-[JenaNoteKitTests.PageRulerTests testStoredMarginsApplyToFreshReaderAndSurviveMobileWidth]' started.
+Test Case '-[JenaNoteKitTests.PageRulerTests testStoredMarginsApplyToFreshReaderAndSurviveMobileWidth]' passed (0.077 seconds).
+Test Suite 'PageRulerTests' passed at 2026-10-31 14:29:58.094.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.767 (0.768) seconds
+Test Suite 'PersonalDictionaryTests' started at 2026-10-31 14:29:58.094.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testBulkDeletionPersistsOnceAndPreservesUncheckedWords]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testBulkDeletionPersistsOnceAndPreservesUncheckedWords]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testChangingDocumentWorkRefiltersWithoutNativeRerun]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testChangingDocumentWorkRefiltersWithoutNativeRerun]' passed (0.059 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testCorruptDictionaryAndWriteFailurePreserveOriginalState]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testCorruptDictionaryAndWriteFailurePreserveOriginalState]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDeletionFailureKeepsWordsAndFileIntact]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDeletionFailureKeepsWordsAndFileIntact]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDictionaryChangeRefiltersCachedKiwiResultImmediately]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDictionaryChangeRefiltersCachedKiwiResultImmediately]' passed (0.075 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDictionaryFormDefaultsToCurrentWorkAndPersistsOnlyAfterSave]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testDictionaryFormDefaultsToCurrentWorkAndPersistsOnlyAfterSave]' passed (0.103 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testExceptionsOnlySuppressTheirEditsAndRespectWordBoundaries]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testExceptionsOnlySuppressTheirEditsAndRespectWordBoundaries]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testMovingWorkFolderKeepsBookmarkIdentity]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testMovingWorkFolderKeepsBookmarkIdentity]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testPagedPopoverAppliesOnlyItsCandidateWithUndo]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testPagedPopoverAppliesOnlyItsCandidateWithUndo]' passed (0.758 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testPopoverShowsFromFocusAndAppliesOnlyItsCandidateWithUndo]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testPopoverShowsFromFocusAndAppliesOnlyItsCandidateWithUndo]' passed (0.776 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testReaddingDisabledGlobalTermDoesNotSilentlyEnableItEverywhere]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testReaddingDisabledGlobalTermDoesNotSilentlyEnableItEverywhere]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testScopesIsolateSameNamedWorksAndSupportExplicitSharingAndPersistence]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testScopesIsolateSameNamedWorksAndSupportExplicitSharingAndPersistence]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testSelectionSheetUsesSameDictionaryAndUpdatesAfterRegistration]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testSelectionSheetUsesSameDictionaryAndUpdatesAfterRegistration]' passed (0.574 seconds).
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testSuggestionsApplyOneWordWithoutChangingOtherCorrectionsOrEmoji]' started.
+Test Case '-[JenaNoteKitTests.PersonalDictionaryTests testSuggestionsApplyOneWordWithoutChangingOtherCorrectionsOrEmoji]' passed (0.000 seconds).
+Test Suite 'PersonalDictionaryTests' passed at 2026-10-31 14:30:00.453.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 2.358 (2.359) seconds
+Test Suite 'ReaderLayoutRoundTripTests' started at 2026-10-31 14:30:00.453.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testAvailableFontsAlwaysIncludeAutoAndSans]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testAvailableFontsAlwaysIncludeAutoAndSans]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testBoldWeightDoesNotAddMarkupToPlainBody]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testBoldWeightDoesNotAddMarkupToPlainBody]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testBoldWeightDoesNotLeakIntoSerializationWhileStyled]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testBoldWeightDoesNotLeakIntoSerializationWhileStyled]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testBoldWeightKeepsUserBoldDistinct]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testBoldWeightKeepsUserBoldDistinct]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testEveryAvailableFontResolvesToARealFont]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testEveryAvailableFontResolvesToARealFont]' passed (0.007 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testMissingFontFallsBackInsteadOfCrashing]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testMissingFontFallsBackInsteadOfCrashing]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testReaderFontKeepsBoldTraitForEveryFamily]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testReaderFontKeepsBoldTraitForEveryFamily]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testReaderFontKeepsBothTraits]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testReaderFontKeepsBothTraits]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testReaderFontKeepsItalicTraitForEveryFamily]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testReaderFontKeepsItalicTraitForEveryFamily]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testReaderFontWithoutTraitsStaysInRequestedFamily]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testReaderFontWithoutTraitsStaysInRequestedFamily]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testRestylingUsesOriginalFontNotAccumulated]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testRestylingUsesOriginalFontNotAccumulated]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testRoundTripForEveryWeight]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testRoundTripForEveryWeight]' passed (0.003 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testRoundTripPreservesMarkdown]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testRoundTripPreservesMarkdown]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testRoundTripPreservesMarkdownForSansFont]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testRoundTripPreservesMarkdownForSansFont]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testRoundTripRestoresOriginalFonts]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testRoundTripRestoresOriginalFonts]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testStyledTextStillSerializesWithBoldIntact]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testStyledTextStillSerializesWithBoldIntact]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testTypedTextUnderBoldWeightDoesNotBecomeMarkup]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testTypedTextUnderBoldWeightDoesNotBecomeMarkup]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testUnstyledKeepsUserBoldForTextTypedWhileStyled]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testUnstyledKeepsUserBoldForTextTypedWhileStyled]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testUnstyledRebuildsFontForTextTypedWhileStyled]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testUnstyledRebuildsFontForTextTypedWhileStyled]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testUnstyledRebuildsHeadingFont]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testUnstyledRebuildsHeadingFont]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testUnstyledRemovesBackupAttributes]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testUnstyledRemovesBackupAttributes]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testUnstyledRemovesReaderBoldMarker]' started.
+Test Case '-[JenaNoteKitTests.ReaderLayoutRoundTripTests testUnstyledRemovesReaderBoldMarker]' passed (0.001 seconds).
+Test Suite 'ReaderLayoutRoundTripTests' passed at 2026-10-31 14:30:00.480.
+	 Executed 22 tests, with 0 failures (0 unexpected) in 0.027 (0.028) seconds
+Test Suite 'ReaderMetricsTests' started at 2026-10-31 14:30:00.480.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testColumnWidth]' started.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testColumnWidth]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testDoesNotEnterSpreadJustBelowThreshold]' started.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testDoesNotEnterSpreadJustBelowThreshold]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testFitsSpreadAtExactThreshold]' started.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testFitsSpreadAtExactThreshold]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testFitsSpreadFalseForNonPositiveColumn]' started.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testFitsSpreadFalseForNonPositiveColumn]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testMobileColumnEntersSpreadEarlierThanBookColumn]' started.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testMobileColumnEntersSpreadEarlierThanBookColumn]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testMobileColumnWidthIsFixed]' started.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testMobileColumnWidthIsFixed]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testMobileColumnWidthNarrowerThanDefaultBookColumn]' started.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testMobileColumnWidthNarrowerThanDefaultBookColumn]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testScaledDoublesFontSize]' started.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testScaledDoublesFontSize]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testScaledKeepsRelativeRatios]' started.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testScaledKeepsRelativeRatios]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testScaledLeavesOriginalUnchanged]' started.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testScaledLeavesOriginalUnchanged]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testSnappedPageHeightAtLeastOneLine]' started.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testSnappedPageHeightAtLeastOneLine]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testSnappedPageHeightFloorsToLineMultiple]' started.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testSnappedPageHeightFloorsToLineMultiple]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testSnappedPageHeightZeroLineHeightReturnsZero]' started.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testSnappedPageHeightZeroLineHeightReturnsZero]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testSpreadDropsBelowHysteresisBand]' started.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testSpreadDropsBelowHysteresisBand]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testSpreadHoldsWithinHysteresisBand]' started.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testSpreadHoldsWithinHysteresisBand]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testSpreadMinWidthIsTwoColumnsPlusGutterAndMargins]' started.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testSpreadMinWidthIsTwoColumnsPlusGutterAndMargins]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testSpreadStartClampsNegative]' started.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testSpreadStartClampsNegative]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testSpreadStartSnapsToEvenPage]' started.
+Test Case '-[JenaNoteKitTests.ReaderMetricsTests testSpreadStartSnapsToEvenPage]' passed (0.000 seconds).
+Test Suite 'ReaderMetricsTests' passed at 2026-10-31 14:30:00.483.
+	 Executed 18 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'ReaderPageViewLifecycleTests' started at 2026-10-31 14:30:00.483.
+Test Case '-[JenaNoteKitTests.ReaderPageViewLifecycleTests testFocusFollowsNewPageAfterRebuild]' started.
+Test Case '-[JenaNoteKitTests.ReaderPageViewLifecycleTests testFocusFollowsNewPageAfterRebuild]' passed (0.021 seconds).
+Test Case '-[JenaNoteKitTests.ReaderPageViewLifecycleTests testLeavingPagedModeThenFocusChangeIsSafe]' started.
+Test Case '-[JenaNoteKitTests.ReaderPageViewLifecycleTests testLeavingPagedModeThenFocusChangeIsSafe]' passed (0.018 seconds).
+Test Case '-[JenaNoteKitTests.ReaderPageViewLifecycleTests testPageTurnThenFocusChangeDoesNotTouchDeadPageView]' started.
+Test Case '-[JenaNoteKitTests.ReaderPageViewLifecycleTests testPageTurnThenFocusChangeDoesNotTouchDeadPageView]' passed (0.020 seconds).
+Test Case '-[JenaNoteKitTests.ReaderPageViewLifecycleTests testRebuildingPagesDoesNotLeaveDeadPageView]' started.
+Test Case '-[JenaNoteKitTests.ReaderPageViewLifecycleTests testRebuildingPagesDoesNotLeaveDeadPageView]' passed (0.019 seconds).
+Test Suite 'ReaderPageViewLifecycleTests' passed at 2026-10-31 14:30:00.561.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.078 (0.078) seconds
+Test Suite 'ReadingAnchorTests' started at 2026-10-31 14:30:00.561.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testAnchorRoundTripsThroughJSON]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testAnchorRoundTripsThroughJSON]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testMakeCapturesSnippetAtOffset]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testMakeCapturesSnippetAtOffset]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testMakeClampsNegativeOffset]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testMakeClampsNegativeOffset]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testMakeClampsOffsetBeyondEnd]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testMakeClampsOffsetBeyondEnd]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testMakeTruncatesSnippetNearEnd]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testMakeTruncatesSnippetNearEnd]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testPreviewClampsOutOfRangeOffset]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testPreviewClampsOutOfRangeOffset]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testPreviewFlattensNewlinesAndSpaces]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testPreviewFlattensNewlinesAndSpaces]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testPreviewOfEmptyOrEndPositionIsEmpty]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testPreviewOfEmptyOrEndPositionIsEmpty]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testPreviewStartsAtGivenOffset]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testPreviewStartsAtGivenOffset]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testPreviewTruncatesWithEllipsis]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testPreviewTruncatesWithEllipsis]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolveCannotDisambiguatePerfectlyPeriodicText]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolveCannotDisambiguatePerfectlyPeriodicText]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolveClampsWhenDocumentShrank]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolveClampsWhenDocumentShrank]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolveClampsWhenSnippetGone]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolveClampsWhenSnippetGone]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolveFindsSnippetBeyondSearchRadius]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolveFindsSnippetBeyondSearchRadius]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolveFollowsDeletionBefore]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolveFollowsDeletionBefore]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolveFollowsInsertionBefore]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolveFollowsInsertionBefore]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolveHandlesEmptyDocument]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolveHandlesEmptyDocument]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolvePicksNearestAmongDuplicates]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolvePicksNearestAmongDuplicates]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolveReturnsSameOffsetWhenUnchanged]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolveReturnsSameOffsetWhenUnchanged]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolveWithEmptySnippetClampsToLength]' started.
+Test Case '-[JenaNoteKitTests.ReadingAnchorTests testResolveWithEmptySnippetClampsToLength]' passed (0.000 seconds).
+Test Suite 'ReadingAnchorTests' passed at 2026-10-31 14:30:00.564.
+	 Executed 20 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'ReadingProgressStoreTests' started at 2026-10-31 14:30:00.564.
+Test Case '-[JenaNoteKitTests.ReadingProgressStoreTests testAnchorsAreKeyedPerDocument]' started.
+Test Case '-[JenaNoteKitTests.ReadingProgressStoreTests testAnchorsAreKeyedPerDocument]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.ReadingProgressStoreTests testAnchorsSurviveNewStoreInstance]' started.
+Test Case '-[JenaNoteKitTests.ReadingProgressStoreTests testAnchorsSurviveNewStoreInstance]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.ReadingProgressStoreTests testClearRemovesAnchor]' started.
+Test Case '-[JenaNoteKitTests.ReadingProgressStoreTests testClearRemovesAnchor]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.ReadingProgressStoreTests testPathIsStandardizedBeforeKeying]' started.
+Test Case '-[JenaNoteKitTests.ReadingProgressStoreTests testPathIsStandardizedBeforeKeying]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.ReadingProgressStoreTests testPrunesOldestBeyondLimit]' started.
+Test Case '-[JenaNoteKitTests.ReadingProgressStoreTests testPrunesOldestBeyondLimit]' passed (0.098 seconds).
+Test Case '-[JenaNoteKitTests.ReadingProgressStoreTests testSetAnchorOrClearDropsTopOfDocument]' started.
+Test Case '-[JenaNoteKitTests.ReadingProgressStoreTests testSetAnchorOrClearDropsTopOfDocument]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.ReadingProgressStoreTests testStoresAndReadsBackAnchor]' started.
+Test Case '-[JenaNoteKitTests.ReadingProgressStoreTests testStoresAndReadsBackAnchor]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.ReadingProgressStoreTests testUnknownDocumentHasNoAnchor]' started.
+Test Case '-[JenaNoteKitTests.ReadingProgressStoreTests testUnknownDocumentHasNoAnchor]' passed (0.001 seconds).
+Test Suite 'ReadingProgressStoreTests' passed at 2026-10-31 14:30:00.671.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.106 (0.107) seconds
+Test Suite 'ReadingSettingsTests' started at 2026-10-31 14:30:00.671.
+Test Case '-[JenaNoteKitTests.ReadingSettingsTests testDefaults]' started.
+Test Case '-[JenaNoteKitTests.ReadingSettingsTests testDefaults]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingSettingsTests testFontScaleClamps]' started.
+Test Case '-[JenaNoteKitTests.ReadingSettingsTests testFontScaleClamps]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ReadingSettingsTests testPageModePersists]' started.
+Test Case '-[JenaNoteKitTests.ReadingSettingsTests testPageModePersists]' passed (0.000 seconds).
+Test Suite 'ReadingSettingsTests' passed at 2026-10-31 14:30:00.672.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'SidebarItemCreationTests' started at 2026-10-31 14:30:00.672.
+Test Case '-[JenaNoteKitTests.SidebarItemCreationTests testExistingContentIsNeverOverwritten]' started.
+Test Case '-[JenaNoteKitTests.SidebarItemCreationTests testExistingContentIsNeverOverwritten]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.SidebarItemCreationTests testFolderIsCreatedAndDuplicateIsRejected]' started.
+Test Case '-[JenaNoteKitTests.SidebarItemCreationTests testFolderIsCreatedAndDuplicateIsRejected]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.SidebarItemCreationTests testInvalidNamesCannotEscapeOrCreateHiddenItems]' started.
+Test Case '-[JenaNoteKitTests.SidebarItemCreationTests testInvalidNamesCannotEscapeOrCreateHiddenItems]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.SidebarItemCreationTests testMarkdownExtensionIsNotDuplicated]' started.
+Test Case '-[JenaNoteKitTests.SidebarItemCreationTests testMarkdownExtensionIsNotDuplicated]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.SidebarItemCreationTests testMissingParentIsNotSilentlyRecreated]' started.
+Test Case '-[JenaNoteKitTests.SidebarItemCreationTests testMissingParentIsNotSilentlyRecreated]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.SidebarItemCreationTests testNewDocumentIsEmptyMarkdownInSelectedDirectory]' started.
+Test Case '-[JenaNoteKitTests.SidebarItemCreationTests testNewDocumentIsEmptyMarkdownInSelectedDirectory]' passed (0.000 seconds).
+Test Suite 'SidebarItemCreationTests' passed at 2026-10-31 14:30:00.674.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'SidebarItemOperationsTests' started at 2026-10-31 14:30:00.674.
+Test Case '-[JenaNoteKitTests.SidebarItemOperationsTests testDuplicateRenamePreservesBothFiles]' started.
+Test Case '-[JenaNoteKitTests.SidebarItemOperationsTests testDuplicateRenamePreservesBothFiles]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.SidebarItemOperationsTests testFolderRenamePreservesDescendants]' started.
+Test Case '-[JenaNoteKitTests.SidebarItemOperationsTests testFolderRenamePreservesDescendants]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.SidebarItemOperationsTests testInvalidRenameLeavesSourceIntact]' started.
+Test Case '-[JenaNoteKitTests.SidebarItemOperationsTests testInvalidRenameLeavesSourceIntact]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.SidebarItemOperationsTests testRenamePreservesContentAndMarkdownExtension]' started.
+Test Case '-[JenaNoteKitTests.SidebarItemOperationsTests testRenamePreservesContentAndMarkdownExtension]' passed (0.000 seconds).
+Test Suite 'SidebarItemOperationsTests' passed at 2026-10-31 14:30:00.676.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'SmokeTests' started at 2026-10-31 14:30:00.676.
+Test Case '-[JenaNoteKitTests.SmokeTests testKitModuleLinks]' started.
+Test Case '-[JenaNoteKitTests.SmokeTests testKitModuleLinks]' passed (0.000 seconds).
+Test Suite 'SmokeTests' passed at 2026-10-31 14:30:00.677.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
+Test Suite 'TextMetricsTests' started at 2026-10-31 14:30:00.677.
+Test Case '-[JenaNoteKitTests.TextMetricsTests testEmptyString]' started.
+Test Case '-[JenaNoteKitTests.TextMetricsTests testEmptyString]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.TextMetricsTests testGraphemeClusterCountedAsOne]' started.
+Test Case '-[JenaNoteKitTests.TextMetricsTests testGraphemeClusterCountedAsOne]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.TextMetricsTests testImageAttachmentExcludedFromBoth]' started.
+Test Case '-[JenaNoteKitTests.TextMetricsTests testImageAttachmentExcludedFromBoth]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.TextMetricsTests testKoreanWithSpace]' started.
+Test Case '-[JenaNoteKitTests.TextMetricsTests testKoreanWithSpace]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.TextMetricsTests testNewlineExcludedFromBoth]' started.
+Test Case '-[JenaNoteKitTests.TextMetricsTests testNewlineExcludedFromBoth]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.TextMetricsTests testTabsAndRepeatedSpacesOnlyCountInWithSpaces]' started.
+Test Case '-[JenaNoteKitTests.TextMetricsTests testTabsAndRepeatedSpacesOnlyCountInWithSpaces]' passed (0.000 seconds).
+Test Suite 'TextMetricsTests' passed at 2026-10-31 14:30:00.677.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+Test Suite 'UnifiedEditorTests' started at 2026-10-31 14:30:00.677.
+Test Case '-[JenaNoteKitTests.UnifiedEditorTests testDocumentStartsEditableWithOneToolbarAndNoModeSwitches]' started.
+Test Case '-[JenaNoteKitTests.UnifiedEditorTests testDocumentStartsEditableWithOneToolbarAndNoModeSwitches]' passed (0.103 seconds).
+Test Case '-[JenaNoteKitTests.UnifiedEditorTests testFileSwitchAndSearchUseUnifiedVisibleDocument]' started.
+Test Case '-[JenaNoteKitTests.UnifiedEditorTests testFileSwitchAndSearchUseUnifiedVisibleDocument]' passed (0.136 seconds).
+Test Case '-[JenaNoteKitTests.UnifiedEditorTests testPagedFormattingUsesOriginalTraitsAndSurvivesUndoAndLayoutChanges]' started.
+Test Case '-[JenaNoteKitTests.UnifiedEditorTests testPagedFormattingUsesOriginalTraitsAndSurvivesUndoAndLayoutChanges]' passed (0.137 seconds).
+Test Case '-[JenaNoteKitTests.UnifiedEditorTests testParagraphCommandsAndShortcutReachPagedDocument]' started.
+Test Case '-[JenaNoteKitTests.UnifiedEditorTests testParagraphCommandsAndShortcutReachPagedDocument]' passed (0.181 seconds).
+Test Suite 'UnifiedEditorTests' passed at 2026-10-31 14:30:01.234.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.557 (0.557) seconds
+Test Suite 'WriterUtilitiesTests' started at 2026-10-31 14:30:01.234.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testAutosavePreferencesApplyToDocumentControllerAndPreserveIntervalWhenDisabled]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testAutosavePreferencesApplyToDocumentControllerAndPreserveIntervalWhenDisabled]' passed (0.002 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testBackupDeduplicatesThrottlesAutosavesAndPrunesOnlyOldSnapshots]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testBackupDeduplicatesThrottlesAutosavesAndPrunesOnlyOldSnapshots]' passed (0.010 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testBackupFailureReportsErrorButStillSavesOriginalDocument]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testBackupFailureReportsErrorButStillSavesOriginalDocument]' passed (0.054 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testEndnoteIDsAvoidOrphanReferencesAndDeletionHandlesSelfReference]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testEndnoteIDsAvoidOrphanReferencesAndDeletionHandlesSelfReference]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testEndnotesRemainInBothExportFormats]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testEndnotesRemainInBothExportFormats]' passed (0.009 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testEndnotesRoundTripEditDeleteAndKeepInlineCodeLiteral]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testEndnotesRoundTripEditDeleteAndKeepInlineCodeLiteral]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testInvalidBackupAndFailureToProtectCurrentTextNeverModifyDocument]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testInvalidBackupAndFailureToProtectCurrentTextNeverModifyDocument]' passed (0.001 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testNativeColorWellAppliesArbitraryColorAndResetRestoresDefault]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testNativeColorWellAppliesArbitraryColorAndResetRestoresDefault]' passed (0.097 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testPaperPresetsApplyWithoutMutatingMarkdown]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testPaperPresetsApplyWithoutMutatingMarkdown]' passed (0.005 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testRestorePreservesUnsavedTextAndUndoWithoutOverwritingDisk]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testRestorePreservesUnsavedTextAndUndoWithoutOverwritingDisk]' passed (0.008 seconds).
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testSafeSaveBacksUpOriginalAndNewVersionUnderRealPath]' started.
+Test Case '-[JenaNoteKitTests.WriterUtilitiesTests testSafeSaveBacksUpOriginalAndNewVersionUnderRealPath]' passed (0.009 seconds).
+Test Suite 'WriterUtilitiesTests' passed at 2026-10-31 14:30:01.432.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.197 (0.198) seconds
+Test Suite 'ZipArchiveTests' started at 2026-10-31 14:30:01.432.
+Test Case '-[JenaNoteKitTests.ZipArchiveTests testCRC32Empty]' started.
+Test Case '-[JenaNoteKitTests.ZipArchiveTests testCRC32Empty]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ZipArchiveTests testCRC32KnownVector]' started.
+Test Case '-[JenaNoteKitTests.ZipArchiveTests testCRC32KnownVector]' passed (0.000 seconds).
+Test Case '-[JenaNoteKitTests.ZipArchiveTests testEmptyEntryAndBinaryData]' started.
+Test Case '-[JenaNoteKitTests.ZipArchiveTests testEmptyEntryAndBinaryData]' passed (0.041 seconds).
+Test Case '-[JenaNoteKitTests.ZipArchiveTests testProducesValidZipReadableByUnzip]' started.
+Test Case '-[JenaNoteKitTests.ZipArchiveTests testProducesValidZipReadableByUnzip]' passed (0.006 seconds).
+Test Suite 'ZipArchiveTests' passed at 2026-10-31 14:30:01.480.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.047 (0.048) seconds
+Test Suite 'JenaNotePackageTests.xctest' passed at 2026-10-31 14:30:01.480.
+	 Executed 469 tests, with 0 failures (0 unexpected) in 26.169 (26.211) seconds
+Test Suite 'All tests' passed at 2026-10-31 14:30:01.480.
+	 Executed 469 tests, with 0 failures (0 unexpected) in 26.169 (26.213) seconds
+Synthetic 4312-passage local search: 0.3337380886077881 seconds
+Paged reader typing: 181890 UTF16, 6.229996681213379 ms synchronous, 30.585050582885742 ms including visible layout and 20ms run loop
+Kiwi sample: "그제야 리에느가 빵을 받았다." → "그제야 리에느가 빵을 받았다.", 0.49102306365966797 ms
+Kiwi sample: "😀 그제야 리에느가 빵을 받았다." → "😀 그제야 리에느가 빵을 받았다.", 0.3699064254760742 ms
+Kiwi sample: "나는 학교 에 갔다." → "나는 학교에 갔다.", 0.3390312194824219 ms
+Kiwi sample: "오랫만에 친구를 만났다." → "오랜만에 친구를 만났다.", 0.8929967880249023 ms
+Kiwi sample: "몇일 동안 기다렸다." → "며칠 동안 기다렸다.", 0.6480216979980469 ms
+Kiwi sample: "몇 일 동안 기다렸다." → "며칠 동안 기다렸다.", 0.5539655685424805 ms
+Kiwi sample: "이건 않되요." → "이건 안 돼요.", 0.3820657730102539 ms
+Kiwi sample: "서준은학교에갔다." → "서준은 학교에 갔다.", 0.41794776916503906 ms
+Kiwi sample: "오늘  학교에갔다." → "오늘 학교에 갔다.", 0.26607513427734375 ms
+Kiwi sample: "오늘학교에갔다." → "오늘 학교에 갔다.", 0.2570152282714844 ms
+Kiwi sample: "회의가 끝낫습니다." → "회의가 끝났습니다.", 0.3490447998046875 ms
+Kiwi sample: "안녕 하세요." → "안녕하세요.", 0.21195411682128906 ms
+Kiwi sample: "오늘학교에갓다." → "오늘 학교에 갔다.", 0.2579689025878906 ms
+Kiwi sample: "선섕님" → "선생님", 0.1519918441772461 ms
+Kiwi sample: "하연은 서준에게 책을 건넸다." → "하연은 서준에게 책을 건넸다.", 1.2749433517456055 ms
+Kiwi sample: "  오늘학교에갔다.\r\n\r\n\t안녕 하세요.  😀" → "  오늘 학교에 갔다.\r\n\r\n\t안녕하세요. 😀", 0.4429817199707031 ms
+Kiwi sample: "  오늘학교에갔다.  " → "  오늘 학교에 갔다.  ", 0.2410411834716797 ms
+Kiwi sample: "   " → "   ", 0.011920928955078125 ms
+Kiwi sample: "Hello world!" → "Hello world!", 0.09000301361083984 ms
+Kiwi sample: "https://example.com/a?q=1 😀" → "https://example.com/a?q=1 😀", 0.0959634780883789 ms
+Kiwi warm 30 checks: median 0.2009868621826172 ms, p95 0.2510547637939453 ms, max 0.2840757369995117 ms
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

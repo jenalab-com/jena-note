@@ -1,0 +1,82 @@
+CMake Warning (dev) at CMakeLists.txt:49 (set):
+  Cannot set "KIWI_CPU_ARCH": current scope has no parent.
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+-- Use mimalloc allocators
+CMake Deprecation Warning at third_party/streamvbyte/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+
+
+-- CMAKE_SYSTEM_PROCESSOR: arm64
+-- CMAKE_BUILD_TYPE: Release
+-- CMAKE_C_COMPILER: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/cc
+-- CMAKE_C_FLAGS: 
+-- CMAKE_C_FLAGS_DEBUG: -g
+-- CMAKE_C_FLAGS_RELEASE: -O3 -DNDEBUG
+Compiling for arm64
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/arm64
+/Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-tools/lib/python3.14/site-packages/cmake/data/bin/cmake -S/Volumes/Backup/Project/jena/source/jena-note/Vendor/Kiwi/source -B/Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/arm64 --check-build-system CMakeFiles/Makefile.cmake 0
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  -f CMakeFiles/Makefile2 kiwi_static
+/Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-tools/lib/python3.14/site-packages/cmake/data/bin/cmake -S/Volumes/Backup/Project/jena/source/jena-note/Vendor/Kiwi/source -B/Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/arm64 --check-build-system CMakeFiles/Makefile.cmake 0
+/Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-tools/lib/python3.14/site-packages/cmake/data/bin/cmake -E cmake_progress_start /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/arm64/CMakeFiles 39
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  -f CMakeFiles/Makefile2 CMakeFiles/kiwi_static.dir/all
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  -f third_party/streamvbyte/CMakeFiles/streamvbyte.dir/build.make third_party/streamvbyte/CMakeFiles/streamvbyte.dir/depend
+cd /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/arm64 && /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-tools/lib/python3.14/site-packages/cmake/data/bin/cmake -E cmake_depends "Unix Makefiles" /Volumes/Backup/Project/jena/source/jena-note/Vendor/Kiwi/source /Volumes/Backup/Project/jena/source/jena-note/Vendor/Kiwi/source/third_party/streamvbyte /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/arm64 /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/arm64/third_party/streamvbyte /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/arm64/third_party/streamvbyte/CMakeFiles/streamvbyte.dir/DependInfo.cmake "--color="
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  -f third_party/streamvbyte/CMakeFiles/streamvbyte.dir/build.make third_party/streamvbyte/CMakeFiles/streamvbyte.dir/build
+make[4]: Nothing to be done for `third_party/streamvbyte/CMakeFiles/streamvbyte.dir/build'.
+[ 20%] Built target streamvbyte
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  -f CMakeFiles/kiwi_static.dir/build.make CMakeFiles/kiwi_static.dir/depend
+cd /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/arm64 && /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-tools/lib/python3.14/site-packages/cmake/data/bin/cmake -E cmake_depends "Unix Makefiles" /Volumes/Backup/Project/jena/source/jena-note/Vendor/Kiwi/source /Volumes/Backup/Project/jena/source/jena-note/Vendor/Kiwi/source /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/arm64 /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/arm64 /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/arm64/CMakeFiles/kiwi_static.dir/DependInfo.cmake "--color="
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  -f CMakeFiles/kiwi_static.dir/build.make CMakeFiles/kiwi_static.dir/build
+make[4]: Nothing to be done for `CMakeFiles/kiwi_static.dir/build'.
+[100%] Built target kiwi_static
+/Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-tools/lib/python3.14/site-packages/cmake/data/bin/cmake -E cmake_progress_start /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/arm64/CMakeFiles 0
+CMake Warning (dev) at CMakeLists.txt:49 (set):
+  Cannot set "KIWI_CPU_ARCH": current scope has no parent.
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+-- Use mimalloc allocators
+CMake Deprecation Warning at third_party/streamvbyte/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+
+
+-- CMAKE_SYSTEM_PROCESSOR: arm64
+-- CMAKE_BUILD_TYPE: Release
+-- CMAKE_C_COMPILER: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/cc
+-- CMAKE_C_FLAGS: 
+-- CMAKE_C_FLAGS_DEBUG: -g
+-- CMAKE_C_FLAGS_RELEASE: -O3 -DNDEBUG
+Compiling for x86_64
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/x86_64
+/Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-tools/lib/python3.14/site-packages/cmake/data/bin/cmake -S/Volumes/Backup/Project/jena/source/jena-note/Vendor/Kiwi/source -B/Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/x86_64 --check-build-system CMakeFiles/Makefile.cmake 0
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  -f CMakeFiles/Makefile2 kiwi_static
+/Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-tools/lib/python3.14/site-packages/cmake/data/bin/cmake -S/Volumes/Backup/Project/jena/source/jena-note/Vendor/Kiwi/source -B/Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/x86_64 --check-build-system CMakeFiles/Makefile.cmake 0
+/Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-tools/lib/python3.14/site-packages/cmake/data/bin/cmake -E cmake_progress_start /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/x86_64/CMakeFiles 40
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  -f CMakeFiles/Makefile2 CMakeFiles/kiwi_static.dir/all
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  -f third_party/streamvbyte/CMakeFiles/streamvbyte.dir/build.make third_party/streamvbyte/CMakeFiles/streamvbyte.dir/depend
+cd /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/x86_64 && /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-tools/lib/python3.14/site-packages/cmake/data/bin/cmake -E cmake_depends "Unix Makefiles" /Volumes/Backup/Project/jena/source/jena-note/Vendor/Kiwi/source /Volumes/Backup/Project/jena/source/jena-note/Vendor/Kiwi/source/third_party/streamvbyte /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/x86_64 /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/x86_64/third_party/streamvbyte /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/x86_64/third_party/streamvbyte/CMakeFiles/streamvbyte.dir/DependInfo.cmake "--color="
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  -f third_party/streamvbyte/CMakeFiles/streamvbyte.dir/build.make third_party/streamvbyte/CMakeFiles/streamvbyte.dir/build
+make[4]: Nothing to be done for `third_party/streamvbyte/CMakeFiles/streamvbyte.dir/build'.
+[ 20%] Built target streamvbyte
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  -f CMakeFiles/kiwi_static.dir/build.make CMakeFiles/kiwi_static.dir/depend
+cd /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/x86_64 && /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-tools/lib/python3.14/site-packages/cmake/data/bin/cmake -E cmake_depends "Unix Makefiles" /Volumes/Backup/Project/jena/source/jena-note/Vendor/Kiwi/source /Volumes/Backup/Project/jena/source/jena-note/Vendor/Kiwi/source /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/x86_64 /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/x86_64 /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/x86_64/CMakeFiles/kiwi_static.dir/DependInfo.cmake "--color="
+/Applications/Xcode.app/Contents/Developer/usr/bin/make  -f CMakeFiles/kiwi_static.dir/build.make CMakeFiles/kiwi_static.dir/build
+make[4]: Nothing to be done for `CMakeFiles/kiwi_static.dir/build'.
+[100%] Built target kiwi_static
+/Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-tools/lib/python3.14/site-packages/cmake/data/bin/cmake -E cmake_progress_start /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-native/x86_64/CMakeFiles 0
+xcframework successfully written out to: /Volumes/Backup/Project/jena/source/jena-note/.build/kiwi-package.PESMlD/Kiwi.xcframework
+Local Kiwi XCFramework ready (arm64 + x86_64).

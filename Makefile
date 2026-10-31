@@ -6,10 +6,17 @@ BINARY      = $(BUNDLE)/Contents/MacOS/$(APP_NAME)
 DMG         = $(BUILD_DIR)/$(APP_NAME).dmg
 PKG         = $(BUILD_DIR)/$(APP_NAME)-$(VERSION).pkg
 
-.PHONY: build run install dmg pkg clean test prepare-kiwi
+.PHONY: build run install dmg pkg clean test prepare-kiwi bootstrap-kiwi rebuild-kiwi
 
 run: build
 	@open $(BUNDLE)
+
+bootstrap-kiwi:
+	@bash scripts/fetch-kiwi-model.sh
+	@bash scripts/build-kiwi.sh
+
+rebuild-kiwi:
+	@bash scripts/build-kiwi.sh
 
 prepare-kiwi:
 	@bash scripts/prepare-kiwi.sh

@@ -1,0 +1,10 @@
+[0/1] Planning build
+Building for production...
+[0/5] Copying libkiwi.a
+[1/5] Copying ThirdParty
+[2/5] Write swift-version--58304C5D6DBC2206.txt
+[4/6] Compiling JenaNoteKit AIChatComposerView.swift
+[5/7] Compiling JenaNote main.swift
+[5/7] Write Objects.LinkFileList
+[6/7] Linking JenaNote
+Build of product 'JenaNote' complete! (25.12s)

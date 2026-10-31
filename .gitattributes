@@ -1,0 +1,2 @@
+# Vendored upstream snapshot: keep bytes verbatim so the build fingerprint matches on every checkout.
+Vendor/Kiwi/source/** -text

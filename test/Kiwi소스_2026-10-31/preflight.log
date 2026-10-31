@@ -1,0 +1,5 @@
+PASS: prepared local dependencies accepted with network denied 
+PASS: changed source requires rebuild Kiwi source/build configuration changed. Run make rebuild-kiwi to apply it.
+PASS: missing library metadata requires bootstrap Local Kiwi library is missing. Run make bootstrap-kiwi once; see Vendor/Kiwi/README.md.
+PASS: incompatible model rejected without download Kiwi model is missing or incompatible. Run bash scripts/fetch-kiwi-model.sh explicitly.
+PASS: all originals restored 

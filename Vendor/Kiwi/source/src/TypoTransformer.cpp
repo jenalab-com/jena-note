@@ -1,0 +1,1435 @@
+﻿#include <cmath>
+#include <kiwi/TypoTransformer.h>
+#include <kiwi/Utils.h>
+#include "StrUtils.h"
+#include "FrozenTrie.hpp"
+#include "FeatureTestor.h"
+
+using namespace std;
+using namespace kiwi;
+
+template<bool u16wrap>
+TypoCandidates<u16wrap>::TypoCandidates()
+	: strPtrs(1), branchPtrs(1)
+{}
+
+template<bool u16wrap>
+TypoCandidates<u16wrap>::~TypoCandidates() = default;
+
+template<bool u16wrap>
+TypoCandidates<u16wrap>::TypoCandidates(const TypoCandidates&) = default;
+
+template<bool u16wrap>
+TypoCandidates<u16wrap>::TypoCandidates(TypoCandidates&&) noexcept = default;
+
+template<bool u16wrap>
+TypoCandidates<u16wrap>& TypoCandidates<u16wrap>::operator=(const TypoCandidates&) = default;
+
+template<bool u16wrap>
+TypoCandidates<u16wrap>& TypoCandidates<u16wrap>::operator=(TypoCandidates&&) = default;
+
+template<bool u16wrap>
+TypoIterator<u16wrap> TypoCandidates<u16wrap>::begin() const
+{
+	return { *this };
+}
+
+template<bool u16wrap>
+TypoIterator<u16wrap> TypoCandidates<u16wrap>::end() const
+{
+	return { *this, 0 };
+}
+
+template<bool u16wrap>
+template<class It>
+void TypoCandidates<u16wrap>::insertSinglePath(It first, It last)
+{
+	strPool.insert(strPool.end(), first, last);
+	strPtrs.emplace_back(strPool.size());
+}
+
+template<bool u16wrap>
+template<class It>
+void TypoCandidates<u16wrap>::addBranch(It first, It last, float _cost, CondVowel _leftCond, Dialect _dialect)
+{
+	strPool.insert(strPool.end(), first, last);
+	strPtrs.emplace_back(strPool.size());
+	candidates.emplace_back(_cost, _leftCond, _dialect);
+}
+
+template<bool u16wrap>
+template<class It1, class It2, class It3>
+void TypoCandidates<u16wrap>::addBranch(It1 first1, It1 last1, It2 first2, It2 last2, It3 first3, It3 last3, float _cost, CondVowel _leftCond, Dialect _dialect)
+{
+	strPool.insert(strPool.end(), first1, last1);
+	strPool.insert(strPool.end(), first2, last2);
+	strPool.insert(strPool.end(), first3, last3);
+	strPtrs.emplace_back(strPool.size());
+	candidates.emplace_back(_cost, _leftCond, _dialect);
+}
+
+template<bool u16wrap>
+void TypoCandidates<u16wrap>::finishBranch()
+{
+	branchPtrs.emplace_back(strPtrs.size() - 1);
+}
+
+template<bool u16wrap>
+TypoIterator<u16wrap>::TypoIterator(const TypoCandidates<u16wrap>& _cand)
+	: cands{ &_cand }, digit(std::max(_cand.branchPtrs.size(), (size_t)2) - 1)
+{
+	while (!valid())
+	{
+		if (increase()) break;
+	}
+}
+
+template<bool u16wrap>
+TypoIterator<u16wrap>::TypoIterator(const TypoCandidates<u16wrap>& _cand, int)
+	: cands{ &_cand }, digit(std::max(_cand.branchPtrs.size(), (size_t)2) - 1)
+{
+	if (cands->branchPtrs.size() <= 1)
+	{
+		digit.back() = 1;
+	}
+	else
+	{
+		digit.back() = _cand.branchPtrs.end()[-1] - _cand.branchPtrs.end()[-2] - 1;
+	}
+}
+
+template<bool u16wrap>
+TypoIterator<u16wrap>::~TypoIterator() = default;
+
+template<bool u16wrap>
+TypoIterator<u16wrap>::TypoIterator(const TypoIterator&) = default;
+
+template<bool u16wrap>
+TypoIterator<u16wrap>::TypoIterator(TypoIterator&&) noexcept = default;
+
+template<bool u16wrap>
+TypoIterator<u16wrap>& TypoIterator<u16wrap>::operator=(const TypoIterator&) = default;
+
+template<bool u16wrap>
+TypoIterator<u16wrap>& TypoIterator<u16wrap>::operator=(TypoIterator&&) = default;
+
+namespace detail
+{
+	template<bool u16wrap>
+	struct ToU16;
+
+	template<>
+	struct ToU16<true>
+	{
+		u16string operator()(KString&& o)
+		{
+			return joinHangul(o);
+		}
+	};
+
+	template<>
+	struct ToU16<false>
+	{
+		KString operator()(KString&& o)
+		{
+			return std::move(o);
+		}
+	};
+}
+
+template<bool u16wrap>
+bool TypoIterator<u16wrap>::increase()
+{
+	if (cands->branchPtrs.size() <= 1)
+	{
+		digit[0]++;
+		return true;
+	}
+	if (digit.back() >= cands->branchPtrs.end()[-1] - cands->branchPtrs.end()[-2] - 1) return true;
+
+	digit[0]++;
+	for (size_t i = 0; i < digit.size() - 1; ++i)
+	{
+		if (digit[i] < cands->branchPtrs[i + 1] - cands->branchPtrs[i] - 1) break;
+		digit[i] = 0;
+		digit[i + 1]++;
+	}
+	return digit.back() >= cands->branchPtrs.end()[-1] - cands->branchPtrs.end()[-2] - 1;
+}
+
+template<bool u16wrap>
+bool TypoIterator<u16wrap>::valid() const
+{
+	if (cands->branchPtrs.size() <= 1) return true;
+	float cost = 0;
+	Dialect dialect = Dialect::standard;
+	for (size_t i = 0; i < digit.size(); ++i)
+	{
+		size_t s = cands->branchPtrs[i] + digit[i];
+		cost += get<float>(cands->candidates[s - i]);
+		if (dialectHasIntersection(dialect, get<Dialect>(cands->candidates[s - i])))
+		{
+			dialect = dialectAnd(dialect, get<Dialect>(cands->candidates[s - i]));
+		}
+		else return false; // dialect mismatch
+	}
+	return cost <= cands->costThreshold;
+}
+
+template<bool u16wrap>
+auto TypoIterator<u16wrap>::operator*() const -> value_type
+{
+	KString ret;
+	float cost = 0;
+	CondVowel leftCond = CondVowel::none;
+	Dialect dialect = Dialect::standard;
+	if (cands->branchPtrs.size() > 1)
+	{
+		for (size_t i = 0; i < digit.size(); ++i)
+		{
+			ret.insert(ret.end(), cands->strPool.begin() + cands->strPtrs[cands->branchPtrs[i]], cands->strPool.begin() + cands->strPtrs[cands->branchPtrs[i] + 1]);
+			size_t s = cands->branchPtrs[i] + digit[i];
+			cost += get<float>(cands->candidates[s - i]);
+			if (!i) leftCond = get<CondVowel>(cands->candidates[s - i]);
+			dialect = dialectAnd(dialect, get<Dialect>(cands->candidates[s - i]));
+			ret.insert(ret.end(), cands->strPool.begin() + cands->strPtrs[s + 1], cands->strPool.begin() + cands->strPtrs[s + 2]);
+		}
+	}
+	ret.insert(ret.end(), cands->strPool.begin() + cands->strPtrs[cands->branchPtrs.back()], cands->strPool.begin() + cands->strPtrs[cands->branchPtrs.back() + 1]);
+	return { detail::ToU16<u16wrap>{}(move(ret)), cost, leftCond, dialect };
+}
+
+template<bool u16wrap>
+TypoIterator<u16wrap>& TypoIterator<u16wrap>::operator++()
+{
+	if (digit.empty()) return *this;
+	do
+	{
+		if (increase()) break;
+	} while (!valid());
+
+	return *this;
+}
+
+TypoTransformer::TypoTransformer()
+{
+}
+
+TypoTransformer::~TypoTransformer() = default;
+TypoTransformer::TypoTransformer(const TypoTransformer&) = default;
+TypoTransformer::TypoTransformer(TypoTransformer&&) noexcept = default;
+TypoTransformer& TypoTransformer::operator=(const TypoTransformer&) = default;
+TypoTransformer& TypoTransformer::operator=(TypoTransformer&&) = default;
+
+void TypoTransformer::addTypoWithCond(const KString& orig, const KString& error, float cost, CondVowel leftCond, Dialect dialect)
+{
+	if (orig == error) return;
+
+	if (leftCond == CondVowel::none || leftCond == CondVowel::vowel || leftCond == CondVowel::any || leftCond == CondVowel::continual || leftCond == CondVowel::boundary)
+	{
+		auto inserted = typos.emplace(make_tuple(orig, error, leftCond, dialect), cost);
+		if (!inserted.second)
+		{
+			inserted.first->second = isfinite(cost) ? min(inserted.first->second, cost) : cost;
+		}
+	}
+	else if (leftCond == CondVowel::applosive)
+	{
+		for (auto c : u"ᆨᆩᆪᆮᆸᆹᆺᆻᆽᆾᆿᇀᇁ")
+		{
+			KString o, e;
+			o.push_back(c);
+			o += orig;
+			if (c) e.push_back(c);
+			e += error;
+			auto inserted = typos.emplace(make_tuple(o, e, c ? CondVowel::none : leftCond, dialect), cost);
+			if (!inserted.second)
+			{
+				inserted.first->second = isfinite(cost) ? min(inserted.first->second, cost) : cost;
+			}
+		}
+	}
+	else
+	{
+		throw invalid_argument{ "Unsupported leftCond" };
+	}
+}
+
+void TypoTransformer::addTypoNormalized(const KString& orig, const KString& error, float cost, CondVowel leftCond, Dialect dialect)
+{
+	if (isHangulOnset(orig.back()) != isHangulOnset(error.back()))
+		throw invalid_argument{ "`orig` and `error` are both onset or not. But `orig`=" + utf16To8(orig) + ", `error`=" + utf16To8(error) };
+	if (isHangulVowel(orig[0]) != isHangulVowel(error[0]))
+		throw invalid_argument{ "`orig` and `error` are both vowel or not. But `orig`=" + utf16To8(orig) + ", `error`=" + utf16To8(error) };
+
+	if (isHangulOnset(orig.back()))
+	{
+		KString tOrig = orig, tError = error;
+		for (size_t i = 0; i < 21; ++i)
+		{
+			tOrig.back() = joinOnsetVowel(orig.back() - u'ᄀ', i);
+			tError.back() = joinOnsetVowel(error.back() - u'ᄀ', i);
+			addTypoWithCond(tOrig, tError, cost, leftCond, dialect);
+		}
+	}
+	else if (isHangulVowel(orig[0]))
+	{
+		KString tOrig = orig, tError = error;
+		for (size_t i = 0; i < 19; ++i)
+		{
+			tOrig[0] = joinOnsetVowel(i, orig[0] - u'ㅏ');
+			tError[0] = joinOnsetVowel(i, error[0] - u'ㅏ');
+			addTypoWithCond(tOrig, tError, cost, leftCond, dialect);
+		}
+	}
+	else
+	{
+		addTypoWithCond(orig, error, cost, leftCond, dialect);
+	}
+}
+
+void TypoTransformer::addTypo(const u16string& orig, const u16string& error, float cost, CondVowel leftCond, Dialect dialect)
+{
+	return addTypoNormalized(normalizeHangul(orig), normalizeHangul(error), cost, leftCond, dialect);
+}
+
+bool TypoTransformer::isContinualTypoEnabled() const
+{
+	return isfinite(continualTypoThreshold);
+}
+
+bool TypoTransformer::isLengtheningTypoEnabled() const
+{
+	return isfinite(lengtheningTypoThreshold);
+}
+
+bool TypoTransformer::empty() const
+{
+	return typos.empty() && !isContinualTypoEnabled() && !isLengtheningTypoEnabled();
+}
+
+TypoTransformer TypoTransformer::copyWithNewContinualTypoCost(float threshold) const
+{
+	TypoTransformer ret = *this;
+	ret.continualTypoThreshold = threshold;
+	return ret;
+}
+
+TypoTransformer TypoTransformer::copyWithNewLengtheningTypoCost(float threshold) const
+{
+	TypoTransformer ret = *this;
+	ret.lengtheningTypoThreshold = threshold;
+	return ret;
+}
+
+TypoTransformer TypoTransformer::copyWithDialectOverriding(Dialect dialect) const
+{
+	TypoTransformer ret;
+	for (auto& p : typos)
+	{
+		auto newKey = make_tuple(get<0>(p.first), get<1>(p.first), get<2>(p.first), dialect);
+		ret.typos.emplace(newKey, p.second);
+	}
+	ret.continualTypoThreshold = continualTypoThreshold;
+	ret.lengtheningTypoThreshold = lengtheningTypoThreshold;
+	return ret;
+}
+
+void TypoTransformer::update(const TypoTransformer& o)
+{
+	for (auto& p : o.typos)
+	{
+		auto inserted = typos.emplace(p);
+		if (!inserted.second)
+		{
+			inserted.first->second = min(inserted.first->second, p.second);
+		}
+	}
+	
+	continualTypoThreshold = min(continualTypoThreshold, o.continualTypoThreshold);
+	lengtheningTypoThreshold = min(lengtheningTypoThreshold, o.lengtheningTypoThreshold);
+}
+
+void TypoTransformer::scaleCost(float scale)
+{
+	if (!isfinite(scale) || scale <= 0) throw invalid_argument{ "`scale` must be positive real." };
+	
+	for (auto& p : typos)
+	{
+		p.second *= scale;
+	}
+	if (isfinite(continualTypoThreshold)) continualTypoThreshold *= scale;
+	if (isfinite(lengtheningTypoThreshold)) lengtheningTypoThreshold *= scale;
+}
+
+namespace kiwi
+{
+	struct IntermediateTypoTransformer
+	{
+		using TrieNode = utils::TrieNode<char16_t, size_t, utils::ConstAccess<UnorderedMap<char16_t, int32_t>>>;
+
+		struct ReplInfo
+		{
+			uint32_t begin, end;
+			float cost;
+			CondVowel leftCond;
+			Dialect dialect;
+
+			ReplInfo(uint32_t _begin = 0, uint32_t _end = 0, float _cost = 0, 
+				CondVowel _leftCond = CondVowel::none,
+				Dialect _dialect = Dialect::standard)
+				: begin{ _begin }, end{ _end }, cost{ _cost }, leftCond{ _leftCond }, dialect{ _dialect }
+			{}
+		};
+
+		utils::ContinuousTrie<TrieNode> patTrie;
+		KString strPool;
+		Vector<Vector<ReplInfo>> replacements;
+
+		IntermediateTypoTransformer()
+			: patTrie{ 1 }
+		{
+			char16_t c = 0;
+			patTrie.build(&c, &c + 1, 0);
+		}
+
+		void addTypo(const KString& orig, const KString& error, float cost, CondVowel leftCond = CondVowel::none, Dialect dialect = Dialect::standard)
+		{
+			if (orig == error) return;
+
+			size_t replIdx = patTrie.build(orig.begin(), orig.end(), replacements.size() + 1)->val - 1;
+			if (replIdx == replacements.size())
+			{
+				replacements.emplace_back();
+			}
+			bool updated = false;
+			for (auto& p : replacements[replIdx])
+			{
+				if (p.leftCond == leftCond && strPool.substr(p.begin, p.end - p.begin) == error)
+				{
+					if (p.dialect == dialect)
+					{
+						p.cost = isfinite(cost) ? min(p.cost, cost) : cost;
+						updated = true;
+						break;
+					}
+					else if (p.cost == cost)
+					{
+						p.dialect = dialectOr(p.dialect, dialect);
+						updated = true;
+						break;
+					}
+				}
+			}
+			if (!updated)
+			{
+				replacements[replIdx].emplace_back(strPool.size(), strPool.size() + error.size(), cost, leftCond, dialect);
+				strPool += error;
+			}
+		}
+	};
+}
+
+PreparedTypoTransformer::PreparedTypoTransformer() = default;
+
+PreparedTypoTransformer::PreparedTypoTransformer(const TypoTransformer& tt, bool inverse)
+	: continualTypoThreshold{ tt.continualTypoThreshold }, lengtheningTypoThreshold{ tt.lengtheningTypoThreshold }
+{
+	IntermediateTypoTransformer itt;
+	for (auto& t : tt.typos)
+	{
+		itt.addTypo(
+			inverse ? get<1>(t.first) : get<0>(t.first), 
+			inverse ? get<0>(t.first) : get<1>(t.first), 
+			t.second, 
+			get<2>(t.first), 
+			get<3>(t.first)
+		);
+	}
+	strPool = std::move(itt.strPool);
+
+	size_t tot = 0;
+	for (auto& rs : itt.replacements) tot += rs.size();
+	replacements.reserve(tot);
+	
+	Vector<pair<const ReplInfo*, uint32_t>> patData;
+	for (auto& rs : itt.replacements)
+	{
+		patData.emplace_back(replacements.data() + replacements.size(), rs.size());
+		for (auto& r : rs)
+		{
+			auto rBegin = r.begin;
+			if (inverse && r.leftCond == CondVowel::applosive && strPool[rBegin] == 0)
+			{
+				rBegin++;
+			}
+			replacements.emplace_back(strPool.data() + rBegin, r.end - rBegin, r.cost, r.leftCond, r.dialect);
+		}
+	}
+	
+	patTrie = decltype(patTrie){ itt.patTrie, ArchTypeHolder<ArchType::none>{}, [&](const IntermediateTypoTransformer::TrieNode& o) -> PatInfo
+		{
+			uint32_t depth = o.depth;
+			if (!inverse && o.val && patData[o.val - 1].first->leftCond == CondVowel::applosive)
+			{
+				depth--;
+			}
+
+			if (o.val) return { patData[o.val - 1].first, patData[o.val - 1].second, depth };
+			else return { nullptr, 0, depth };
+		}
+	};
+}
+
+PreparedTypoTransformer::~PreparedTypoTransformer() = default;
+PreparedTypoTransformer::PreparedTypoTransformer(PreparedTypoTransformer&&) noexcept = default;
+PreparedTypoTransformer& PreparedTypoTransformer::operator=(PreparedTypoTransformer&&) = default;
+
+template<bool u16wrap>
+TypoCandidates<u16wrap> PreparedTypoTransformer::_generate(const KString& orig, float costThreshold) const
+{
+	TypoCandidates<u16wrap> ret;
+	ret.costThreshold = costThreshold;
+	Vector<pair<size_t, const PatInfo&>> matches;
+	size_t last = 0;
+	const auto& insertBranch = [&]()
+	{
+		size_t totStartPos = matches[0].first - matches[0].second.patLength;
+		size_t totEndPos = matches.back().first;
+		ret.insertSinglePath(orig.begin() + last, orig.begin() + totStartPos);
+		ret.addBranch(orig.begin() + totStartPos, orig.begin() + totEndPos, 0.f, CondVowel::none, Dialect::standard);
+		for (auto& m : matches)
+		{
+			size_t e = m.first;
+			size_t s = e - m.second.patLength;
+			for (size_t j = 0; j < m.second.size; ++j)
+			{
+				auto& repl = m.second.repl[j];
+				if (repl.cost > costThreshold) continue;
+				CondVowel laxedCond = repl.leftCond;
+				if (laxedCond == CondVowel::vowel)
+				{
+					if (s == 0 || !isHangulSyllable(orig[s - 1])) continue;
+					laxedCond = CondVowel::none;
+				}
+				else if (laxedCond == CondVowel::any)
+				{
+					if (s == 0) continue;
+					laxedCond = CondVowel::none;
+				}
+				ret.addBranch(orig.begin() + totStartPos, orig.begin() + s,
+					repl.str, repl.str + repl.length,
+					orig.begin() + e, orig.begin() + totEndPos,
+					repl.cost,
+					laxedCond,
+					repl.dialect
+				);
+			}
+		}
+		ret.finishBranch();
+		last = totEndPos;
+		matches.clear();
+	};
+
+	auto node = patTrie.root()->nextOpt<ArchType::none>(patTrie, 0);
+	for (size_t i = 0; i < orig.size(); ++i)
+	{
+		auto nnode = node->nextOpt<ArchType::none>(patTrie, orig[i]);
+		while (!nnode)
+		{
+			node = node->fail();
+			if (node)
+			{
+				nnode = node->nextOpt<ArchType::none>(patTrie, orig[i]);
+			}
+			else
+			{
+				node = patTrie.root();
+				break;
+			}
+		}
+		if (!nnode) continue;
+		node = nnode;
+
+		auto& v = node->val(patTrie);
+		if (patTrie.isNull(v)) continue;
+
+		size_t endPos = i + 1;
+		size_t startPos = endPos - v.patLength;
+		if (!matches.empty() && matches.back().first < startPos)
+		{
+			insertBranch();
+		}
+		for (auto sub = node; sub; sub = sub->fail())
+		{
+			auto& sv = sub->val(patTrie);
+			if (patTrie.isNull(sv)) break;
+			if (patTrie.hasSubmatch(sv)) continue;
+			matches.emplace_back(endPos, sv);
+		}
+	}
+	if (!matches.empty())
+	{
+		insertBranch();
+	}
+	ret.insertSinglePath(orig.begin() + last, orig.end());
+	return ret;
+}
+
+TypoCandidates<true> PreparedTypoTransformer::generate(const u16string& orig, float costThreshold) const
+{
+	return _generate<true>(normalizeHangul(orig), costThreshold);
+}
+
+size_t PreparedTypoTransformer::sampleTypos(u16string& out, const u16string& orig, float typoProb, mt19937_64& rng, float costThreshold, float costScale) const
+{
+	out = orig;
+	if (typoProb <= 0 || !ready()) return 0;
+
+	const KString str = normalizeHangul(orig);
+
+	// generateGraph와 같은 기준으로 적용 조건을 검사한다.
+	const auto applicableCost = [&](size_t s, size_t e, const ReplInfo& repl) -> float
+	{
+		// 방언 규칙과 어절 경계 조건 규칙(분석 중에만 판단할 수 있다)은 쓰지 않는다.
+		if (repl.dialect != Dialect::standard) return INFINITY;
+		float cost = repl.cost;
+		switch (repl.leftCond)
+		{
+		case CondVowel::none:
+			break;
+		case CondVowel::vowel:
+			if (s == 0 || !isHangulSyllable(str[s - 1])) return INFINITY;
+			break;
+		case CondVowel::any:
+			if (s == 0) return INFINITY;
+			break;
+		case CondVowel::boundary:
+			return INFINITY;
+		case CondVowel::continual:
+			if (s == 0 || !isHangulSyllable(str[s - 1]) || !isfinite(continualTypoThreshold)) return INFINITY;
+			cost *= continualTypoThreshold;
+			break;
+		default:
+			if (!FeatureTestor::isMatched(str.data(), str.data() + s, repl.leftCond)) return INFINITY;
+			break;
+		}
+		if (!(cost <= costThreshold)) return INFINITY;
+
+		// 겹받침을 쪼개는 규칙(ᆹ->ᆸᆺ 등)은 연철 오타 인식을 위한 중간 단계일 뿐이라,
+		// 음절에 합쳐지지 못한 받침이 남는 결과는 실제 오타가 아니므로 제외한다.
+		char16_t prev = s ? str[s - 1] : 0;
+		for (size_t k = 0; k < repl.length; ++k)
+		{
+			if (isHangulCoda(repl.str[k]) && !isHangulSyllable(prev)) return INFINITY;
+			prev = repl.str[k];
+		}
+		if (e < str.size() && isHangulCoda(str[e]) && !isHangulSyllable(prev)) return INFINITY;
+		return cost;
+	};
+
+	struct Candidate
+	{
+		size_t start, end;
+		const ReplInfo* repl;
+		float cost;
+		double weight;
+	};
+	using Match = pair<size_t, const PatInfo*>; // (endPos, pattern)
+	thread_local Vector<Match> matches;
+	thread_local Vector<Candidate> candidates;
+	matches.clear();
+
+	std::bernoulli_distribution applyTypo{ std::min(typoProb, 1.f) };
+	KString result;
+	size_t copied = 0; // str[copied:]는 아직 result로 옮기지 않은 부분
+	size_t numTypos = 0;
+
+	// 겹치거나 맞닿은 매치들의 구간이 한 지점이며, 오타를 넣기로 한 지점에서만 문자열을 만든다.
+	const auto flushSite = [&]()
+	{
+		candidates.clear();
+		float minCost = INFINITY;
+		for (auto& [e, pat] : matches)
+		{
+			const size_t s = e - pat->patLength;
+			for (size_t j = 0; j < pat->size; ++j)
+			{
+				const float cost = applicableCost(s, e, pat->repl[j]);
+				if (!isfinite(cost)) continue;
+				candidates.push_back({ s, e, &pat->repl[j], cost, 0. });
+				minCost = std::min(minCost, cost);
+			}
+		}
+		matches.clear();
+		if (candidates.empty() || !applyTypo(rng)) return;
+
+		double totalWeight = 0;
+		for (auto& c : candidates)
+		{
+			c.weight = std::exp(-(double)costScale * (c.cost - minCost));
+			totalWeight += c.weight;
+		}
+		double r = std::uniform_real_distribution<double>{ 0, totalWeight }(rng);
+		auto chosen = candidates.begin();
+		for (; chosen + 1 != candidates.end(); ++chosen)
+		{
+			r -= chosen->weight;
+			if (r < 0) break;
+		}
+		result.append(str.begin() + copied, str.begin() + chosen->start);
+		result.append(chosen->repl->str, chosen->repl->str + chosen->repl->length);
+		copied = chosen->end;
+		++numTypos;
+	};
+
+	auto node = patTrie.root()->nextOpt<ArchType::none>(patTrie, 0);
+	for (size_t i = 0; i < str.size(); ++i)
+	{
+		auto nnode = node->nextOpt<ArchType::none>(patTrie, str[i]);
+		while (!nnode)
+		{
+			node = node->fail();
+			if (node)
+			{
+				nnode = node->nextOpt<ArchType::none>(patTrie, str[i]);
+			}
+			else
+			{
+				node = patTrie.root();
+				break;
+			}
+		}
+		if (!nnode) continue;
+		node = nnode;
+
+		auto& v = node->val(patTrie);
+		if (patTrie.isNull(v)) continue;
+
+		const size_t endPos = i + 1;
+		if (!matches.empty() && matches.back().first < endPos - v.patLength)
+		{
+			flushSite();
+		}
+		for (auto sub = node; sub; sub = sub->fail())
+		{
+			auto& sv = sub->val(patTrie);
+			if (patTrie.isNull(sv)) break;
+			if (patTrie.hasSubmatch(sv)) continue;
+			matches.emplace_back(endPos, &sv);
+		}
+	}
+	if (!matches.empty())
+	{
+		flushSite();
+	}
+	if (!numTypos) return 0;
+
+	result.append(str.begin() + copied, str.end());
+	out = joinHangul(result);
+	return numTypos;
+}
+
+/*
+다음과 같은 오타 규칙이 있을때
+* ㄷ이 -> 지
+'구지'라는 입력에 대한 Char DAG는 아래처럼 구축된다.
+
+Idx    0     1           2
+BOS -> 구 -> 지       -> EOS
+		  -> ㄷ -> 이 -> EOS
+*/
+
+template<class Alloc, class... Args>
+inline bool appendNewNode(vector<TypoGraphNode, Alloc>& nodes, Vector<pair<uint32_t, uint32_t>>& endPosMap, size_t endPosMapOffset, U16StringView form, size_t startPos, size_t endPos, Args&&... args)
+{
+	static constexpr uint32_t npos = -1;
+
+	if (startPos != -1 && endPosMap[startPos - endPosMapOffset].first == npos)
+	{
+		return false;
+	}
+
+	size_t newId = nodes.size();
+	nodes.emplace_back(form, endPos, forward<Args>(args)...);
+	TypoGraphNode& nnode = nodes.back();
+
+	if (startPos == -1)
+	{
+		nnode.prevOffset = newId - 1;
+	}
+	else
+	{
+		nnode.prevOffset = endPosMap[startPos - endPosMapOffset].first; // absolute offset for now, will be converted to relative offset later
+	}
+	if (nnode.endPos >= endPosMap.size() + endPosMapOffset) return true;
+
+	if (endPosMap[nnode.endPos - endPosMapOffset].first == npos)
+	{
+		endPosMap[nnode.endPos - endPosMapOffset].first = newId;
+	}
+	else
+	{
+		nodes[endPosMap[nnode.endPos - endPosMapOffset].second].siblingOffset = newId; // absolute offset for now, will be converted to relative offset later
+	}
+	endPosMap[nnode.endPos - endPosMapOffset].second = newId;
+	return true;
+}
+
+// onset: ㅇ=11, ㅎ=18
+inline char16_t overrideOnset(char16_t c, const int onset = 11)
+{
+	if (!isHangulSyllable(c)) return 0;
+	const int vowel = (c - 0xAC00) / 28 % 21;
+	const int coda = (c - 0xAC00) % 28;
+	return 0xAC00 + onset * 28 * 21 + vowel * 28 + coda;
+}
+
+// 받침 + 초성 ㅇ이 연철된 경우
+struct ContinualIeungDecomposer
+{
+	static constexpr size_t boundaryId = 1;
+	char16_t onsetToCoda(char16_t c, char16_t prev)
+	{
+		static constexpr char16_t o2c[] = {
+			0x11A8, // ㄱ
+			0x11A9, // ㄲ
+			0x11AB, // ㄴ
+			0x11AE, // ㄷ
+			0, // ㄸ
+			0x11AF, // ㄹ
+			0x11B7, // ㅁ
+			0x11B8, // ㅂ
+			0, // ㅃ
+			0x11BA, // ㅅ
+			0x11BB, // ㅆ
+			0, // ㅇ
+			0x11BD, // ㅈ
+			0, // ㅉ
+			0x11BE, // ㅊ
+			0x11BF, // ㅋ
+			0x11C0, // ㅌ
+			0x11C1, // ㅍ
+			0x11C2, // ㅎ
+		};
+
+		if (isHangulSyllable(c))
+		{
+			int onset = (c - 0xAC00) / 28 / 21;
+			return o2c[onset];
+		}
+
+		switch (c)
+		{
+		case u'ㄱ': return 0x11A8;
+		case u'ㄲ': return 0x11A9;
+		case u'ㄴ': return 0x11AB;
+		case u'ㄷ': return 0x11AE;
+		case u'ㄹ': return 0x11AF;
+		case u'ㅁ': return 0x11B7;
+		case u'ㅂ': return 0x11B8;
+		case u'ㅅ': return 0x11BA;
+		case u'ㅆ': return 0x11BB;
+		case u'ㅈ': return 0x11BD;
+		case u'ㅊ': return 0x11BE;
+		case u'ㅋ': return 0x11BF;
+		case u'ㅌ': return 0x11C0;
+		case u'ㅍ': return 0x11C1;
+		case u'ㅎ': return 0x11C2;
+		default: return 0;
+		}
+
+		return 0;
+	}
+
+	char16_t dropRightSyllable(char16_t c)
+	{
+		return overrideOnset(c, 11);
+	}
+};
+
+// 받침 + 초성 ㅎ이 연철된 경우
+struct ContinualHieutDecomposer
+{
+	static constexpr size_t boundaryId = 2;
+	char16_t onsetToCoda(char16_t c)
+	{
+		static constexpr char16_t o2c[] = {
+			0, // ㄱ
+			0, // ㄲ
+			0x11AB, // ㄴ
+			0, // ㄷ
+			0, // ㄸ
+			0x11AF, // ㄹ
+			0x11B7, // ㅁ
+			0, // ㅂ
+			0, // ㅃ
+			0x11BA, // ㅅ
+			0, // ㅆ
+			0, // ㅇ
+			0, // ㅈ
+			0, // ㅉ
+			0x11BD, // ㅊ->ㅈ
+			0x11A8, // ㅋ->ㄱ
+			0x11AE, // ㅌ->ㄷ
+			0x11B8, // ㅍ->ㅂ
+			0, // ㅎ
+		};
+
+		if (isHangulSyllable(c))
+		{
+			int onset = (c - 0xAC00) / 28 / 21;
+			return o2c[onset];
+		}
+		return 0;
+	}
+
+	char16_t dropRightSyllable(char16_t c)
+	{
+		return overrideOnset(c, 18);
+	}
+};
+
+// 받침 ㅎ + ㅎ이 아닌 초성이 연철된 경우
+struct ContinualCodaDecomposer
+{
+	static constexpr size_t boundaryId = 3;
+	char16_t onsetToCoda(char16_t c)
+	{
+		static constexpr char16_t o2c[] = {
+			0, // ㄱ
+			0, // ㄲ
+			0, // ㄴ
+			0, // ㄷ
+			0, // ㄸ
+			0, // ㄹ
+			0, // ㅁ
+			0, // ㅂ
+			0, // ㅃ
+			0, // ㅅ
+			0, // ㅆ
+			0, // ㅇ
+			0, // ㅈ
+			0, // ㅉ
+			0x11C2, // ㅊ->ㅎ
+			0x11C2, // ㅋ->ㅎ
+			0x11C2, // ㅌ->ㅎ
+			0x11C2, // ㅍ->ㅎ
+			0, // ㅎ
+		};
+
+		if (isHangulSyllable(c))
+		{
+			int onset = (c - 0xAC00) / 28 / 21;
+			return o2c[onset];
+		}
+		return 0;
+	}
+
+	char16_t dropRightSyllable(char16_t c)
+	{
+		const int onset = (c - 0xAC00) / 28 / 21;
+		const int vowel = (c - 0xAC00) / 28 % 21;
+		const int coda = (c - 0xAC00) % 28;
+		static constexpr char16_t onsetMap[] = {
+			0, // ㄱ
+			0, // ㄲ
+			0, // ㄴ
+			0, // ㄷ
+			0, // ㄸ
+			0, // ㄹ
+			0, // ㅁ
+			0, // ㅂ
+			0, // ㅃ
+			0, // ㅅ
+			0, // ㅆ
+			0, // ㅇ
+			0, // ㅈ
+			0, // ㅉ
+			12, // ㅊ->ㅈ
+			0, // ㅋ->ㄱ
+			3, // ㅌ->ㄷ
+			7, // ㅍ->ㅂ
+			0, // ㅎ
+		};
+		return 0xAC00 + (onsetMap[onset] * 21 + vowel) * 28 + coda;
+	}
+};
+
+template<class Alloc>
+size_t PreparedTypoTransformer::generateGraph(U16StringView str, 
+	vector<TypoGraphNode, Alloc>& graphOut,
+	Dialect allowedDialect,
+	const pair<uint32_t, uint32_t>* pretokenizedFirst,
+	const pair<uint32_t, uint32_t>* pretokenizedLast,
+	size_t* maxContinualTypoIdxOut
+) const
+{
+	const bool continualTypoEnabled = isfinite(continualTypoThreshold);
+	static constexpr size_t npos = -1;
+	using MatchInfo = tuple<size_t, PatInfo>; // (endPos, patternInfo)
+	thread_local Vector<TypoGraphNode> tempGraph;
+	thread_local Vector<MatchInfo> matches;
+	thread_local Vector<size_t> breakPoints;
+	thread_local Vector<pair<uint32_t, uint32_t>> endPosMap; // (first position, last position)
+	thread_local UnorderedMap<char16_t, pair<size_t, size_t>> continualTypoIdxMap;
+	matches.clear();
+	endPosMap.clear();
+	endPosMap.emplace_back(0, 0);
+
+	size_t last = 0;
+	tempGraph.clear();
+	tempGraph.emplace_back(U16StringView{ str.data(), 0 }, 0);
+	
+	const auto& insertBranch = [&]()
+	{
+		const size_t totStartPos = get<size_t>(matches[0]) - get<PatInfo>(matches[0]).patLength;
+		const size_t totEndPos = get<size_t>(matches.back());
+
+		const auto v = endPosMap.back();
+		endPosMap.clear();
+		endPosMap.resize((totEndPos - last) + 1, make_pair(npos, npos));
+		endPosMap[0] = v;
+		
+		breakPoints.clear();
+		breakPoints.emplace_back(totStartPos);
+		for (auto& m : matches)
+		{
+			const size_t e = get<size_t>(m);
+			const size_t s = e - get<PatInfo>(m).patLength;
+			breakPoints.emplace_back(e);
+		}
+		breakPoints.emplace_back(totEndPos);
+		sort(breakPoints.begin(), breakPoints.end());
+		breakPoints.erase(unique(breakPoints.begin(), breakPoints.end()), breakPoints.end());
+
+		sort(matches.begin(), matches.end(), [](const MatchInfo& a, const MatchInfo& b)
+			{
+				return get<size_t>(a) - get<PatInfo>(a).patLength < get<size_t>(b) - get<PatInfo>(b).patLength;
+			}
+		);
+
+		if (last < totStartPos)
+		{
+			appendNewNode(tempGraph, endPosMap, last, U16StringView{ str.data() + last, totStartPos - last }, last, totStartPos);
+		}
+		for (size_t i = 1; i < breakPoints.size(); ++i)
+		{
+			appendNewNode(tempGraph, endPosMap, last, U16StringView{ str.data() + breakPoints[i - 1], breakPoints[i] - breakPoints[i - 1] }, breakPoints[i - 1], breakPoints[i]);
+		}
+
+		for (auto& m : matches)
+		{
+			auto [endPos, patInfo] = m;
+			const size_t e = endPos;
+			const size_t s = e - patInfo.patLength;
+			continualTypoIdxMap.clear();
+
+			for (size_t j = 0; j < patInfo.size; ++j)
+			{
+				auto& repl = patInfo.repl[j];
+				if (repl.dialect != Dialect::standard && !(allowedDialect & repl.dialect)) continue;
+				
+				if (repl.leftCond == CondVowel::vowel)
+				{
+					if (s == 0 || !isHangulSyllable(str[s - 1])) continue;
+				}
+				else if (repl.leftCond == CondVowel::any)
+				{
+					if (s == 0) continue;
+				}
+				else if (repl.leftCond == CondVowel::continual || repl.leftCond == CondVowel::boundary)
+				{
+					if (repl.leftCond == CondVowel::continual && (s == 0 || !isHangulSyllable(str[s - 1]))) continue;
+					if (repl.leftCond == CondVowel::continual && !isfinite(continualTypoThreshold)) continue;
+					const float scale = repl.leftCond == CondVowel::continual ? continualTypoThreshold : 1.f;
+					const auto [it, inserted] = continualTypoIdxMap.emplace(*repl.str, make_pair(continualTypoIdxMap.size() + 1, 0));
+					auto& [continualTypoIdx, continualTypoNodeIdx] = it->second;
+					if (inserted)
+					{
+						if (appendNewNode(tempGraph, endPosMap, last, U16StringView{ repl.str, 1 }, s, -1, repl.cost * scale / 2))
+						{
+							tempGraph.back().endPos = e;
+							tempGraph.back().continualTypoIdx = continualTypoIdx;
+							tempGraph.back().dialect = repl.dialect;
+							continualTypoNodeIdx = tempGraph.size() - 1;
+							if (appendNewNode(tempGraph, endPosMap, last, U16StringView{ repl.str + 1, repl.length - 1 }, -1, e, repl.cost * scale / 2))
+							{
+								tempGraph.back().prevOffset = continualTypoNodeIdx;
+								tempGraph.back().dialect = repl.dialect;
+							}
+						}
+						else
+						{
+							continualTypoIdxMap.erase(it);
+						}
+					}
+					else
+					{
+						if (appendNewNode(tempGraph, endPosMap, last, U16StringView{ repl.str + 1, repl.length - 1 }, -1, e, repl.cost * scale / 2))
+						{
+							tempGraph.back().prevOffset = continualTypoNodeIdx;
+							tempGraph.back().dialect = repl.dialect;
+						}
+					}
+					continue;
+				}
+				else
+				{
+					if (!FeatureTestor::isMatched(str.data(), str.data() + s, repl.leftCond)) continue;
+				}
+				if (appendNewNode(tempGraph, endPosMap, last, U16StringView{ repl.str, repl.length }, s, e, repl.cost))
+				{
+					tempGraph.back().dialect = repl.dialect;
+				}
+			}
+			if (maxContinualTypoIdxOut)
+			{
+				*maxContinualTypoIdxOut = max(*maxContinualTypoIdxOut, continualTypoIdxMap.size() + 1);
+			}
+		}
+		last = totEndPos;
+		matches.clear();
+	};
+
+	auto node = patTrie.root()->nextOpt<ArchType::none>(patTrie, 0);
+	for (size_t i = 0; i < str.size(); ++i)
+	{
+		if (pretokenizedFirst < pretokenizedLast && pretokenizedFirst->first == i)
+		{
+			const auto prevLast = last;
+			if (!matches.empty())
+			{
+				insertBranch();
+			}
+			node = patTrie.root();
+			appendNewNode(tempGraph, endPosMap, prevLast, 
+				U16StringView{ str.data() + last, pretokenizedFirst->second - last }, 
+				last, pretokenizedFirst->second
+			);
+			last = pretokenizedFirst->second;
+			endPosMap.clear();
+			endPosMap.emplace_back(tempGraph.size() - 1, tempGraph.size() - 1);
+			i += pretokenizedFirst->second - pretokenizedFirst->first - 1;
+			++pretokenizedFirst;
+			continue;
+		}
+
+		auto nnode = node->nextOpt<ArchType::none>(patTrie, str[i]);
+		while (!nnode)
+		{
+			node = node->fail();
+			if (node)
+			{
+				nnode = node->nextOpt<ArchType::none>(patTrie, str[i]);
+			}
+			else
+			{
+				node = patTrie.root();
+				break;
+			}
+		}
+		if (!nnode) continue;
+		node = nnode;
+
+		auto& v = node->val(patTrie);
+		if (patTrie.isNull(v)) continue;
+
+		const size_t endPos = i + 1;
+		const size_t startPos = endPos - v.patLength;
+		if (!matches.empty() && get<size_t>(matches.back()) < startPos)
+		{
+			insertBranch();
+		}
+		for (auto sub = node; sub; sub = sub->fail())
+		{
+			auto& sv = sub->val(patTrie);
+			if (patTrie.isNull(sv)) break;
+			if (patTrie.hasSubmatch(sv)) continue;
+			matches.emplace_back(endPos, sv);
+		}
+	}
+	if (!matches.empty())
+	{
+		insertBranch();
+	}
+	const auto v = endPosMap.back();
+	endPosMap.clear();
+	endPosMap.resize(1);
+	endPosMap[0] = v;
+	appendNewNode(tempGraph, endPosMap, last, U16StringView{ str.data() + last, str.size() - last }, last, str.size() + 1);
+	tempGraph.back().endPos = str.size();
+	
+	auto& sortIdx = breakPoints;
+	sortIdx.clear();
+	sortIdx.resize(tempGraph.size() * 2);
+	auto reverseIdx = sortIdx.begin() + tempGraph.size();
+	iota(sortIdx.begin(), reverseIdx, 0);
+	stable_sort(sortIdx.begin(), reverseIdx, [&](size_t a, size_t b)
+		{
+			return tempGraph[a].endPos < tempGraph[b].endPos;
+		}
+	);
+	for (size_t i = 0; i < tempGraph.size(); ++i)
+	{
+		reverseIdx[sortIdx[i]] = i;
+	}
+
+	graphOut.clear();
+	graphOut.reserve(tempGraph.size());
+	for (size_t i = 0; i < tempGraph.size(); ++i)
+	{
+		graphOut.push_back(tempGraph[sortIdx[i]]);
+		auto& n = graphOut.back();
+		n.prevOffset = i - reverseIdx[n.prevOffset];
+		if (n.siblingOffset != 0) n.siblingOffset = reverseIdx[n.siblingOffset] - i;
+	}
+	return graphOut.size();
+}
+
+namespace kiwi
+{
+	template class TypoCandidates<true>;
+	template class TypoCandidates<false>;
+	template class TypoIterator<true>;
+	template class TypoIterator<false>;
+
+	template TypoCandidates<true> PreparedTypoTransformer::_generate<true>(const KString&, float) const;
+	template TypoCandidates<false> PreparedTypoTransformer::_generate<false>(const KString&, float) const;
+
+	template size_t PreparedTypoTransformer::generateGraph<allocator<TypoGraphNode>>(
+		U16StringView, vector<TypoGraphNode, allocator<TypoGraphNode>>&, Dialect, const pair<uint32_t, uint32_t>*, const pair<uint32_t, uint32_t>*, size_t*) const;
+#ifdef KIWI_USE_MIMALLOC
+	template size_t PreparedTypoTransformer::generateGraph<mi_stl_allocator<TypoGraphNode>>(
+		U16StringView, vector<TypoGraphNode, mi_stl_allocator<TypoGraphNode>>&, Dialect, const pair<uint32_t, uint32_t>*, const pair<uint32_t, uint32_t>*, size_t*) const;
+#endif
+
+	const TypoTransformer& getDefaultTypoSet(DefaultTypoSet set)
+	{
+		using TypoDef = TypoTransformer::TypoDef;
+		static const TypoTransformer withoutTypo;
+
+		static const TypoTransformer basicTypoSet{
+			TypoDef{ {u"ㅐ", u"ㅔ"}, {u"ㅐ", u"ㅔ"}, 1.f, CondVowel::none },
+			TypoDef{ {u"ㅐ", u"ㅔ"}, {u"ㅒ", u"ㅖ"}, 1.5f, CondVowel::none },
+			TypoDef{ {u"ㅒ", u"ㅖ"}, {u"ㅐ", u"ㅔ"}, 1.5f, CondVowel::none },
+			TypoDef{ {u"ㅒ", u"ㅖ"}, {u"ㅒ", u"ㅖ"}, 1.f, CondVowel::none },
+			TypoDef{ {u"ㅚ", u"ㅙ", u"ㅞ"}, {u"ㅚ", u"ㅙ", u"ㅞ", u"ㅐ", u"ㅔ"}, 1.f, CondVowel::none },
+			TypoDef{ {u"ㅝ"}, {u"ㅗ", u"ㅓ"}, 1.f, CondVowel::none },
+			TypoDef{ {u"ㅟ", u"ㅢ"}, {u"ㅣ"}, 1.f, CondVowel::none},
+			TypoDef{ {u"위", u"의"}, {u"이"}, INFINITY, CondVowel::none}, // 이->위, 이->의 과도교정 배제
+			TypoDef{ {u"위", u"의"}, {u"이"}, 1.f, CondVowel::any}, // 이->위, 이->의 과도교정 배제
+			TypoDef{ {u"자", u"쟈"}, {u"자", u"쟈"}, 1.f, CondVowel::none },
+			TypoDef{ {u"재", u"쟤"}, {u"재", u"쟤"}, 1.f, CondVowel::none },
+			TypoDef{ {u"저", u"져"}, {u"저", u"져"}, 1.f, CondVowel::none },
+			TypoDef{ {u"제", u"졔"}, {u"제", u"졔"}, 1.f, CondVowel::none },
+			TypoDef{ {u"조", u"죠", u"줘"}, {u"조", u"죠", u"줘"}, 1.f, CondVowel::none },
+			TypoDef{ {u"주", u"쥬"}, {u"주", u"쥬"}, 1.f, CondVowel::none },
+			TypoDef{ {u"차", u"챠"}, {u"차", u"챠"}, 1.f, CondVowel::none },
+			TypoDef{ {u"채", u"챼"}, {u"채", u"챼"}, 1.f, CondVowel::none },
+			TypoDef{ {u"처", u"쳐"}, {u"처", u"쳐"}, 1.f, CondVowel::none },
+			TypoDef{ {u"체", u"쳬"}, {u"체", u"쳬"}, 1.f, CondVowel::none },
+			TypoDef{ {u"초", u"쵸", u"춰"}, {u"초", u"쵸", u"춰"}, 1.f, CondVowel::none },
+			TypoDef{ {u"추", u"츄"}, {u"추", u"츄"}, 1.f, CondVowel::none },
+			TypoDef{ {u"유", u"류"}, {u"유", u"류"}, 1.f, CondVowel::none },
+			TypoDef{ {u"므", u"무"}, {u"므", u"무"}, 1.f, CondVowel::none },
+			TypoDef{ {u"브", u"부"}, {u"브", u"부"}, 1.f, CondVowel::none },
+			TypoDef{ {u"프", u"푸"}, {u"프", u"푸"}, 1.f, CondVowel::none },
+			TypoDef{ {u"르", u"루"}, {u"르", u"루"}, 1.f, CondVowel::none },
+			TypoDef{ {u"러", u"뤄"}, {u"러", u"뤄"}, 1.f, CondVowel::none },
+			TypoDef{ {u"ᆩ", u"ᆪ"}, {u"ᆨ", u"ᆩ", u"ᆪ"}, 1.5f, CondVowel::none },
+			TypoDef{ {u"ᆬ", u"ᆭ"}, {u"ᆫ", u"ᆬ", u"ᆭ"}, 1.5f, CondVowel::none },
+			TypoDef{ {u"ᆰ", u"ᆱ", u"ᆲ", u"ᆳ", u"ᆴ", u"ᆵ", u"ᆶ"}, {u"ᆯ", u"ᆰ", u"ᆱ", u"ᆲ", u"ᆳ", u"ᆴ", u"ᆵ", u"ᆶ"}, 1.5f, CondVowel::none },
+			TypoDef{ {u"ᆺ", u"ᆻ"}, {u"ᆺ", u"ᆻ"}, 1.f, CondVowel::none },
+
+			TypoDef{ {u"안"}, {u"않"}, 1.5f, CondVowel::none },
+			TypoDef{ {u"맞추", u"맞히"}, {u"맞추", u"맞히"}, 1.5f, CondVowel::none },
+			TypoDef{ {u"맞춰", u"맞혀"}, {u"맞춰", u"맞혀"}, 1.5f, CondVowel::none },
+			TypoDef{ {u"받치", u"바치", u"받히"}, {u"받치", u"바치", u"받히"}, 1.5f, CondVowel::none },
+			TypoDef{ {u"받쳐", u"바쳐", u"받혀"}, {u"받쳐", u"바쳐", u"받혀"}, 1.5f, CondVowel::none },
+			TypoDef{ {u"던", u"든"}, {u"던", u"든"}, 1.f, CondVowel::none },
+			TypoDef{ {u"때", u"데"}, {u"때", u"데"}, 1.5f, CondVowel::none },
+			TypoDef{ {u"빛", u"빚"}, {u"빛", u"빚"}, 1.f, CondVowel::none },
+
+			TypoDef{ {u"ᆮ이", u"지"}, {u"ᆮ이", u"지"}, 1.f, CondVowel::none },
+			TypoDef{ {u"ᆮ여", u"져"}, {u"ᆮ여", u"져"}, 1.f, CondVowel::none },
+			TypoDef{ {u"ᇀ이", u"치"}, {u"ᇀ이", u"치"}, 1.f, CondVowel::none },
+			TypoDef{ {u"ᇀ여", u"쳐"}, {u"ᇀ여", u"쳐"}, 1.f, CondVowel::none },
+
+			TypoDef{ {u"ᄀ", u"ᄁ"}, {u"ᄀ", u"ᄁ"}, 1.f, CondVowel::applosive },
+			TypoDef{ {u"ᄃ", u"ᄄ"}, {u"ᄃ", u"ᄄ"}, 1.f, CondVowel::applosive },
+			TypoDef{ {u"ᄇ", u"ᄈ"}, {u"ᄇ", u"ᄈ"}, 1.f, CondVowel::applosive },
+			TypoDef{ {u"ᄉ", u"ᄊ"}, {u"ᄉ", u"ᄊ"}, 1.f, CondVowel::applosive },
+			TypoDef{ {u"ᄌ", u"ᄍ"}, {u"ᄌ", u"ᄍ"}, 1.f, CondVowel::applosive },
+
+			TypoDef{ {u"ᇂᄒ", u"ᆨᄒ", u"ᇂᄀ"}, {u"ᇂᄒ", u"ᆨᄒ", u"ᇂᄀ"}, 1.f, CondVowel::none},
+
+			TypoDef{ {u"ᆨᄂ", u"ᆩᄂ", u"ᆪᄂ", u"ᆿᄂ", u"ᆼᄂ"}, {u"ᆨᄂ", u"ᆩᄂ", u"ᆪᄂ", u"ᆿᄂ", u"ᆼᄂ"}, 1.f, CondVowel::none },
+			TypoDef{ {u"ᆨᄆ", u"ᆩᄆ", u"ᆪᄆ", u"ᆿᄆ", u"ᆼᄆ"}, {u"ᆨᄆ", u"ᆩᄆ", u"ᆪᄆ", u"ᆿᄆ", u"ᆼᄆ"}, 1.f, CondVowel::none },
+			TypoDef{ {u"ᆨᄅ", u"ᆩᄅ", u"ᆪᄅ", u"ᆿᄅ", u"ᆼᄅ", u"ᆼᄂ",}, {u"ᆨᄅ", u"ᆩᄅ", u"ᆪᄅ", u"ᆿᄅ", u"ᆼᄅ", u"ᆼᄂ",}, 1.f, CondVowel::none },
+			TypoDef{ {u"ᆮᄂ", u"ᆺᄂ", u"ᆻᄂ", u"ᆽᄂ", u"ᆾᄂ", u"ᇀᄂ", u"ᆫᄂ"}, {u"ᆮᄂ", u"ᆺᄂ", u"ᆻᄂ", u"ᆽᄂ", u"ᆾᄂ", u"ᇀᄂ", u"ᆫᄂ"}, 1.f, CondVowel::none },
+			TypoDef{ {u"ᆮᄆ", u"ᆺᄆ", u"ᆻᄆ", u"ᆽᄆ", u"ᆾᄆ", u"ᇀᄆ", u"ᆫᄆ"}, {u"ᆮᄆ", u"ᆺᄆ", u"ᆻᄆ", u"ᆽᄆ", u"ᆾᄆ", u"ᇀᄆ", u"ᆫᄆ"}, 1.f, CondVowel::none },
+			TypoDef{ {u"ᆮᄅ", u"ᆺᄅ", u"ᆻᄅ", u"ᆽᄅ", u"ᆾᄅ", u"ᇀᄅ", u"ᆫᄅ", u"ᆫᄂ",}, {u"ᆮᄅ", u"ᆺᄅ", u"ᆻᄅ", u"ᆽᄅ", u"ᆾᄅ", u"ᇀᄅ", u"ᆫᄅ", u"ᆫᄂ",}, 1.f, CondVowel::none },
+			TypoDef{ {u"ᆸᄂ", u"ᆹᄂ", u"ᇁᄂ", u"ᆷᄂ"}, {u"ᆸᄂ", u"ᆹᄂ", u"ᇁᄂ", u"ᆷᄂ"}, 1.f, CondVowel::none },
+			TypoDef{ {u"ᆸᄆ", u"ᆹᄆ", u"ᇁᄆ", u"ᆷᄆ"}, {u"ᆸᄆ", u"ᆹᄆ", u"ᇁᄆ", u"ᆷᄆ"}, 1.f, CondVowel::none },
+			TypoDef{ {u"ᆸᄅ", u"ᆹᄅ", u"ᇁᄅ", u"ᆷᄅ", u"ᆷᄂ",}, {u"ᆸᄅ", u"ᆹᄅ", u"ᇁᄅ", u"ᆷᄅ", u"ᆷᄂ",}, 1.f, CondVowel::none },
+			TypoDef{ {u"ᆫᄅ", u"ᆫᄂ", u"ᆯᄅ", u"ᆯᄂ"}, {u"ᆫᄅ", u"ᆫᄂ", u"ᆯᄅ", u"ᆯᄂ"}, 1.f, CondVowel::none },
+
+			TypoDef{ {u"ᆨᄋ", u"ᄀ"}, {u"ᆨᄋ", u"ᄀ"}, 1.f, CondVowel::vowel },
+			TypoDef{ {u"ᆩᄋ", u"ᄁ"}, {u"ᆩᄋ", u"ᄁ"}, 1.f, CondVowel::vowel },
+			TypoDef{ {u"ᆫᄋ", u"ᆫᄒ", u"ᄂ"}, {u"ᆫᄋ", u"ᆫᄒ", u"ᄂ"}, 1.f, CondVowel::vowel },
+			TypoDef{ {u"ᆬᄋ", u"ᆫᄌ"}, {u"ᆬᄋ", u"ᆫᄌ"}, 1.f, CondVowel::vowel },
+			TypoDef{ {u"ᆭᄋ", u"ᄂ"}, {u"ᆭᄋ", u"ᄂ"}, 1.f, CondVowel::vowel },
+			TypoDef{ {u"ᆮᄋ", u"ᄃ"}, {u"ᆮᄋ", u"ᄃ"}, 1.f, CondVowel::vowel },
+			TypoDef{ {u"ᆯᄋ", u"ᆯᄒ", u"ᄅ"}, {u"ᆯᄋ", u"ᆯᄒ", u"ᄅ"}, 1.f, CondVowel::vowel },
+			TypoDef{ {u"ᆰᄋ", u"ᆯᄀ"}, {u"ᆰᄋ", u"ᆯᄀ"}, 1.f, CondVowel::vowel },
+			TypoDef{ {u"ᆰᄒ", u"ᆯᄏ"}, {u"ᆰᄒ", u"ᆯᄏ"}, 1.f, CondVowel::vowel },
+			TypoDef{ {u"ᆷᄋ", u"ᄆ"}, {u"ᆷᄋ", u"ᄆ"}, 1.f, CondVowel::vowel },
+			TypoDef{ {u"ᆸᄋ", u"ᄇ"}, {u"ᆸᄋ", u"ᄇ"}, 1.f, CondVowel::vowel },
+			TypoDef{ {u"ᆺᄋ", u"ᄉ"}, {u"ᆺᄋ", u"ᄉ"}, 1.f, CondVowel::vowel },
+			TypoDef{ {u"ᆻᄋ", u"ᆺᄉ", u"ᄊ"}, {u"ᆻᄋ", u"ᆺᄉ", u"ᄊ"}, 1.f, CondVowel::vowel },
+			TypoDef{ {u"ᆽᄋ", u"ᄌ"}, {u"ᆽᄋ", u"ᄌ"}, 1.f, CondVowel::vowel },
+			TypoDef{ {u"ᆾᄋ", u"ᆾᄒ", u"ᆽᄒ", u"ᄎ"}, {u"ᆾᄋ", u"ᆾᄒ", u"ᆽᄒ", u"ᄎ"}, 1.f, CondVowel::vowel },
+			TypoDef{ {u"ᆿᄋ", u"ᆿᄒ", u"ᆨᄒ", u"ᄏ"}, {u"ᆿᄋ", u"ᆿᄒ", u"ᆨᄒ", u"ᄏ"}, 1.f, CondVowel::vowel },
+			TypoDef{ {u"ᇀᄋ", u"ᇀᄒ", u"ᆮᄒ", u"ᄐ"}, {u"ᇀᄋ", u"ᇀᄒ", u"ᆮᄒ", u"ᄐ"}, 1.f, CondVowel::vowel },
+			TypoDef{ {u"ᇁᄋ", u"ᇁᄒ", u"ᆸᄒ", u"ᄑ"}, {u"ᇁᄋ", u"ᇁᄒ", u"ᆸᄒ", u"ᄑ"}, 1.f, CondVowel::vowel },
+
+			TypoDef{ {u"은", u"는"}, {u"은", u"는"}, 2.f, CondVowel::none },
+			TypoDef{ {u"을", u"를"}, {u"을", u"를"}, 2.f, CondVowel::none },
+
+			TypoDef{ {u"ㅣ워", u"ㅣ어", u"ㅕ"}, {u"ㅣ워", u"ㅣ어", u"ㅕ"}, 1.5f, CondVowel::none},
+			TypoDef{ {u"ㅟ어"}, {u"ㅕ"}, 1.f, CondVowel::none},
+		};
+
+		static const TypoTransformer continualTypoSet = TypoTransformer::fromContinualTypoCost(1.f).addTypos({
+			TypoDef{ {u"ᆪ"}, {u"ᆨᆺ", u"ᆨᆻ"}, 1e-12f, CondVowel::none },
+			TypoDef{ {u"ᆬ"}, {u"ᆫᆽ"}, 1e-12f, CondVowel::none },
+			TypoDef{ {u"ᆭ"}, {u"ᆫᇂ"}, 1e-12f, CondVowel::none },
+			TypoDef{ {u"ᆰ"}, {u"ᆯᆨ"}, 1e-12f, CondVowel::none },
+			TypoDef{ {u"ᆱ"}, {u"ᆯᆷ"}, 1e-12f, CondVowel::none },
+			TypoDef{ {u"ᆲ"}, {u"ᆯᆸ"}, 1e-12f, CondVowel::none },
+			TypoDef{ {u"ᆳ"}, {u"ᆯᆺ"}, 1e-12f, CondVowel::none },
+			TypoDef{ {u"ᆴ"}, {u"ᆯᇀ"}, 1e-12f, CondVowel::none },
+			TypoDef{ {u"ᆵ"}, {u"ᆯᇁ"}, 1e-12f, CondVowel::none },
+			TypoDef{ {u"ᆶ"}, {u"ᆯᇂ"}, 1e-12f, CondVowel::none },
+			TypoDef{ {u"ᆹ"}, {u"ᆸᆺ", u"ᆸᆻ"}, 1e-12f, CondVowel::none },
+
+			TypoDef{ {u"ᆨᄋ"}, {u"ᄀ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆩᄋ", u"ᆨᄀ"}, {u"ᄁ", u"ᆨᄀ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆪᄋ", u"ᆪᄒ"}, {u"ᆨᄉ", u"ᆨᄊ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆫᄋ", u"ᆫᄒ"}, {u"ᄂ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆬᄋ", u"ᆫᄌ"}, {u"ᆬᄋ", u"ᆫᄌ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆭᄋ"}, {u"ᆫᄒ", u"ᄂ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆭᄀ"}, {u"ᆫᄏ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆭᄃ"}, {u"ᆫᄐ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆭᄇ"}, {u"ᆫᄑ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆭᄉ"}, {u"ᆫᄉ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆭᄌ"}, {u"ᆫᄎ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆮᄋ"}, {u"ᄃ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆯᄋ", u"ᆯᄒ"}, {u"ᄅ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆰᄋ"}, {u"ᆯᄀ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆰᄀ"}, {u"ᆯᄁ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆰᄒ"}, {u"ᆯᄏ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆱᄋ", u"ᆱᄒ"}, {u"ᆯᄆ"}, 1.f, CondVowel::continual},
+			TypoDef{ {u"ᆲᄋ"}, {u"ᆯᄇ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆲᄇ"}, {u"ᆯᄈ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆲᄒ"}, {u"ᆯᄑ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆳᄋ"}, {u"ᆯᄉ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆳᄉ"}, {u"ᆯᄊ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆴᄋ", u"ᆴᄐ", u"ᆴᄒ"}, {u"ᆯᄐ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆵᄋ", u"ᆵᄑ", u"ᆵᄒ"}, {u"ᆯᄑ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆶᄉ"}, {u"ᆯᄉ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆶᄋ", u"ᆶᄒ"}, {u"ᆯᄒ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆷᄋ", u"ᆷᄒ"}, {u"ᄆ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆸᄋ"}, {u"ᄇ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆸᄇ"}, {u"ᄈ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆹᄋ", u"ᆹᄒ"}, {u"ᆸᄉ", u"ᆸᄊ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆺᄋ"}, {u"ᄉ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆻᄋ", u"ᆺᄉ"}, {u"ᄊ", u"ᆺᄉ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆽᄋ"}, {u"ᄌ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆽᄌ"}, {u"ᄍ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆾᄋ", u"ᆾᄒ", u"ᆽᄒ", u"ᇂᄌ", u"ᇂᄎ"}, {u"ᄎ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᆿᄋ", u"ᆿᄒ", u"ᆨᄒ", u"ᇂᄀ", u"ᇂᄏ"}, {u"ᄏ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᇀᄋ", u"ᇀᄒ", u"ᆮᄒ", u"ᇂᄃ", u"ᇂᄐ"}, {u"ᄐ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᇁᄋ", u"ᇁᄒ", u"ᆸᄒ", u"ᇂᄇ", u"ᇂᄑ"}, {u"ᄑ"}, 1.f, CondVowel::continual },
+			TypoDef{ {u"ᇂᄋ"}, {u"ᄒ"}, 1.f, CondVowel::continual },
+		});
+
+		static const TypoTransformer basicTypoSetWithContinual = basicTypoSet | continualTypoSet;
+
+		static const TypoTransformer lengtheningTypoSet = TypoTransformer::fromLengtheningTypoCost(0.25f);
+
+		static const TypoTransformer basicTypoSetWithContinualAndLengthening = basicTypoSetWithContinual | lengtheningTypoSet;
+
+		static const TypoTransformer dialect = TypoTransformer{
+			TypoDef{ {u"ㅚ"}, {u"ㅞ"}, 0.5f, CondVowel::none },
+			TypoDef{ {u"ᆻ"}, {u"ᆺ"}, 0.5f, CondVowel::none },
+			TypoDef{ {u"ㅐ", u"ㅔ"}, {u"ㅐ", u"ㅔ"}, 1.f, CondVowel::none },
+		}.copyWithDialectOverriding(Dialect::jeju) | TypoTransformer{
+			TypoDef{ {u"ㅣ이"}, {u"ㅣ"}, 0.2f, CondVowel::boundary },
+			TypoDef{ {u"ㅏ이", u"ㅐ이"}, {u"ㅐ"}, 0.2f, CondVowel::boundary },
+			TypoDef{ {u"ㅓ이", u"ㅔ이"}, {u"ㅔ"}, 0.2f, CondVowel::boundary },
+			TypoDef{ {u"ㅘ이"}, {u"ㅙ"}, 0.2f, CondVowel::boundary },
+			TypoDef{ {u"ㅚ이"}, {u"ㅚ"}, 0.2f, CondVowel::boundary },
+			TypoDef{ {u"ㅝ이"}, {u"ㅞ"}, 0.2f, CondVowel::boundary },
+			TypoDef{ {u"ㅟ이"}, {u"ㅟ"}, 0.2f, CondVowel::boundary },
+			TypoDef{ {u"ㅜ우"}, {u"ㅜ"}, 0.2f, CondVowel::boundary },
+			TypoDef{ {u"ㅠ우"}, {u"ㅠ"}, 0.2f, CondVowel::boundary },
+		}.copyWithDialectOverriding(Dialect::hamgyeong) | TypoTransformer{
+			TypoDef{ {u"ㅣ어"}, {u"ㅔ"}, 0.25f, CondVowel::boundary },
+			TypoDef{ {u"ㅣ어"}, {u"ㅖ"}, 0.5f, CondVowel::boundary },
+		}.copyWithDialectOverriding(Dialect::hamgyeong | Dialect::gyeongsang | Dialect::gangwon) | TypoTransformer{
+			TypoDef{ {u"ㅣ었"}, {u"ㅣᆻ"}, 0.25f, CondVowel::boundary },
+		}.copyWithDialectOverriding(Dialect::gyeongsang);
+
+		switch (set)
+		{
+		case kiwi::DefaultTypoSet::withoutTypo:
+			return withoutTypo;
+		case kiwi::DefaultTypoSet::basicTypoSet:
+			return basicTypoSet;
+		case kiwi::DefaultTypoSet::continualTypoSet:
+			return continualTypoSet;
+		case kiwi::DefaultTypoSet::basicTypoSetWithContinual:
+			return basicTypoSetWithContinual;
+		case kiwi::DefaultTypoSet::lengtheningTypoSet:
+			return lengtheningTypoSet;
+		case kiwi::DefaultTypoSet::basicTypoSetWithContinualAndLengthening:
+			return basicTypoSetWithContinualAndLengthening;
+		case kiwi::DefaultTypoSet::dialect:
+			return dialect;
+		default:
+			throw invalid_argument{ "Invalid `DefaultTypoSet`" };
+		}
+	}
+
+	const PreparedTypoTransformer* getDefaultPreparedTypoSet(DefaultTypoSet set)
+	{
+		static const auto defaultTypoSet = getDefaultTypoSet(DefaultTypoSet::basicTypoSet).prepare(true);
+		static const auto defaultTypoSetWithContinual = getDefaultTypoSet(DefaultTypoSet::basicTypoSetWithContinual).prepare(true);
+		static const auto defaultTypoSetWithContinualAndLengthening = getDefaultTypoSet(DefaultTypoSet::basicTypoSetWithContinualAndLengthening).prepare(true);
+		static const auto continualTypoSet = getDefaultTypoSet(DefaultTypoSet::continualTypoSet).prepare(true);
+		static const auto lengtheningTypoSet = getDefaultTypoSet(DefaultTypoSet::lengtheningTypoSet).prepare(true);
+		static const auto dialect = getDefaultTypoSet(DefaultTypoSet::dialect).prepare(true);
+		switch (set)
+		{
+		case kiwi::DefaultTypoSet::withoutTypo:
+			return nullptr;
+		case kiwi::DefaultTypoSet::basicTypoSet:
+			return &defaultTypoSet;
+		case kiwi::DefaultTypoSet::continualTypoSet:
+			return &continualTypoSet;
+		case kiwi::DefaultTypoSet::basicTypoSetWithContinual:
+			return &defaultTypoSetWithContinual;
+		case kiwi::DefaultTypoSet::lengtheningTypoSet:
+			return &lengtheningTypoSet;
+		case kiwi::DefaultTypoSet::basicTypoSetWithContinualAndLengthening:
+			return &defaultTypoSetWithContinualAndLengthening;
+		case kiwi::DefaultTypoSet::dialect:
+			return &dialect;
+		default:
+			throw invalid_argument{ "Invalid `DefaultTypoSet`" };
+		}
+	}
+
+}
