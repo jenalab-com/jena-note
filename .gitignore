@@ -21,3 +21,6 @@ Package.resolved
 CLAUDE.md
 plan.md
 
+
+# Pinned Kiwi model, restored by scripts/prepare-kiwi.sh
+Sources/JenaNoteKit/Resources/KiwiModel/

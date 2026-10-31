@@ -1,0 +1,13 @@
+availability: available
+input: 오늘학교에갔다.
+seconds: 8.030367016792297
+output: 오늘 학교에 갔다.
+input: 회의가 끝낫습니다.
+seconds: 0.5676499605178833
+output: 회의가 끝났습니다.
+input: 안녕 하세요.
+seconds: 0.5562319755554199
+output: 안녕 하세요.
+input: 하연은 서준에게 책을 건넸다.
+seconds: 6.7035969495773315
+output: 하연은 서준에게 책을 건넸다.

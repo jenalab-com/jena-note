@@ -31,12 +31,13 @@ final class AIWorkLocalSummarizer {
     }
     typealias Infer = (AIIndexedPassage) async throws -> String
     static let shared = AIWorkLocalSummarizer()
-    private var tail: Task<Void, Never>?
+    private let queue: AILocalInferenceQueue
     private let infer: Infer
-    private let timeout: UInt64
+    private let timeout: Double
 
-    init(timeoutSeconds: Double = 120, infer: Infer? = nil) {
-        timeout = UInt64(max(0, timeoutSeconds) * 1_000_000_000)
+    init(timeoutSeconds: Double = 120, queue: AILocalInferenceQueue = .shared, infer: Infer? = nil) {
+        timeout = max(0, timeoutSeconds)
+        self.queue = queue
         self.infer = infer ?? Self.inferOnDevice
     }
 
@@ -58,39 +59,22 @@ final class AIWorkLocalSummarizer {
     func generate(_ passage: AIIndexedPassage,
                   completion: @escaping (Result<AIIndexSummary, Error>) -> Void) -> () -> Void {
         dispatchPrecondition(condition: .onQueue(.main))
-        let predecessor = tail
-        let infer = self.infer, timeout = self.timeout
-        let task = Task { @MainActor in
-            await predecessor?.value
-            guard !Task.isCancelled else { completion(.failure(CancellationError())); return }
-            let inference = Task { try await infer(passage) }
-            var timedOut = false
-            let watchdog = Task { @MainActor in
-                do { try await Task.sleep(nanoseconds: timeout) } catch { return }
-                timedOut = true
-                inference.cancel()
-            }
-            defer { watchdog.cancel() }
-            do {
-                let text = try await withTaskCancellationHandler(operation: {
-                    try await inference.value
-                }, onCancel: { inference.cancel() })
-                try Task.checkCancellation()
+        let infer = self.infer
+        return queue.enqueue(priority: .background, timeout: timeout, operation: { try await infer(passage) }) { result in
+            switch result {
+            case .success(let text):
                 let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if timedOut {
-                    completion(.success(.excerpt(passage, reason: "ai.index.localTimeout")))
-                } else if cleaned.isEmpty {
-                    completion(.success(.excerpt(passage, reason: "ai.index.localFailed")))
-                } else {
-                    completion(.success(AIIndexSummary(text: String(cleaned.prefix(900)), origin: .apple)))
+                completion(.success(cleaned.isEmpty
+                    ? .excerpt(passage, reason: "ai.index.localFailed")
+                    : AIIndexSummary(text: String(cleaned.prefix(900)), origin: .apple)))
+            case .failure(let error):
+                if error is CancellationError { completion(.failure(error)) }
+                else {
+                    completion(.success(.excerpt(passage, reason: error is AILocalInferenceQueue.Failure
+                        ? "ai.index.localTimeout" : "ai.index.localFailed")))
                 }
-            } catch {
-                if Task.isCancelled { completion(.failure(CancellationError())) }
-                else { completion(.success(.excerpt(passage, reason: timedOut ? "ai.index.localTimeout" : "ai.index.localFailed"))) }
             }
         }
-        tail = task
-        return { task.cancel() }
     }
 
     private static func inferOnDevice(_ passage: AIIndexedPassage) async throws -> String {

@@ -38,6 +38,11 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    @objc func showPersonalDictionary(_ sender: Any?) {
+        let doc = NSApp.keyWindow?.windowController?.document as? MarkdownDocument
+        PersonalDictionaryWindowController.present(context: DictionaryWorkContext.locate(documentURL: doc?.fileURL))
+    }
+
     // MARK: - Menu Setup (코드 기반)
 
     func rebuildMenu() {
@@ -145,6 +150,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                                            action: #selector(EditorWindowController.findInFiles(_:)),
                                            keyEquivalent: "f")
         findInFiles.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: L10n.tr("proof.title"),
+                         action: #selector(EditorWindowController.proofreadSelection(_:)), keyEquivalent: "")
+
+        let dictionaryItem = editMenu.addItem(withTitle: L10n.tr("dictionary.title"), action: #selector(showPersonalDictionary(_:)), keyEquivalent: "")
+        dictionaryItem.target = self
 
         // 서식 메뉴
         let formatMenuItem = NSMenuItem()

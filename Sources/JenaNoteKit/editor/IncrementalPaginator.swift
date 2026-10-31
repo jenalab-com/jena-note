@@ -20,7 +20,7 @@ final class IncrementalPaginator {
     init(storage: NSTextStorage, pageSize: NSSize) {
         self.storage = storage
         self.pageSize = NSSize(width: max(1, pageSize.width), height: max(1, pageSize.height))
-        layoutManager = NSLayoutManager()
+        layoutManager = ProofreadingLayoutManager()
         layoutManager.backgroundLayoutEnabled = false
         storage.addLayoutManager(layoutManager)
     }

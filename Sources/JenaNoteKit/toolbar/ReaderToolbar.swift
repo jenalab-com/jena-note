@@ -17,8 +17,15 @@ class ReaderToolbar: NSToolbar {
     private static let itemHeading = NSToolbarItem.Identifier("heading")
     private static let itemLists = NSToolbarItem.Identifier("lists")
     private static let itemInsert = NSToolbarItem.Identifier("insert")
+    private static let itemProofreading = NSToolbarItem.Identifier("proofreadSelection")
+    private weak var proofreadingButton: NSButton?
+    private var hasSelectedText = false
 
-    func updateSelection(hasSelectedText: Bool) { formatItems.updateSelection(hasSelectedText: hasSelectedText && !isSourceActive) }
+    func updateSelection(hasSelectedText: Bool) {
+        self.hasSelectedText = hasSelectedText
+        formatItems.updateSelection(hasSelectedText: hasSelectedText && !isSourceActive)
+        proofreadingButton?.isEnabled = hasSelectedText && !isSourceActive
+    }
 
     func setSourceActive(_ active: Bool) {
         isSourceActive = active
@@ -30,6 +37,7 @@ class ReaderToolbar: NSToolbar {
         pageModeControl?.setEnabled(!active, forSegment: 0)
         pageModeControl?.setEnabled(!active && !isAIActive, forSegment: 1)
         if active { formatItems.updateSelection(hasSelectedText: false) }
+        proofreadingButton?.isEnabled = hasSelectedText && !active
     }
 
     func updateState(attributes: [NSAttributedString.Key: Any]) {
@@ -95,7 +103,8 @@ extension ReaderToolbar: NSToolbarDelegate {
         [ReaderToolbar.itemMode, ReaderToolbar.itemAppearance, ReaderToolbar.itemSource, .space,
          ReaderToolbar.itemHeading, .init("bold"), .init("italic"), .init("inlineCode"),
          ReaderToolbar.itemLists, ReaderToolbar.itemInsert, .init("textColor"), .init("find"),
-         .flexibleSpace, ReaderToolbar.itemBookmark, ReaderToolbar.itemBookmarkList, ReaderToolbar.itemAI]
+         .flexibleSpace, ReaderToolbar.itemBookmark, ReaderToolbar.itemBookmarkList,
+         ReaderToolbar.itemProofreading, ReaderToolbar.itemAI]
     }
 
     func toolbarAllowedItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -106,6 +115,20 @@ extension ReaderToolbar: NSToolbarDelegate {
                  itemForItemIdentifier id: NSToolbarItem.Identifier,
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         switch id {
+        case ReaderToolbar.itemProofreading:
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.label = L10n.tr("proof.title")
+            item.toolTip = item.label
+            let button = NSButton(title: L10n.tr("proof.button"), target: target,
+                                  action: #selector(EditorWindowController.proofreadSelection(_:)))
+            button.toolTip = item.label
+            button.isEnabled = hasSelectedText && !isSourceActive
+            proofreadingButton = button
+            item.view = button
+            let menu = NSMenuItem(title: item.label, action: button.action, keyEquivalent: "")
+            menu.target = target
+            item.menuFormRepresentation = menu
+            return item
         case ReaderToolbar.itemSource:
             let item = NSToolbarItem(itemIdentifier: id)
             item.label = L10n.tr("source.title")

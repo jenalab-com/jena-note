@@ -36,7 +36,7 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         ))
         textContainer.widthTracksTextView = true
 
-        let layoutManager = NSLayoutManager()
+        let layoutManager = ProofreadingLayoutManager()
         layoutManager.addTextContainer(textContainer)
 
         let textStorage = NSTextStorage()
