@@ -1,173 +1,173 @@
 <div align="center">
 
-<img src="icon-1024.png" width="128" alt="JenaNote 아이콘" />
+<img src="icon-1024.png" width="128" alt="JenaNote icon" />
 
 # JenaNote
 
-**마크다운 문법을 몰라도 쓸 수 있는 macOS용 WYSIWYG 마크다운 메모 앱**
+**A WYSIWYG Markdown note app for macOS — no Markdown syntax required**
 
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black?logo=apple)](https://www.apple.com/macos/)
 [![Swift 5.7](https://img.shields.io/badge/Swift-5.7-orange?logo=swift)](https://swift.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/jenalab-com/jena-note)](https://github.com/jenalab-com/jena-note/releases/latest)
 
-[다운로드](#설치) · [기능](#주요-기능) · [스크린샷](#스크린샷) · [소스에서 빌드](#소스에서-빌드) · [단축키](#단축키) · [English](README.en.md)
+[Download](#installation) · [Features](#features) · [Screenshots](#screenshots) · [Build from source](#build-from-source) · [Shortcuts](#keyboard-shortcuts) · [한국어](README.ko.md)
 
 </div>
 
 ---
 
-## 왜 JenaNote인가
+## Why JenaNote
 
-macOS 기본 메모앱(텍스트 편집기, Notes)은 서식을 `.md`로 저장하지 못하고, 전용 마크다운 에디터(Typora, Obsidian)는 기능이 과하거나 `**`, `#` 같은 기호가 화면에 그대로 노출됩니다.
+The built-in macOS editors (TextEdit, Notes) cannot save formatting as `.md`, while dedicated Markdown editors (Typora, Obsidian) are either more than you need or show symbols such as `**` and `#` on screen.
 
-**JenaNote는 그 사이를 메웁니다.** 마크다운 기호를 화면에 드러내지 않고 서식이 적용된 모습 그대로 편집하되(WYSIWYG), 파일은 어디서나 열리는 표준 CommonMark `.md`로 저장합니다. 마크다운을 모르는 사람도 도움말 없이 서식 있는 문서를 만들어 `.md`로 공유할 수 있습니다.
+**JenaNote fills that gap.** You edit text as it looks once formatted (WYSIWYG), without Markdown symbols on screen, and the file is saved as standard CommonMark `.md` that opens anywhere. People who don't know Markdown can write formatted documents and share them as `.md` without reading a manual.
 
-## 주요 기능
+## Features
 
-- **WYSIWYG 마크다운 편집** — 편집 중 `**`·`#`·`>` 같은 기호 없이 서식이 적용된 상태로 보입니다. 저장하면 표준 `.md`.
-- **서식 툴바** — 굵게, 기울임, 제목(H1~H3), 순서 있는/없는 목록, 코드, 인용, 링크.
-- **사이드바 폴더 브라우저** — 폴더를 등록하면 `.md` 파일 트리를 재귀로 표시. 클릭하면 현재 창에서 인-플레이스로 문서 교체, FSEvents 기반 실시간 갱신(외부 추가·삭제·이름변경 자동 반영), 등록 폴더는 재시작 후에도 복원.
-- **통합 편집 화면** — 읽기·수정 모드 전환 없이 바로 편집합니다. 상단 툴바에서 서식·삽입·검색·책갈피·AI를 사용하고, 보기 설정에서 서체·화면 굵기·배율·줄 간격과 모바일/책 본문 폭을 조절합니다. 페이지·양면 배치를 유지한 채 본문을 수정할 수 있고, 뒤쪽 페이지는 나눠 계산합니다. 방향키는 커서 이동, Page Up/Down·스크롤 제스처는 페이지 이동에 사용합니다. 전체 쪽수의 `…`는 계산 중 표시입니다.
-- **CLI 기반 AI 채팅** — 상단 AI 버튼으로 문서별 채팅을 엽니다. 선택한 글을 인식하며 가이드 또는 직접 수정을 받을 수 있고, 본문 수정은 ⌘Z로 복원합니다. AI 사용 중에는 스크롤 편집으로 전환됩니다. 설정에서 Claude Code·Codex·Gemini CLI·Grok CLI를 설치·로그인하고 **재확인**으로 연결을 검사하세요. 재확인은 짧은 AI 요청으로 사용량이 발생할 수 있습니다. 대화는 앱 실행 중 파일별로 유지됩니다. Grok은 기존 설정과 충돌하지 않도록 JenaNote 전용 프로필에서 최초 로그인이 필요합니다.
-- **본문 오류 후보 자동 표시** — 입력을 약 0.5초 멈추면 현재 화면의 문장을 Kiwi로 검사하고, 수정 후보 부분에 주황색 물결 점선 밑줄을 표시합니다. 스크롤·페이지 이동 시 새로 보이는 부분도 검사합니다. 한글 조합 중에는 미루며 원문·저장 서식·실행 취소 이력은 바꾸지 않습니다. 누락된 띄어쓰기는 경계의 두 글자에 표시합니다. 후보에 마우스를 올리거나 커서를 두면 수정안과 적용·사전 담기 버튼이 나타납니다. 적용은 해당 후보만 바꾸며 ⌘Z로 복원합니다.
-- **내 사전** — 편집 > 내 사전에서 검사에서 제외할 표현을 검색·등록·수정합니다. 사전 담기는 현재 작품을 기본으로 하며, 전체 작품 또는 선택한 여러 작품에 공유할 수 있습니다. 작품 밖 문서는 전체 작품이 기본임을 표시합니다. 등록·수정·삭제는 본문과 선택 검사에 즉시 반영되며, 여러 단어를 골라 한 번에 삭제할 수 있습니다. 사전은 기기에 저장하고 변경 전 파일을 보관합니다.
-- **선택 문장 검사** — 문장을 선택하고 툴바의 문장 검사 또는 편집 메뉴의 선택 문장 검사를 실행합니다. Kiwi가 기기 안에서 띄어쓰기·흔한 오타 교정을 제안하며, 원문과 비교한 뒤 적용합니다. ⌘Z로 복원할 수 있습니다. Apple Intelligence 없이 한 번에 최대 500자를 검사하며 작품 요약을 기다리지 않습니다. 처음에는 모델 준비 시간이 필요합니다. 고유명사로 분석된 어절과 줄바꿈·탭을 보존하지만 모든 오류를 검출하지는 않습니다.
-- **맞춤법 규정 기반 보완** — 국립국어원 「한글 맞춤법」 조항에 맞춰 보조 용언 붙여쓰기 허용(`꺼져간다`), `-어 지다`·형용사 + `-어 하다` 붙여쓰기, 체언 뒤 `뿐·대로·만큼`, `넉넉지·생각건대`(하 탈락), `-ㄹ게·-ㄹ지·-ㄹ수록·-ㄹ걸`, `-이/-히` 부사, `됬→됐`을 교정합니다. 규정상 둘 다 허용되는 붙여쓰기는 바꾸지 않습니다. 뜻에 따라 갈리는 표기(`맞추다/맞히다`, `-던지/-든지` 등)와 표준어 어휘 대치는 아직 다루지 않습니다.
-- **오픈소스 라이선스** — 앱 메뉴의 Jena Note 정보 창에서 포함된 오픈소스 구성 요소와 라이선스 고지를 확인합니다.
-- **문서 크기** — 보기 설정에서 A4·A5·ISO/JIS B계열·Letter·Legal 등을 선택하고 상단 가로 치수자로 좌우 본문 여백을 조절합니다. 규격 용지의 전체 크기는 고정됩니다.
-- **본문 배경색** — 설정의 UI 탭에서 macOS 색상 선택기로 원하는 바탕색을 고릅니다. 보기 전용으로 원고와 내보내기에는 영향을 주지 않습니다.
-- **설정 탭·자동 저장** — 설정을 일반·UI·AI 탭으로 나눴습니다. 일반 탭에서 언어와 자동 저장 켜기/끄기, 저장 간격(30초·1분·3분·5분·10분, 기본 1분)을 고릅니다.
-- **원고 버전 이력·복원** — 이름 붙인 버전과 자동 이력을 보관하고, 좌우 비교·변경 위치 표시로 차이를 확인합니다. 복원 전 현재 내용을 보관하며 실행 취소가 가능합니다. 일반 이력은 최근 100개, 이름 붙인 버전은 계속 보관합니다. 별도 이미지 파일은 포함하지 않습니다.
-- **문서 끝 주석** — 서식 메뉴에서 번호 참조와 설명을 추가·수정·삭제합니다. Markdown 각주 표기로 저장하며 docx·hwpx에서는 번호와 설명을 일반 텍스트로 보존합니다.
-- **작품 문맥 자동 준비** — 설정 자료와 집필 폴더를 등록하면 원문 검색을 준비하고, 상세 요약은 백그라운드에서 진행합니다. 전체 요약을 기다리지 않고 채팅할 수 있으며, 최근 질문과 열린 글을 우선 정리합니다. AI는 요청에 필요한 설정과 이전 화 원문을 먼저 찾아 참고하고, 이후 변경된 부분만 갱신합니다. 파일을 수동 요약해서 500KB에 맞출 필요가 없습니다. 준비 중에도 편집할 수 있고, 준비 상태·재시도·기기 내 요약/발췌 개수는 작품 문맥 창에서 확인합니다. 초기 준비는 Foundation Models로 기기 안에서 처리하고 외부 AI 사용량을 쓰지 않습니다(macOS 26 이상, Apple Intelligence 필요). 모델 비지원 또는 요약 실패 시 원문 발췌로 검색을 유지하며, 현재 화보다 뒤의 글은 요청에 포함하지 않습니다.
-- **간결한 AI 입력창** — 가이드·직접 수정, 모델 선택, 보내기/중지를 입력창 안에서 사용합니다. Enter는 전송, Shift+Enter는 줄바꿈이며 한글 조합 확정은 전송하지 않습니다. 사용량은 정보 버튼에서 확인합니다.
-- **원문 보기** — 본문 영역을 읽기 전용 마크다운 원문으로 전환해 확인하고 복사합니다. 다시 누르면 기존 편집 화면으로 돌아가며, 저장 전 변경사항도 반영합니다. **인라인 코드**는 선택한 글에 코드 서식을 적용하는 별도 버튼입니다.
-- **치수자와 좌·우 여백** — 작성화면 상단에 워드식 cm 치수자가 있습니다. 양 끝 핸들을 끌어 페이지 좌·우 여백을 정하면 글 영역이 그만큼 줄고, 양면 배치에서는 페이지마다 치수자가 놓여 한쪽을 끌면 둘이 같이 움직입니다. 핸들을 페이지 바깥으로 끌면 페이지가 넓어지고(책 폭에서), 더블클릭하면 기본으로 돌아옵니다. 폭과 여백은 보기 설정처럼 기억됩니다.
-- **클라우드 드라이브 문서** — iCloud Drive·Google Drive 등 연결 폴더의 문서를 내려받는 동안 다른 파일을 연달아 열어도 마지막에 연 파일만 표시합니다. 열지 못한 파일은 안내하고, UTF-8로 읽을 수 없는 파일은 빈 문서로 열지 않아 원본이 덮어써지지 않습니다. 내려받는 동안 화면이 잠시 멈출 수 있습니다.
-- **상태바 글자수 카운터** — 창 하단에서 실시간 글자수 확인.
-- **docx·hwpx 내보내기** — 노트를 Word(`.docx`)·한글(`.hwpx`)로 내보냅니다. 외부 도구·라이브러리 의존성 0, 순수 Swift로 zip+XML을 직접 생성. (원본 `.md`는 건드리지 않는 단방향 내보내기)
-- **줄 간격·글자 색상** 조절, 표준 macOS 단축키와 미저장 변경 경고.
+- **WYSIWYG Markdown editing** — Formatting is shown applied, without `**`, `#` or `>` symbols. Saving produces standard `.md`.
+- **Formatting toolbar** — Bold, italic, headings (H1–H3), bulleted and numbered lists, code, blockquote, link.
+- **Sidebar folder browser** — Register a folder to see its `.md` files as a recursive tree. Clicking a file swaps the document in place in the current window. FSEvents keeps the tree live (external additions, deletions and renames appear automatically), and registered folders are restored after relaunch.
+- **Unified editing view** — Edit directly without switching between reading and editing modes. The top toolbar provides formatting, insert, find, bookmarks and AI; the view settings adjust typeface, display weight, zoom, line spacing and mobile/book text width. You can edit while keeping page and two-page layouts; later pages are laid out incrementally. Arrow keys move the cursor; Page Up/Down and scroll gestures turn pages. A `…` in the total page count means pagination is still in progress.
+- **CLI-based AI chat** — The AI button opens a per-document chat. It recognizes selected text and can give guidance or edit directly; edits are undoable with ⌘Z. The editor switches to scroll layout while AI is in use. Install and sign in to Claude Code, Codex, Gemini CLI or Grok CLI from Settings and use **Recheck** to test the connection. Recheck sends a short AI request and may use quota. Conversations are kept per file while the app is running. Grok requires a first sign-in in a JenaNote-specific profile so it does not conflict with your existing setup.
+- **Automatic error highlighting** — When you pause typing for about 0.5 seconds, the sentences on screen are checked with Kiwi and suggested corrections get an orange wavy dotted underline. Newly visible text is checked as you scroll or turn pages. Checking waits while Hangul is being composed, and never changes the text, saved formatting or undo history. A missing space is marked on the two characters around it. Hovering over or placing the cursor on a suggestion shows the correction with Apply and Add to dictionary buttons. Apply changes only that suggestion and can be undone with ⌘Z.
+- **My Dictionary** — In Edit > My Dictionary…, search, add and edit words to exclude from checking. Adding defaults to the current work, and can be shared with all works or selected works. Documents outside a work show that the default is all works. Adding, editing and deleting apply immediately to on-screen and selection checks, and several words can be selected and deleted at once. The dictionary is stored on this Mac and the previous file is kept before every change.
+- **Check Selected Text** — Select text and run Proofread from the toolbar or Edit > Check Selected Text. Kiwi suggests spacing and common typo corrections on device; you compare them with the original before applying, and ⌘Z restores the original. It checks up to 500 characters at a time without Apple Intelligence and does not wait for work summaries. The model needs a moment to load the first time. Words analyzed as proper nouns, line breaks and tabs are preserved, but not every error is detected.
+- **Rules from Korean orthography** — Corrections follow the Korean orthography rules of the National Institute of Korean Language: auxiliary verbs written together are allowed (`꺼져간다`); `-어 지다` and adjective + `-어 하다` are joined; `뿐·대로·만큼` after a noun are joined; `하` contraction (`넉넉지`, `생각건대`); plain consonants in `-ㄹ게·-ㄹ지·-ㄹ수록·-ㄹ걸`; `-이/-히` adverbs; `됬 → 됐`. Spacing that the rules accept either way is left as written. Spellings that depend on meaning (`맞추다/맞히다`, `-던지/-든지`) and standard-vocabulary replacement are not covered yet.
+- **Open source licenses** — Jena Note's About window lists the bundled open source components and their license notices.
+- **Paper size** — Choose A4, A5, ISO/JIS B series, Letter, Legal and more in the view settings, and adjust the left and right text margins with the horizontal ruler. Standard paper sizes keep their full dimensions.
+- **Page background** — Pick any background color with the macOS color picker in the UI tab of Settings. It affects only the display, not the manuscript or exports.
+- **Settings tabs and autosave** — Settings are split into General, UI and AI tabs. General sets the language, autosave on/off and the save interval (30 seconds, 1, 3, 5 or 10 minutes; default 1 minute).
+- **Version history and restore** — Keeps named versions and automatic history, with a side-by-side comparison and a change map to find differences. The current text is kept before restoring, and a restore can be undone. Automatic history keeps the latest 100 entries; named versions are kept indefinitely. Separate image files are not included.
+- **Endnotes** — Add, edit and delete numbered references and notes from Format > Endnotes…. They are saved in Markdown footnote syntax and kept as plain numbered text in docx and hwpx exports.
+- **Automatic work context** — Register your reference material and manuscript folders and the original text becomes searchable right away, while detailed summaries continue in the background. You can chat without waiting for all summaries; recent questions and the open document are processed first. AI looks up the settings and earlier chapters a request needs, and only changed parts are updated afterwards. There is no need to summarize files by hand to fit 500 KB. You can keep editing during preparation; status, retry and the number of on-device summaries/excerpts are shown in the work context window. Initial preparation runs on device with Foundation Models and does not use external AI quota (macOS 26 or later with Apple Intelligence). If the model is unavailable or a summary fails, search continues with excerpts, and text after the current chapter is never included in requests.
+- **Compact AI composer** — Guidance/direct edit, model selection and send/stop live inside the input field. Enter sends, Shift+Enter inserts a line break, and confirming Hangul composition does not send. Usage is shown from the info button.
+- **Markdown source view** — Switch the text area to read-only Markdown source to check and copy it. Switching back returns to the editor, including unsaved changes. **Inline Code** is a separate button that applies code formatting to the selection.
+- **Ruler and side margins** — A Word-style centimeter ruler sits above the text. Drag the handles at either end to set the page's left and right margins; in two-page layout each page has its own ruler and both move together. Dragging a handle past the page edge widens the page (in book width), and double-clicking resets it. Width and margins are remembered like other view settings.
+- **Documents on cloud drives** — While a document on iCloud Drive, Google Drive or another synced folder is downloading, opening several other files in a row shows only the last one you opened. Files that cannot be opened are reported, and files that cannot be read as UTF-8 are not opened as empty documents, so the original is never overwritten. The window may pause briefly while a file downloads.
+- **Character count in the status bar** — Live character count at the bottom of the window.
+- **docx and hwpx export** — Export notes to Word (`.docx`) and Hangul (`.hwpx`). No external tools or libraries: zip and XML are generated directly in pure Swift. (One-way export; the original `.md` is untouched.)
+- **Line spacing and text color**, standard macOS shortcuts, and unsaved-change warnings.
 
-## 스크린샷
+## Screenshots
 
 <p align="center">
-  <img src="assets/01-editor.png" alt="사이드바 폴더 브라우저와 WYSIWYG 편집 화면" width="900">
+  <img src="assets/01-editor.png" alt="Folder sidebar and WYSIWYG editor" width="900">
 </p>
 
-| 맞춤법 교정 후보 | 양면 페이지 배치 |
+| Proofreading candidates | Two-page spread |
 |---|---|
-| <img src="assets/02-proofreading.png" alt="교정 후보에 마우스를 올리면 나타나는 수정안 툴팁" width="440"> | <img src="assets/03-book.png" alt="소설 원고를 양면 페이지로 배치한 화면" width="440"> |
-| **보기 설정** | **AI 채팅** |
-| <img src="assets/04-view-settings.png" alt="문서 크기·폭·글꼴·굵기·행간을 고르는 보기 설정" width="440"> | <img src="assets/05-ai-chat.png" alt="문서별 AI 채팅의 가이드 응답" width="440"> |
+| <img src="assets/02-proofreading.png" alt="Suggestion tooltip shown when hovering a proofreading candidate" width="440"> | <img src="assets/03-book.png" alt="A novel manuscript laid out as a two-page spread" width="440"> |
+| **View settings** | **AI chat** |
+| <img src="assets/04-view-settings.png" alt="View settings for page size, width, font, weight and line spacing" width="440"> | <img src="assets/05-ai-chat.png" alt="Guide reply in the per-document AI chat" width="440"> |
 
-### 데모
+### Demo
 
-| 서식 편집과 원문 보기 | 교정 후보 적용·되돌리기 |
+| Formatting and Markdown source | Applying and undoing suggestions |
 |---|---|
-| <img src="assets/editing.gif" alt="이어 쓰기와 새 목록 항목 추가, 굵게·기울임 적용, 마크다운 원문 확인" width="440"> | <img src="assets/proofreading.gif" alt="교정 후보 두 곳을 적용하고 ⌘Z로 되돌리기" width="440"> |
-| **페이지 배치와 보기 설정** | **AI 직접 수정** |
-| <img src="assets/book.gif" alt="페이징 전환, 행간 변경, 페이지 넘기기" width="440"> | <img src="assets/ai.gif" alt="AI에게 인용문 수정을 요청해 본문에 바로 반영(대기 시간 빨리 감기)" width="440"> |
+| <img src="assets/editing.gif" alt="Typing, adding a list item, applying bold and italic, then viewing the Markdown source" width="440"> | <img src="assets/proofreading.gif" alt="Applying two proofreading suggestions and undoing with Cmd-Z" width="440"> |
+| **Page layout and view settings** | **AI direct edit** |
+| <img src="assets/book.gif" alt="Switching to paged view, changing line spacing and turning pages" width="440"> | <img src="assets/ai.gif" alt="Asking the AI to revise a quote, applied directly to the document (waiting sped up)" width="440"> |
 
-AI 데모의 응답 대기 시간은 빨리 감았습니다. 실제로는 약 15초 걸렸습니다.
+The UI is shown in Korean. The AI demo's waiting time is sped up; the actual reply took about 15 seconds.
 
-## 설치
+## Installation
 
-[최신 릴리스](https://github.com/jenalab-com/jena-note/releases/latest)에서 `JenaNote.dmg`를 내려받아, 열린 창에서 앱을 **Applications** 폴더로 드래그하세요. (macOS 13 Ventura 이상)
+Download `JenaNote.dmg` from the [latest release](https://github.com/jenalab-com/jena-note/releases/latest) and drag the app into the **Applications** folder in the window that opens. (macOS 13 Ventura or later)
 
-### ⚠️ 처음 실행할 때 — "확인되지 않은 개발자" / "손상되었기 때문에 열 수 없습니다"
+### ⚠️ First launch — "unidentified developer" / "is damaged and can't be opened"
 
-JenaNote는 Apple Developer 서명·공증을 거치지 않은 무료 앱입니다. 그래서 처음 열 때 macOS Gatekeeper가 막습니다. **앱이 손상된 것이 아니니** 아래 방법 중 하나로 열어주세요.
+JenaNote is a free app that is not signed or notarized through the Apple Developer program, so macOS Gatekeeper blocks it the first time. **The app is not damaged.** Open it with one of the methods below.
 
-**방법 1 — 터미널 (가장 확실, 모든 macOS 버전)**
+**Method 1 — Terminal (most reliable, all macOS versions)**
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/JenaNote.app
 ```
 
-실행한 뒤 평소처럼 더블클릭하면 열립니다.
+Then double-click the app as usual.
 
-**방법 2 — 시스템 설정 (macOS 15 Sequoia 이상)**
+**Method 2 — System Settings (macOS 15 Sequoia or later)**
 
-앱을 한 번 더블클릭 → 차단 메시지가 뜨면 → **시스템 설정 > 개인정보 보호 및 보안** 으로 이동 → 맨 아래 "JenaNote을(를) 열도록 허용" 옆 **"확인 없이 열기"** 클릭 → 다시 열기.
+Double-click the app once → when it is blocked, go to **System Settings > Privacy & Security** → click **Open Anyway** next to "JenaNote was blocked" at the bottom → open it again.
 
-**방법 3 — 우클릭 열기 (macOS 13~14)**
+**Method 3 — Right-click Open (macOS 13–14)**
 
-Finder에서 앱을 **우클릭(또는 Control+클릭) → 열기 → 열기**.
+In Finder, **right-click (or Control-click) the app → Open → Open**.
 
-> 한 번만 통과시키면 이후로는 평범하게 더블클릭으로 열립니다.
+> After allowing it once, it opens normally with a double-click.
 
-## 소스에서 빌드
+## Build from source
 
-Swift 5.7+와 Xcode가 필요합니다. Kiwi 소스는 `Vendor/Kiwi/source/`에서 직접 확인·수정할 수 있으며, 로컬 XCFramework를 참조합니다. 최초 준비는 CMake 설치 후 `make bootstrap-kiwi`로 수행합니다(모델이 없을 때만 고정 버전·체크섬으로 다운로드). 이후 `make build`와 `make test`는 네트워크 없이 준비 상태를 검사하고 로컬 라이브러리를 사용합니다. 소스 수정 후에는 `make rebuild-kiwi`를 실행하세요. 모델 약 104MB는 앱에 포함되며 실행 중 다운로드는 없습니다. 도구 설치·오프라인 복사·소스 안내는 [Kiwi 개발 안내](Vendor/Kiwi/README.md)를 참고하세요. `swift build`·`swift test` 직접 호출 전에는 `make prepare-kiwi`가 필요합니다.
+Requires Swift 5.7+ and Xcode. The Kiwi source is in `Vendor/Kiwi/source/`, where you can read and modify it; the app links a locally built XCFramework. For the first setup, install CMake and run `make bootstrap-kiwi` (it downloads the model with a pinned version and checksum only when it is missing). After that, `make build` and `make test` check readiness offline and use the local library. Run `make rebuild-kiwi` after changing the source. The model (about 104 MB) is bundled in the app; nothing is downloaded at runtime. See the [Kiwi development guide](Vendor/Kiwi/README.md) (Korean) for tool setup, offline copies and a source tour. Run `make prepare-kiwi` before calling `swift build` or `swift test` directly.
 
 ```bash
 git clone https://github.com/jenalab-com/jena-note.git
 cd jena-note
 
-make build     # .build/JenaNote.app 빌드
-make run       # 빌드 후 즉시 실행
-make install   # ~/Applications 에 설치
-make dmg       # 배포용 .dmg 생성
-make test      # 테스트 실행
-make clean     # 빌드 산출물 삭제
+make build     # build .build/JenaNote.app
+make run       # build and launch
+make install   # install to ~/Applications
+make dmg       # create a distributable .dmg
+make test      # run tests
+make clean     # remove build products
 ```
 
-직접 빌드한 앱은 quarantine 속성이 붙지 않으므로 위의 Gatekeeper 안내가 필요 없습니다.
+Apps you build yourself have no quarantine attribute, so the Gatekeeper steps above are not needed.
 
-## 단축키
+## Keyboard shortcuts
 
-| 동작 | 단축키 |
+| Action | Shortcut |
 | --- | --- |
-| 저장 | ⌘S |
-| 다른 이름으로 저장 | ⇧⌘S |
-| 굵게 | ⌘B |
-| 기울임 | ⌘I |
-| 링크 | ⌘K |
-| 폴더 추가 | ⇧⌘O |
-| 사이드바 토글 | ⌥⌘S |
-| 실행 취소 / 다시 실행 | ⌘Z / ⇧⌘Z |
+| Save | ⌘S |
+| Save As | ⇧⌘S |
+| Bold | ⌘B |
+| Italic | ⌘I |
+| Link | ⌘K |
+| Add Folder | ⇧⌘O |
+| Toggle Sidebar | ⌥⌘S |
+| Undo / Redo | ⌘Z / ⇧⌘Z |
 
-## 파일 포맷
+## File format
 
-- **저장 포맷**: UTF-8 인코딩 CommonMark 호환 `.md` — VSCode·GitHub 등 다른 뷰어에서 동일하게 렌더링됩니다.
-- **내부 표현**: `NSAttributedString` ↔ Markdown 직렬화(저장 시)·역직렬화(열기 시).
-- **내보내기**: `.docx`(OOXML)·`.hwpx`(OWPML)는 단방향. 원본 `.md`는 변경하지 않습니다.
+- **Storage format**: UTF-8, CommonMark-compatible `.md` — renders the same in other viewers such as VS Code and GitHub.
+- **Internal representation**: `NSAttributedString` ↔ Markdown serialization (on save) and parsing (on open).
+- **Export**: `.docx` (OOXML) and `.hwpx` (OWPML) are one-way. The original `.md` is not changed.
 
-## 프로젝트 구조
+## Project structure
 
 ```
 Resources/
-  Info.plist        번들 메타데이터
-  Fonts/            읽기 모드 명조 (KoPub 바탕, 앱 번들 동봉)
+  Info.plist        bundle metadata
+  Fonts/            serif body font (KoPub Batang, bundled with the app)
 Sources/
-  JenaNote/         실행 진입점 (main.swift)
+  JenaNote/         executable entry point (main.swift)
   JenaNoteKit/
-    app/            AppDelegate, 설정, 도움말, 라이선스 창, 로컬라이제이션
-    ai/             CLI AI 채팅, 작품 문맥 인덱스·검색, 기기 내 요약
-    document/       Markdown 직렬화/역직렬화, 버전 이력, 문서 끝 주석
-    editor/         편집기 뷰·윈도우 컨트롤러, 서식 명령, 페이지 조판, 치수자
-    proofreading/   Kiwi 교정 엔진, 맞춤법 규칙, 본문 오류 표시, 내 사전
-    sidebar/        폴더 북마크, FSEvents 감시, 아웃라인 뷰
-    statusbar/      하단 상태바 (글자수)
-    toolbar/        통합 툴바와 서식 버튼 생성
-    export/         docx·hwpx Writer, 문서 IR, zip/XML 직접 생성
-  Resources/        Kiwi 모델(빌드 시 준비), 제3자 라이선스 고지
-Vendor/Kiwi/        Kiwi 0.24.1 C++ 소스 스냅샷, 빌드 스크립트(scripts/)와 로컬 빌드 안내
-Tests/              JenaNoteKit 단위 테스트
-assets/             README 스크린샷·데모 GIF
+    app/            AppDelegate, settings, help, license window, localization
+    ai/             CLI AI chat, work context index and search, on-device summaries
+    document/       Markdown serialization/parsing, version history, endnotes
+    editor/         editor views and window controller, format commands, page layout, ruler
+    proofreading/   Kiwi proofreading engine, orthography rules, error highlighting, My Dictionary
+    sidebar/        folder bookmarks, FSEvents watching, outline view
+    statusbar/      bottom status bar (character count)
+    toolbar/        unified toolbar and format buttons
+    export/         docx and hwpx writers, document IR, direct zip/XML generation
+  Resources/        Kiwi model (prepared at build time), third-party license notices
+Vendor/Kiwi/        Kiwi 0.24.1 C++ source snapshot, build scripts (scripts/) and local build guide
+Tests/              JenaNoteKit unit tests
+assets/             README screenshots and demo GIFs
 ```
 
-## 라이선스
+## License
 
 [MIT](LICENSE) © 2026 JenaLab
 
-### Kiwi 한국어 형태소 분석기
+### Kiwi Korean morphological analyzer
 
-문장 검사에 [Kiwi](https://github.com/bab2min/Kiwi) 0.24.1과 기본 모델을 사용합니다(Apache-2.0). 소스는 수정 없이 `Vendor/Kiwi/source/`에 포함하며, Kiwi가 정적으로 포함하는 Eigen(MPL-2.0)·mimalloc·streamvbyte·cpp-btree·nlohmann/json의 고지와 함께 앱의 Jena Note 정보 → 오픈소스 라이선스에서 확인할 수 있습니다.
+Text checking uses [Kiwi](https://github.com/bab2min/Kiwi) 0.24.1 and its base model (Apache-2.0). The unmodified source is included in `Vendor/Kiwi/source/`. Its notices, together with those of the libraries Kiwi links statically — Eigen (MPL-2.0), mimalloc, streamvbyte, cpp-btree and nlohmann/json — are available in the app under About Jena Note → Open Source Licenses.
 
-### 동봉 글꼴
+### Bundled font
 
-통합 편집 화면의 명조 본문에 **KoPub 바탕체**(Medium·Bold)를 앱 번들에 동봉합니다.
-KoPub 서체는 한국출판인회의가 제작·배포하는 무료 글꼴로, 저작권은 한국출판인회의에 있습니다.
-이용 조건 전문은 배포처 [kopus.org](https://www.kopus.org/biz/electronic/font/)에서 확인하세요.
+The serif body text of the unified editing view uses **KoPub Batang** (Medium, Bold), bundled with the app.
+KoPub fonts are free fonts produced and distributed by the Korean Publishers Society, which holds the copyright.
+See the full terms of use at [kopus.org](https://www.kopus.org/biz/electronic/font/).
