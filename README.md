@@ -11,7 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/jenalab-com/jena-note)](https://github.com/jenalab-com/jena-note/releases/latest)
 
-[다운로드](#설치) · [기능](#주요-기능) · [소스에서 빌드](#소스에서-빌드) · [단축키](#단축키) · [English](README.en.md)
+[다운로드](#설치) · [기능](#주요-기능) · [스크린샷](#스크린샷) · [소스에서 빌드](#소스에서-빌드) · [단축키](#단축키) · [English](README.en.md)
 
 </div>
 
@@ -48,6 +48,28 @@ macOS 기본 메모앱(텍스트 편집기, Notes)은 서식을 `.md`로 저장�
 - **상태바 글자수 카운터** — 창 하단에서 실시간 글자수 확인.
 - **docx·hwpx 내보내기** — 노트를 Word(`.docx`)·한글(`.hwpx`)로 내보냅니다. 외부 도구·라이브러리 의존성 0, 순수 Swift로 zip+XML을 직접 생성. (원본 `.md`는 건드리지 않는 단방향 내보내기)
 - **줄 간격·글자 색상** 조절, 표준 macOS 단축키와 미저장 변경 경고.
+
+## 스크린샷
+
+<p align="center">
+  <img src="assets/01-editor.png" alt="사이드바 폴더 브라우저와 WYSIWYG 편집 화면" width="900">
+</p>
+
+| 맞춤법 교정 후보 | 양면 페이지 배치 |
+|---|---|
+| <img src="assets/02-proofreading.png" alt="교정 후보에 마우스를 올리면 나타나는 수정안 툴팁" width="440"> | <img src="assets/03-book.png" alt="소설 원고를 양면 페이지로 배치한 화면" width="440"> |
+| **보기 설정** | **AI 채팅** |
+| <img src="assets/04-view-settings.png" alt="문서 크기·폭·글꼴·굵기·행간을 고르는 보기 설정" width="440"> | <img src="assets/05-ai-chat.png" alt="문서별 AI 채팅의 가이드 응답" width="440"> |
+
+### 데모
+
+| 서식 편집과 원문 보기 | 교정 후보 적용·되돌리기 |
+|---|---|
+| <img src="assets/editing.gif" alt="이어 쓰기와 새 목록 항목 추가, 굵게·기울임 적용, 마크다운 원문 확인" width="440"> | <img src="assets/proofreading.gif" alt="교정 후보 두 곳을 적용하고 ⌘Z로 되돌리기" width="440"> |
+| **페이지 배치와 보기 설정** | **AI 직접 수정** |
+| <img src="assets/book.gif" alt="페이징 전환, 행간 변경, 페이지 넘기기" width="440"> | <img src="assets/ai.gif" alt="AI에게 인용문 수정을 요청해 본문에 바로 반영(대기 시간 빨리 감기)" width="440"> |
+
+AI 데모의 응답 대기 시간은 빨리 감았습니다. 실제로는 약 15초 걸렸습니다.
 
 ## 설치
 
@@ -131,12 +153,10 @@ Sources/
     toolbar/        통합 툴바와 서식 버튼 생성
     export/         docx·hwpx Writer, 문서 IR, zip/XML 직접 생성
   Resources/        Kiwi 모델(빌드 시 준비), 제3자 라이선스 고지
-Vendor/Kiwi/        Kiwi 0.24.1 C++ 소스 스냅샷과 로컬 빌드 안내
+Vendor/Kiwi/        Kiwi 0.24.1 C++ 소스 스냅샷, 빌드 스크립트(scripts/)와 로컬 빌드 안내
 Tests/              JenaNoteKit 단위 테스트
-docs/               spec, architecture, 개발 로그(devlog)
+assets/             README 스크린샷·데모 GIF
 ```
-
-자세한 기획·설계는 [`docs/spec.md`](docs/spec.md)와 [`docs/architecture.md`](docs/architecture.md), 버전별 변경 내역은 [`docs/devlog/`](docs/devlog/)를 참고하세요.
 
 ## 라이선스
 

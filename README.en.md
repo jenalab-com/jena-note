@@ -11,7 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/jenalab-com/jena-note)](https://github.com/jenalab-com/jena-note/releases/latest)
 
-[Download](#installation) · [Features](#features) · [Build from source](#build-from-source) · [Shortcuts](#keyboard-shortcuts) · [한국어](README.md)
+[Download](#installation) · [Features](#features) · [Screenshots](#screenshots) · [Build from source](#build-from-source) · [Shortcuts](#keyboard-shortcuts) · [한국어](README.md)
 
 </div>
 
@@ -48,6 +48,28 @@ The built-in macOS editors (TextEdit, Notes) cannot save formatting as `.md`, wh
 - **Character count in the status bar** — Live character count at the bottom of the window.
 - **docx and hwpx export** — Export notes to Word (`.docx`) and Hangul (`.hwpx`). No external tools or libraries: zip and XML are generated directly in pure Swift. (One-way export; the original `.md` is untouched.)
 - **Line spacing and text color**, standard macOS shortcuts, and unsaved-change warnings.
+
+## Screenshots
+
+<p align="center">
+  <img src="assets/01-editor.png" alt="Folder sidebar and WYSIWYG editor" width="900">
+</p>
+
+| Proofreading candidates | Two-page spread |
+|---|---|
+| <img src="assets/02-proofreading.png" alt="Suggestion tooltip shown when hovering a proofreading candidate" width="440"> | <img src="assets/03-book.png" alt="A novel manuscript laid out as a two-page spread" width="440"> |
+| **View settings** | **AI chat** |
+| <img src="assets/04-view-settings.png" alt="View settings for page size, width, font, weight and line spacing" width="440"> | <img src="assets/05-ai-chat.png" alt="Guide reply in the per-document AI chat" width="440"> |
+
+### Demo
+
+| Formatting and Markdown source | Applying and undoing suggestions |
+|---|---|
+| <img src="assets/editing.gif" alt="Typing, adding a list item, applying bold and italic, then viewing the Markdown source" width="440"> | <img src="assets/proofreading.gif" alt="Applying two proofreading suggestions and undoing with Cmd-Z" width="440"> |
+| **Page layout and view settings** | **AI direct edit** |
+| <img src="assets/book.gif" alt="Switching to paged view, changing line spacing and turning pages" width="440"> | <img src="assets/ai.gif" alt="Asking the AI to revise a quote, applied directly to the document (waiting sped up)" width="440"> |
+
+The UI is shown in Korean. The AI demo's waiting time is sped up; the actual reply took about 15 seconds.
 
 ## Installation
 
@@ -131,12 +153,10 @@ Sources/
     toolbar/        unified toolbar and format buttons
     export/         docx and hwpx writers, document IR, direct zip/XML generation
   Resources/        Kiwi model (prepared at build time), third-party license notices
-Vendor/Kiwi/        Kiwi 0.24.1 C++ source snapshot and local build guide
+Vendor/Kiwi/        Kiwi 0.24.1 C++ source snapshot, build scripts (scripts/) and local build guide
 Tests/              JenaNoteKit unit tests
-docs/               spec, architecture, development logs (devlog)
+assets/             README screenshots and demo GIFs
 ```
-
-Planning and design are in [`docs/spec.md`](docs/spec.md) and [`docs/architecture.md`](docs/architecture.md); per-version changes are in [`docs/devlog/`](docs/devlog/) (Korean).
 
 ## License
 

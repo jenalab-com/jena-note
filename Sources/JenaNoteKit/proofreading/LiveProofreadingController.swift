@@ -217,9 +217,12 @@ final class LiveProofreadingController {
         let popup = NSPopover(); popup.behavior = .semitransient; popup.animates = false
         popup.contentViewController = content
         self.popover = popup; shownCandidate = item
+        let previousResponder = view.window?.firstResponder
         popup.show(relativeTo: anchor, of: view, preferredEdge: .maxY)
-        // A focus-triggered suggestion must never interrupt typing or consume Return.
-        view.window?.makeKey(); view.window?.makeFirstResponder(view)
+        // Keep chat input focus: focusing the document can dismiss a hovered candidate
+        // when its insertion point is elsewhere.
+        view.window?.makeKey()
+        if let previousResponder { view.window?.makeFirstResponder(previousResponder) }
     }
 
     func dismissPopover() {

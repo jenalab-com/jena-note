@@ -160,12 +160,9 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         guard let storage = textView.textStorage else { return }
         let selection = textView.selectedRange()
         let source = NSAttributedString(attributedString: storage)
-        let s = SettingsManager.shared
-        let next = isReadingLayout
-            ? ReaderMetrics.styled(source, scale: s.readingFontScale, font: s.readingFont,
-                                   lineHeightMultiple: s.readingLineSpacing,
-                                   weight: s.readingWeight)
-            : ReaderMetrics.unstyled(source)
+        let next = isReadingLayout ? Self.readingStyled(source) : ReaderMetrics.unstyled(source)
+        // 새 줄(Enter)이 만드는 속성도 같은 조판을 입도록 넘긴다.
+        textView.displayStyler = isReadingLayout ? Self.readingStyled : nil
 
         storage.beginEditing()
         storage.setAttributedString(next)
@@ -177,6 +174,14 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         syncTypingAttributes(at: selection.location)
         updateColumnInset()
         textView.relayoutImageAttachments()
+    }
+
+    /// 현재 읽기 설정(배율·서체·행간·굵기)으로 조판한다. 설정은 부를 때마다 읽는다.
+    private static func readingStyled(_ source: NSAttributedString) -> NSAttributedString {
+        let s = SettingsManager.shared
+        return ReaderMetrics.styled(source, scale: s.readingFontScale, font: s.readingFont,
+                                    lineHeightMultiple: s.readingLineSpacing,
+                                    weight: s.readingWeight)
     }
 
     /// 커서 자리의 실제 속성을 타이핑 속성으로 물려준다 — 조판 상태에서 이어 쳐도
@@ -626,11 +631,13 @@ extension EditorViewController: NSTextViewDelegate {
         let sel = hostWindowController?.documentSelection ?? textView.selectedRange()
 
         // 커서 바로 앞 문자에서 인라인 속성(font/code/link) 읽기
+        // 선택은 편집기, 속성은 문서에서 읽는다. 마크된 텍스트(한글 조합·인라인 자동완성 예측)는
+        // 확정 전까지 문서에 없어 선택이 문서 끝을 넘을 수 있으므로 문서 범위로 자른다.
         let readPos: Int
         if sel.length > 0 {
             readPos = min(sel.location, storage.length - 1)
         } else if sel.location > 0 {
-            readPos = sel.location - 1
+            readPos = min(sel.location - 1, storage.length - 1)
         } else {
             readPos = 0
         }

@@ -1,3 +1,0 @@
-availability: available
-koreanSupported: true
-error: guardrailViolation(FoundationModels.LanguageModelSession.GenerationError.Context(debugDescription: "Response may contain sensitive or unsafe content", underlyingErrors: [], errorDescriptionOverride: nil))
