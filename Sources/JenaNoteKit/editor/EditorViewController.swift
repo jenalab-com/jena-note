@@ -114,7 +114,7 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
     /// 알고 있을 때는 이쪽으로 직접 실어 윈도우 부착 타이밍에 기대지 않는다.
     func loadContent(of doc: MarkdownDocument) {
         guard let storage = textView.textStorage else { return }
-        storage.setAttributedString(doc.content)
+        storage.replaceContents(with: doc.content)
         if storage.length == 0 {
             textView.typingAttributes = textView.defaultTypingAttributes()
         }
@@ -167,9 +167,7 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         // 새 줄(Enter)이 만드는 속성도 같은 조판을 입도록 넘긴다.
         textView.displayStyler = isReadingLayout ? Self.readingStyled : nil
 
-        storage.beginEditing()
-        storage.setAttributedString(next)
-        storage.endEditing()
+        storage.replaceContents(with: next)
 
         if keepSelection, NSMaxRange(selection) <= storage.length {
             textView.setSelectedRange(selection)

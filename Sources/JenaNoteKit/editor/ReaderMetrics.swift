@@ -29,6 +29,38 @@ enum ReaderMetrics {
                        lineHeightMultiple: CGFloat,
                        weight: SettingsManager.ReadingWeight = .regular,
                        maxImageWidth: CGFloat = .greatestFiniteMagnitude) -> NSAttributedString {
+        inParagraphChunks(content) {
+            styledInOnePass($0, scale: scale, font: family, lineHeightMultiple: lineHeightMultiple,
+                            weight: weight, maxImageWidth: maxImageWidth)
+        }
+    }
+
+    /// 속성 배열은 한 덩어리라 구간 하나를 고칠 때마다 뒤쪽 전체가 밀린다. 긴 문서를 통째로
+    /// 고치면 시간이 길이의 제곱으로 늘어나므로 문단 경계에서 나눠 고치고 이어 붙인다.
+    /// 조판은 문단을 넘나들지 않아서 나눠도 결과가 같다.
+    private static func inParagraphChunks(_ content: NSAttributedString,
+                                          _ transform: (NSAttributedString) -> NSAttributedString) -> NSAttributedString {
+        guard content.length > chunkLength else { return transform(content) }
+        let text = content.string as NSString
+        let result = NSMutableAttributedString()
+        var location = 0
+        while location < content.length {
+            let probe = NSRange(location: min(location + chunkLength, content.length), length: 0)
+            let end = NSMaxRange(text.paragraphRange(for: probe))
+            result.append(transform(content.attributedSubstring(from: NSRange(location: location, length: end - location))))
+            location = end
+        }
+        return result
+    }
+
+    private static let chunkLength = 8_000
+
+    static func styledInOnePass(_ content: NSAttributedString,
+                                scale: CGFloat,
+                                font family: SettingsManager.ReadingFont,
+                                lineHeightMultiple: CGFloat,
+                                weight: SettingsManager.ReadingWeight = .regular,
+                                maxImageWidth: CGFloat = .greatestFiniteMagnitude) -> NSAttributedString {
         let result = NSMutableAttributedString(attributedString: content)
         let full = NSRange(location: 0, length: result.length)
 
@@ -110,6 +142,10 @@ enum ReaderMetrics {
     /// 볼드·이탤릭 trait 만 얹는다 — 조판 서체·배율이 문서에 눌러앉지 않게 하는 자리다.
     /// 이미지 첨부 크기는 되돌리지 않는다 (에디터가 자기 폭에 맞춰 다시 잡는다).
     static func unstyled(_ content: NSAttributedString) -> NSAttributedString {
+        inParagraphChunks(content, unstyledInOnePass)
+    }
+
+    static func unstyledInOnePass(_ content: NSAttributedString) -> NSAttributedString {
         let result = NSMutableAttributedString(attributedString: content)
         let full = NSRange(location: 0, length: result.length)
 
@@ -424,5 +460,16 @@ enum ReaderMetrics {
     static func spreadStart(page: Int) -> Int {
         guard page > 0 else { return 0 }
         return page - (page % 2)
+    }
+}
+
+extension NSTextStorage {
+    /// 내용을 통째로 바꾼다. 내용이 찬 채로 바꾸면 새 구간마다 기존 속성 배열 전체가 밀려
+    /// 긴 문서에서 시간이 길이의 제곱으로 늘어나므로, 비운 뒤 이어 붙인다.
+    func replaceContents(with content: NSAttributedString) {
+        beginEditing()
+        deleteCharacters(in: NSRange(location: 0, length: length))
+        setAttributedString(content)
+        endEditing()
     }
 }

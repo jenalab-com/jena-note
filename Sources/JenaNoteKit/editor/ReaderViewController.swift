@@ -322,7 +322,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         }
         deferredRender = false
         if let storage = textView.textStorage {
-            storage.setAttributedString(styledContent())
+            storage.replaceContents(with: styledContent())
         }
         updateColumnInset()
         if pageMode == .paged {
