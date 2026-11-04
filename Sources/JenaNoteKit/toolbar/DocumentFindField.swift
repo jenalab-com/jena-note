@@ -2,6 +2,8 @@ import AppKit
 
 /// 헤더의 문서 내 찾기 입력창. 글자를 치면 바로 찾고 Enter로 일치를 오간다.
 final class DocumentFindField: NSSearchField, NSSearchFieldDelegate {
+    static let width: CGFloat = 180
+
     var onQueryChange: ((String) -> Void)?
     var onMove: ((_ forward: Bool) -> Void)?
     var onCancel: (() -> Void)?
@@ -10,7 +12,7 @@ final class DocumentFindField: NSSearchField, NSSearchFieldDelegate {
     private var lastQuery = ""
 
     init() {
-        super.init(frame: NSRect(x: 0, y: 0, width: 180, height: 26))
+        super.init(frame: NSRect(x: 0, y: 0, width: Self.width, height: 26))
         placeholderString = L10n.tr("toolbar.find")
         toolTip = L10n.tr("toolbar.find")
         sendsSearchStringImmediately = true
@@ -19,7 +21,7 @@ final class DocumentFindField: NSSearchField, NSSearchFieldDelegate {
         target = self
         action = #selector(queryChanged)
         translatesAutoresizingMaskIntoConstraints = false
-        widthAnchor.constraint(equalToConstant: 180).isActive = true
+        widthAnchor.constraint(equalToConstant: Self.width).isActive = true
 
         countLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         countLabel.textColor = .secondaryLabelColor

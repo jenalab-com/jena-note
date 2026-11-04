@@ -19,9 +19,14 @@ class ReaderToolbar: NSToolbar {
     private static let itemInsert = NSToolbarItem.Identifier("insert")
     private static let itemProofreading = NSToolbarItem.Identifier("proofreadSelection")
     private static let itemFind = NSToolbarItem.Identifier("documentFind")
+    private static let itemReplaceToggle = NSToolbarItem.Identifier("documentReplaceToggle")
     weak var documentFinder: DocumentFinder?
     var onFindCancel: (() -> Void)?
+    weak var documentWindow: NSWindow?
     private weak var findField: DocumentFindField?
+    private weak var replaceToggle: NSButton?
+    private(set) var replacePanel: DocumentReplacePanel?
+    private var replacePanelObservers: [NSObjectProtocol] = []
     private weak var proofreadingButton: NSButton?
     private var hasSelectedText = false
 
@@ -33,6 +38,7 @@ class ReaderToolbar: NSToolbar {
 
     func setSourceActive(_ active: Bool) {
         isSourceActive = active
+        if active { closeReplacePanel() }
         sourceButton?.state = active ? .on : .off
         for item in items {
             let allowed = [Self.itemSource, Self.itemAI, Self.itemFind].contains(item.itemIdentifier)
@@ -98,8 +104,80 @@ class ReaderToolbar: NSToolbar {
     }
 
     func focusFindField() { findField?.window?.makeFirstResponder(findField) }
-    func resetFindField() { findField?.reset() }
-    func updateFindCount(current: Int?, total: Int) { findField?.showCount(current: current, total: total) }
+    func resetFindField() {
+        closeReplacePanel()
+        findField?.reset()
+    }
+    func updateFindCount(current: Int?, total: Int) {
+        findField?.showCount(current: current, total: total)
+        replacePanel?.setHasMatches(total > 0)
+    }
+
+    var isReplacePanelShown: Bool { replacePanel != nil }
+
+    @objc private func toggleReplacePanel(_ sender: Any?) {
+        if isReplacePanelShown { closeReplacePanel(); focusFindField() } else { showReplacePanel() }
+    }
+
+    /// 본문 위에 얹으므로 페이지를 다시 조판하지 않는다. 본문을 고치다 돌아올 수 있게
+    /// 바깥을 눌러도 닫지 않는다.
+    func showReplacePanel() {
+        guard let field = findField, let host = documentWindow?.contentView, !isSourceActive else { return }
+        if !isReplacePanelShown {
+            let panel = DocumentReplacePanel(matching: field)
+            panel.onReplace = { [weak self] in self?.documentFinder?.replaceCurrent(with: $0) }
+            panel.onReplaceAll = { [weak self] in self?.documentFinder?.replaceAll(with: $0) }
+            panel.onClose = { [weak self] in
+                self?.closeReplacePanel()
+                self?.focusFindField()
+            }
+            panel.setHasMatches(documentFinder?.matches.isEmpty == false)
+            host.addSubview(panel)
+            replacePanel = panel
+            replaceToggle?.image = Self.replaceToggleImage(open: true)
+            observeReplacePanelAnchor(field)
+            positionReplacePanel()
+        }
+        if documentFinder?.query.isEmpty != false { focusFindField() } else { replacePanel?.focus() }
+    }
+
+    func closeReplacePanel() {
+        replacePanelObservers.forEach(NotificationCenter.default.removeObserver)
+        replacePanelObservers = []
+        replacePanel?.removeFromSuperview()
+        replacePanel = nil
+        replaceToggle?.image = Self.replaceToggleImage(open: false)
+    }
+
+    /// 전체 화면에서는 툴바가 다른 창으로 옮겨 가므로 레이아웃 제약 대신 화면 좌표로 맞춘다.
+    private func positionReplacePanel() {
+        guard let panel = replacePanel, let host = panel.superview, let field = findField,
+              let fieldWindow = field.window, let window = host.window else { return }
+        let onScreen = fieldWindow.convertToScreen(field.convert(field.bounds, to: nil))
+        let anchor = host.convert(window.convertFromScreen(onScreen), from: nil)
+        let size = panel.fittingSize
+        // 헤더 아래 선에 붙여 검색창이 펼쳐진 것처럼 보이게 한다.
+        let top = host.convert(window.contentLayoutRect, from: nil).maxY
+        panel.frame = NSRect(x: anchor.minX - DocumentReplacePanel.padding, y: top - size.height,
+                             width: size.width, height: size.height)
+    }
+
+    private func observeReplacePanelAnchor(_ field: NSView) {
+        field.postsFrameChangedNotifications = true
+        let center = NotificationCenter.default
+        let reposition: (Notification) -> Void = { [weak self] _ in self?.positionReplacePanel() }
+        replacePanelObservers = [
+            center.addObserver(forName: NSView.frameDidChangeNotification, object: field, queue: .main, using: reposition),
+            center.addObserver(forName: NSWindow.didResizeNotification, object: documentWindow, queue: .main, using: reposition),
+            center.addObserver(forName: NSWindow.didEnterFullScreenNotification, object: documentWindow, queue: .main, using: reposition),
+            center.addObserver(forName: NSWindow.didExitFullScreenNotification, object: documentWindow, queue: .main, using: reposition)
+        ]
+    }
+
+    private static func replaceToggleImage(open: Bool) -> NSImage? {
+        NSImage(systemSymbolName: open ? "chevron.up" : "chevron.down",
+                accessibilityDescription: L10n.tr("find.replace"))
+    }
 
     /// 책갈피 목록 팝오버를 붙일 기준 뷰.
     var bookmarkAnchorView: NSView? { bookmarkButton }
@@ -108,7 +186,7 @@ class ReaderToolbar: NSToolbar {
 extension ReaderToolbar: NSToolbarDelegate {
 
     func toolbarDefaultItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [ReaderToolbar.itemFind, ReaderToolbar.itemMode, ReaderToolbar.itemAppearance, ReaderToolbar.itemSource, .space,
+        [ReaderToolbar.itemFind, ReaderToolbar.itemReplaceToggle, ReaderToolbar.itemMode, ReaderToolbar.itemAppearance, ReaderToolbar.itemSource, .space,
          ReaderToolbar.itemHeading, .init("bold"), .init("italic"), .init("inlineCode"),
          ReaderToolbar.itemLists, ReaderToolbar.itemInsert, .init("textColor"),
          .flexibleSpace, ReaderToolbar.itemBookmark, ReaderToolbar.itemBookmarkList,
@@ -133,6 +211,18 @@ extension ReaderToolbar: NSToolbarDelegate {
             field.onCancel = { [weak self] in self?.onFindCancel?() }
             findField = field
             item.view = field
+            return item
+        case ReaderToolbar.itemReplaceToggle:
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.label = L10n.tr("find.replace")
+            item.toolTip = item.label
+            item.visibilityPriority = .high
+            let button = NSButton(image: Self.replaceToggleImage(open: false) ?? NSImage(),
+                                  target: self, action: #selector(toggleReplacePanel(_:)))
+            button.toolTip = item.label
+            button.isEnabled = !isSourceActive
+            replaceToggle = button
+            item.view = button
             return item
         case ReaderToolbar.itemProofreading:
             let item = NSToolbarItem(itemIdentifier: id)

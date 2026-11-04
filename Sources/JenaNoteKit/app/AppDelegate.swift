@@ -137,10 +137,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                                         keyEquivalent: "g")
         findPrev.keyEquivalentModifierMask = [.command, .shift]
         let findReplace = editMenu.addItem(withTitle: L10n.tr("menu.edit.findReplace"),
-                                           action: #selector(NSResponder.performTextFinderAction(_:)),
+                                           action: #selector(EditorWindowController.showDocumentReplace(_:)),
                                            keyEquivalent: "f")
         findReplace.keyEquivalentModifierMask = [.command, .option]
-        findReplace.tag = NSTextFinder.Action.showReplaceInterface.rawValue
 
         editMenu.addItem(.separator())
         let findInFiles = editMenu.addItem(withTitle: L10n.tr("menu.edit.findInFiles"),

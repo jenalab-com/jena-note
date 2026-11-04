@@ -167,6 +167,7 @@ class EditorWindowController: NSWindowController {
         toolbar.formatTarget = editorVC
         toolbar.documentFinder = documentFinder
         toolbar.onFindCancel = { [weak self] in self?.cancelDocumentFind() }
+        toolbar.documentWindow = window
         documentFinder.onChange = { [weak toolbar] in toolbar?.updateFindCount(current: $0, total: $1) }
         window.toolbar = toolbar
         readerToolbar = toolbar
@@ -826,6 +827,8 @@ extension EditorWindowController: NSMenuItemValidation {
         switch menuItem.action {
         case #selector(proofreadSelection(_:)):
             return canProofreadSelection
+        case #selector(showDocumentReplace(_:)):
+            return !isShowingSource
         case #selector(manageEndnotes(_:)):
             guard let doc = document as? MarkdownDocument else { return false }
             return !isShowingSource && doc.fileType != "public.plain-text" && doc.fileURL?.pathExtension.lowercased() != "txt"

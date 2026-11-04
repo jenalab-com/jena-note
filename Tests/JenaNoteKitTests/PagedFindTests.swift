@@ -45,6 +45,9 @@ final class PagedFindTests: XCTestCase {
     }
 
     private func close(_ doc: MarkdownDocument, _ controller: EditorWindowController, _ window: NSWindow) {
+        // 바꾸기의 Undo 묶음은 다음 런루프에 닫히며 문서를 다시 수정됨으로 만든다.
+        RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        doc.undoManager?.removeAllActions()
         doc.updateChangeCount(.changeCleared)
         window.close()
         doc.removeWindowController(controller)
@@ -226,5 +229,139 @@ final class PagedFindTests: XCTestCase {
         XCTAssertTrue(scrollView.isFindBarVisible)
         let bar = try XCTUnwrap(scrollView.findBarView)
         XCTAssertFalse(editor.ruler.frame.intersects(bar.frame), "치수자가 찾기 바를 가리면 안 된다")
+    }
+
+    // MARK: - 바꾸기
+
+    func testReplacingAdvancesAndUndoRestoresInThePagedLayout() throws {
+        let (doc, controller, window) = makeWindow()
+        defer { close(doc, controller, window) }
+        let reader = try XCTUnwrap(controller.readerVC)
+        let finder = controller.documentFinder
+        let original = doc.content.string
+        finder.search("등대")
+        let first = try XCTUnwrap(finder.current)
+
+        finder.replaceCurrent(with: "등대지기")
+
+        XCTAssertEqual((doc.content.string as NSString).substring(with: NSRange(location: first.location, length: 4)), "등대지기")
+        XCTAssertEqual(reader.findableString, doc.content.string)
+        XCTAssertEqual(finder.matches.count, 120, "바꾼 글자 안의 검색어도 일치로 보인다")
+        XCTAssertGreaterThan(try XCTUnwrap(finder.current).location, first.location + 3, "바꾼 글자를 다시 잡지 않는다")
+
+        doc.undoManager?.undo()
+        XCTAssertEqual(doc.content.string, original)
+    }
+
+    func testReplacingKeepsThePageOfTheNextMatch() throws {
+        let (doc, controller, window) = makeWindow()
+        defer { close(doc, controller, window) }
+        let reader = try XCTUnwrap(controller.readerVC)
+        reader.selectTextRange(NSRange(location: 0, length: 0))
+        let finder = controller.documentFinder
+        finder.search("등대")
+        finder.move(forward: false)
+        finder.move(forward: false)
+
+        finder.replaceCurrent(with: "섬")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+
+        let current = try XCTUnwrap(finder.current)
+        XCTAssertTrue(NSLocationInRange(current.location, reader.visibleCharacterRange), "편집 후 새로고침이 커서 쪽으로 되돌리면 안 된다")
+    }
+
+    func testReplaceAllIsOneUndoInThePagedLayout() throws {
+        let (doc, controller, window) = makeWindow()
+        defer { close(doc, controller, window) }
+        let finder = controller.documentFinder
+        let original = doc.content.string
+        finder.search("등대")
+
+        XCTAssertEqual(finder.replaceAll(with: "섬"), 120)
+
+        XCTAssertFalse(doc.content.string.contains("등대"))
+        XCTAssertTrue(finder.matches.isEmpty)
+        doc.undoManager?.undo()
+        XCTAssertEqual(doc.content.string, original, "모두 바꾸기는 실행 취소 한 번으로 돌아간다")
+    }
+
+    func testReplaceKeepsFormattingInBothLayouts() throws {
+        for mode in [SettingsManager.ReadingPageMode.paged, .scroll] {
+            SettingsManager.shared.readingPageMode = mode
+            let doc = MarkdownDocument()
+            doc.content = NSMutableAttributedString(attributedString: MarkdownSerializer.parse("앞 **등대** 뒤"))
+            let controller = EditorWindowController()
+            doc.addWindowController(controller)
+            let window = try XCTUnwrap(controller.window)
+            window.isReleasedWhenClosed = false
+            window.makeKeyAndOrderFront(nil)
+            defer { close(doc, controller, window) }
+            controller.documentFinder.search("등대")
+
+            controller.documentFinder.replaceAll(with: "바다")
+
+            XCTAssertEqual(MarkdownSerializer.serialize(doc.content).trimmingCharacters(in: .whitespacesAndNewlines),
+                           "앞 **바다** 뒤", "\(mode)")
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            XCTAssertTrue(doc.isDocumentEdited, "\(mode)")
+            doc.undoManager?.undo()
+            XCTAssertEqual(doc.content.string.trimmingCharacters(in: .whitespacesAndNewlines), "앞 등대 뒤", "\(mode)")
+        }
+    }
+
+    func testSourceViewIsNotReplaced() throws {
+        let (doc, controller, window) = makeWindow()
+        defer { close(doc, controller, window) }
+        let original = doc.content.string
+        controller.showMarkdownSource(nil)
+        controller.documentFinder.search("등대")
+
+        controller.documentFinder.replaceAll(with: "섬")
+
+        XCTAssertEqual(doc.content.string, original, "원문 보기는 읽기 전용이다")
+    }
+
+    func testReplacePanelOpensBelowTheFieldAndClosesWithFind() throws {
+        let (doc, controller, window) = makeWindow()
+        defer { close(doc, controller, window) }
+        let toolbar = try XCTUnwrap(window.toolbar as? ReaderToolbar)
+        let ids = toolbar.toolbarDefaultItemIdentifiers(toolbar).map(\.rawValue)
+        XCTAssertEqual(Array(ids.prefix(2)), ["documentFind", "documentReplaceToggle"], "화살표는 검색창 바로 옆이다")
+
+        controller.showDocumentReplace(nil)
+        XCTAssertTrue(toolbar.isReplacePanelShown)
+
+        controller.cancelDocumentFind()
+        XCTAssertFalse(toolbar.isReplacePanelShown)
+    }
+
+    func testReplaceFieldTakesFocusEnterReplacesAndUndoReachesTheDocument() throws {
+        let (doc, controller, window) = makeWindow()
+        defer { close(doc, controller, window) }
+        let toolbar = try XCTUnwrap(window.toolbar as? ReaderToolbar)
+        let original = doc.content.string
+        controller.documentFinder.search("등대")
+        controller.showDocumentReplace(nil)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        let panel = try XCTUnwrap(toolbar.replacePanel)
+        let field = panel.field
+        XCTAssertNotNil(field.currentEditor(), "검색어가 있으면 바꿀 단어 입력창으로 간다")
+
+        let anchor = try findField(window)
+        let findFrame = window.convertToScreen(anchor.convert(anchor.bounds, to: nil))
+        let replaceFrame = window.convertToScreen(field.convert(field.bounds, to: nil))
+        XCTAssertLessThanOrEqual(replaceFrame.maxY, findFrame.minY, "입력창은 검색창 아래에 뜬다")
+        XCTAssertEqual(replaceFrame.minX, findFrame.minX, accuracy: 0.5, "두 입력창은 왼쪽이 맞는다")
+        XCTAssertEqual(replaceFrame.width, findFrame.width, accuracy: 0.5, "두 입력창은 너비가 같다")
+        XCTAssertTrue(field.window === window, "말풍선이 아니라 문서 창 안에 뜬다")
+
+        XCTAssertEqual(replaceFrame.height, findFrame.height, accuracy: 0.5, "두 입력창은 높이가 같다")
+
+        field.stringValue = "섬"
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        XCTAssertTrue(panel.control(field, textView: editor, doCommandBy: #selector(NSResponder.insertNewline(_:))))
+
+        XCTAssertNotEqual(doc.content.string, original, "Enter 는 현재 일치를 바꾼다")
+        XCTAssertTrue(editor.undoManager === doc.undoManager, "입력창에서 ⌘Z 를 눌러도 문서가 되돌아가야 한다")
     }
 }

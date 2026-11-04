@@ -1130,6 +1130,21 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         pageView(forPage: pageIndex(containing: range.location))?.setSelectedRange(range)
     }
 
+    /// 페이지 저장소를 직접 고치면 `didProcessEditing` 이 문서로 넘기며 범위별로 Undo를 남긴다.
+    /// 페이지 뷰에 포커스가 남아 있으면 편집 후 새로고침이 커서가 있던 쪽으로 되돌아간다.
+    func replaceFindMatches(_ ranges: [NSRange], with text: String) {
+        guard let storage = pagedStorage else { return }
+        finishComposition()
+        if activePageTextView != nil { view.window?.makeFirstResponder(self) }
+        let undo = documentUndoManager?()
+        undo?.beginUndoGrouping()
+        for range in ranges.reversed() where NSMaxRange(range) <= storage.length {
+            storage.replaceCharacters(in: range, with: text)
+        }
+        undo?.setActionName(L10n.tr("find.replace"))
+        undo?.endUndoGrouping()
+    }
+
     private func pageView(forPage page: Int) -> PageTextView? {
         guard page < pageContainers.count else { return nil }
         return pageViews.first { $0.textContainer === pageContainers[page] }

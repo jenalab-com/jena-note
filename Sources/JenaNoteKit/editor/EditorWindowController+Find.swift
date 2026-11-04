@@ -16,6 +16,11 @@ extension EditorWindowController {
         readerToolbar?.focusFindField()
     }
 
+    /// ⌥⌘F — 헤더 검색창 아래에 바꾸기 입력창을 연다.
+    @objc func showDocumentReplace(_ sender: Any?) {
+        readerToolbar?.showReplacePanel()
+    }
+
     @objc func findNextInDocument(_ sender: Any?) {
         moveDocumentFind(forward: true)
     }

@@ -7,6 +7,8 @@ protocol DocumentFindTarget: AnyObject {
     func showFindMatches(_ matches: [NSRange], current: NSRange?)
     func revealFindMatch(_ range: NSRange)
     func selectFindMatch(_ range: NSRange)
+    /// 일치를 글자만 바꾼다. 서식은 바뀌는 글자의 첫 글자를 따르고, 전체가 실행 취소 한 번이다.
+    func replaceFindMatches(_ ranges: [NSRange], with text: String)
 }
 
 /// 문서 내 찾기 (ADR-0007). macOS 찾기 바는 바깥에서 검색어를 넣을 수 없어서 헤더 검색창이
@@ -21,6 +23,8 @@ final class DocumentFinder {
     /// 검색을 시작한 자리. 글자를 더 쳐도 이 자리부터 다시 찾아야 현재 일치가 튀지 않는다.
     private var anchor = 0
     private var target: DocumentFindTarget?
+    /// 바꾸는 도중의 본문 변경 알림은 무시한다. 끝난 뒤 한 번만 다시 찾는다.
+    private var isReplacing = false
     var onChange: ((_ current: Int?, _ total: Int) -> Void)?
 
     static func ranges(of query: String, in text: String) -> [NSRange] {
@@ -58,11 +62,41 @@ final class DocumentFinder {
 
     /// 본문이 바뀌면 일치 위치도 바뀐다. 읽던 자리를 옮기지 않고 강조만 맞춘다.
     func refresh() {
-        guard !query.isEmpty else { return }
+        guard !query.isEmpty, !isReplacing else { return }
         let location = current?.location ?? anchor
         matches = Self.ranges(of: query, in: target?.findableString ?? "")
         current = matches.first { $0.location >= location } ?? matches.first
         present(reveal: false)
+    }
+
+    /// 현재 일치만 바꾸고 그 뒤의 일치로 넘어간다. 바꾼 글자에 검색어가 들어 있어도 다시 잡지 않는다.
+    func replaceCurrent(with text: String) {
+        guard !query.isEmpty else { return }
+        matches = Self.ranges(of: query, in: target?.findableString ?? "")
+        guard let range = current, matches.contains(range) else { refresh(); return }
+        replace([range], with: text)
+        let next = range.location + text.utf16.count
+        current = matches.first { $0.location >= next } ?? matches.first
+        present(reveal: true)
+    }
+
+    /// 문서의 일치를 모두 바꾸고 바꾼 개수를 돌려준다.
+    @discardableResult
+    func replaceAll(with text: String) -> Int {
+        guard !query.isEmpty else { return 0 }
+        let all = Self.ranges(of: query, in: target?.findableString ?? "")
+        guard !all.isEmpty else { return 0 }
+        replace(all, with: text)
+        current = matches.first
+        present(reveal: false)
+        return all.count
+    }
+
+    private func replace(_ ranges: [NSRange], with text: String) {
+        isReplacing = true
+        target?.replaceFindMatches(ranges, with: text)
+        isReplacing = false
+        matches = Self.ranges(of: query, in: target?.findableString ?? "")
     }
 
     /// 보기 방식이 바뀌면 찾는 화면도 바뀐다. 이전 화면의 강조는 지우고 검색어는 이어간다.
@@ -116,6 +150,20 @@ final class TextViewFindTarget: DocumentFindTarget {
 
     func selectFindMatch(_ range: NSRange) {
         textView?.setSelectedRange(range)
+    }
+
+    func replaceFindMatches(_ ranges: [NSRange], with text: String) {
+        guard let textView, let storage = textView.textStorage else { return }
+        if textView.hasMarkedText() { textView.unmarkText() }
+        textView.breakUndoCoalescing()
+        guard textView.shouldChangeText(inRanges: ranges.map { NSValue(range: $0) },
+                                        replacementStrings: ranges.map { _ in text }) else { return }
+        storage.beginEditing()
+        for range in ranges.reversed() { storage.replaceCharacters(in: range, with: text) }
+        storage.endEditing()
+        textView.didChangeText()
+        textView.undoManager?.setActionName(L10n.tr("find.replace"))
+        textView.breakUndoCoalescing()
     }
 }
 
