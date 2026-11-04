@@ -119,6 +119,25 @@ class EditorTextView: NSTextView {
 
     // MARK: - Default Typing Attributes
 
+    /// 화면 조판(읽기 서체·배율·행간). 켜져 있으면 새 줄이 만드는 속성에도 입힌다.
+    /// 조판은 문서를 실을 때와 설정이 바뀔 때만 다시 칠하므로, 여기서 입히지 않으면
+    /// Enter로 만든 줄만 원본 스타일(시스템 서체·기본 행간)로 보인다.
+    var displayStyler: ((NSAttributedString) -> NSAttributedString)?
+
+    private func displayed(_ text: NSAttributedString) -> NSAttributedString {
+        displayStyler?(text) ?? text
+    }
+
+    /// 새 일반 줄의 타이핑 속성. 조판 백업 키는 빼고 넘긴다 —
+    /// `EditorViewController.syncTypingAttributes` 와 같은 약속이다.
+    private func newLineTypingAttributes() -> [NSAttributedString.Key: Any] {
+        let sample = NSAttributedString(string: " ", attributes: defaultTypingAttributes())
+        var attrs = displayed(sample).attributes(at: 0, effectiveRange: nil)
+        attrs.removeValue(forKey: .mdBaseFont)
+        attrs.removeValue(forKey: .mdBaseParagraph)
+        return attrs
+    }
+
     func defaultTypingAttributes() -> [NSAttributedString.Key: Any] {
         [
             .font: MemoFont.body,
@@ -314,9 +333,10 @@ class EditorTextView: NSTextView {
                     .paragraphStyle: FormatCommands.listParagraphStyle()
                 ])
             }
+            let shown = displayed(prefix)
             shouldChangeText(in: NSRange(location: newLoc, length: 0), replacementString: nil)
-            storage.insert(prefix, at: newLoc)
-            setSelectedRange(NSRange(location: newLoc + prefix.length, length: 0))
+            storage.insert(shown, at: newLoc)
+            setSelectedRange(NSRange(location: newLoc + shown.length, length: 0))
             didChangeText()
             return
         }
@@ -324,6 +344,6 @@ class EditorTextView: NSTextView {
         super.insertNewline(sender)
 
         // 일반 줄바꿈 후 typing attributes 리셋 (heading → body 전환)
-        typingAttributes = defaultTypingAttributes()
+        typingAttributes = newLineTypingAttributes()
     }
 }

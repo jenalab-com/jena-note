@@ -118,7 +118,15 @@ final class LiveProofreadingTests: XCTestCase {
         try verifyAutomaticEditor(mode: .paged)
     }
 
-    private func verifyAutomaticEditor(mode: SettingsManager.ReadingPageMode) throws {
+    func testAIModeFromScrollingEditorShowsCorrectionPopover() throws {
+        try verifyAutomaticEditor(mode: .scroll, aiMode: true)
+    }
+
+    func testAIModeFromPagedEditorShowsCorrectionPopover() throws {
+        try verifyAutomaticEditor(mode: .paged, aiMode: true)
+    }
+
+    private func verifyAutomaticEditor(mode: SettingsManager.ReadingPageMode, aiMode: Bool = false) throws {
         _ = NSApplication.shared
         let previous = SettingsManager.shared.readingPageMode
         SettingsManager.shared.readingPageMode = mode
@@ -135,9 +143,36 @@ final class LiveProofreadingTests: XCTestCase {
         }
         let original = NSAttributedString(attributedString: doc.content)
         let index = (doc.content.string as NSString).range(of: "낫").location
+        if aiMode { editor.toggleAI(nil) }
         waitUntil {
-            let view: NSTextView? = mode == .scroll ? editor.editorVC.textView : editor.readerVC?.visiblePageTextViews.first
+            let view: NSTextView? = aiMode || mode == .scroll ? editor.editorVC.textView : editor.readerVC?.visiblePageTextViews.first
             return view?.layoutManager?.temporaryAttribute(.underlineColor, atCharacterIndex: index, effectiveRange: nil) != nil
+        }
+        if aiMode {
+            let view = try XCTUnwrap(editor.editorVC.textView)
+            let live = try XCTUnwrap(view.liveProofreading)
+            editor.window?.makeFirstResponder(view)
+            view.setSelectedRange(NSRange(location: index, length: 0))
+            live.selectionChanged()
+            waitUntil { live.popover?.isShown == true }
+            live.dismissPopover()
+            let chat = try XCTUnwrap(editor.aiChatVC)
+            func editableTextView(in parent: NSView) -> NSTextView? {
+                if let text = parent as? NSTextView, text.isEditable { return text }
+                return parent.subviews.lazy.compactMap { editableTextView(in: $0) }.first
+            }
+            let input = try XCTUnwrap(editableTextView(in: chat.view))
+            view.setSelectedRange(NSRange(location: 0, length: 0))
+            editor.window?.makeFirstResponder(input)
+            let item = try XCTUnwrap(live.candidates.first)
+            let layout = try XCTUnwrap(view.layoutManager)
+            let container = try XCTUnwrap(view.textContainer)
+            let glyphs = layout.glyphRange(forCharacterRange: item.marks[0], actualCharacterRange: nil)
+            let rect = layout.boundingRect(forGlyphRange: glyphs, in: container)
+            live.hover(at: NSPoint(x: rect.midX + view.textContainerOrigin.x, y: rect.midY + view.textContainerOrigin.y))
+            waitUntil { live.popover?.isShown == true }
+            XCTAssertTrue(editor.window?.firstResponder === input, "Hovering a correction must preserve AI chat input focus")
+            live.dismissPopover()
         }
         XCTAssertTrue(doc.content.isEqual(to: original))
         XCTAssertFalse(doc.isDocumentEdited)

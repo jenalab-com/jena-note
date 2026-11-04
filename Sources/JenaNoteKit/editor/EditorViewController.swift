@@ -22,7 +22,10 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
     // MARK: - View Lifecycle
 
     override func loadView() {
-        scrollView = NSScrollView()
+        let tiling = TileReportingScrollView()
+        // 찾기 바가 열리고 닫히면 치수자를 그 아래로 옮긴다. tile 은 레이아웃 도중이라 다음 차례로 미룬다.
+        tiling.onTile = { [weak self] in DispatchQueue.main.async { self?.updateColumnInset() } }
+        scrollView = tiling
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
@@ -160,12 +163,9 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         guard let storage = textView.textStorage else { return }
         let selection = textView.selectedRange()
         let source = NSAttributedString(attributedString: storage)
-        let s = SettingsManager.shared
-        let next = isReadingLayout
-            ? ReaderMetrics.styled(source, scale: s.readingFontScale, font: s.readingFont,
-                                   lineHeightMultiple: s.readingLineSpacing,
-                                   weight: s.readingWeight)
-            : ReaderMetrics.unstyled(source)
+        let next = isReadingLayout ? Self.readingStyled(source) : ReaderMetrics.unstyled(source)
+        // 새 줄(Enter)이 만드는 속성도 같은 조판을 입도록 넘긴다.
+        textView.displayStyler = isReadingLayout ? Self.readingStyled : nil
 
         storage.beginEditing()
         storage.setAttributedString(next)
@@ -177,6 +177,14 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         syncTypingAttributes(at: selection.location)
         updateColumnInset()
         textView.relayoutImageAttachments()
+    }
+
+    /// 현재 읽기 설정(배율·서체·행간·굵기)으로 조판한다. 설정은 부를 때마다 읽는다.
+    private static func readingStyled(_ source: NSAttributedString) -> NSAttributedString {
+        let s = SettingsManager.shared
+        return ReaderMetrics.styled(source, scale: s.readingFontScale, font: s.readingFont,
+                                    lineHeightMultiple: s.readingLineSpacing,
+                                    weight: s.readingWeight)
     }
 
     /// 커서 자리의 실제 속성을 타이핑 속성으로 물려준다 — 조판 상태에서 이어 쳐도
@@ -222,6 +230,12 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
     /// 조판이 켜져 있으면 본문 단을 가운데로 좁히고, 꺼져 있으면 기본 여백으로 되돌린다.
     /// 단 = 페이지 폭에서 치수자 여백을 뺀 글 영역. 글 영역을 가운데 두고, 치수자는
     /// 그 글 영역이 자기 여백 안쪽에 오도록 페이지 폭으로 위에 얹는다.
+    /// 치수자는 본문 위쪽에서 조금 내려온 자리에 뜬다. 찾기 바가 보이면 그 아래로 내려간다.
+    private func rulerY() -> CGFloat {
+        let top = 8 + scrollView.findBarTopInset
+        return scrollView.isFlipped ? top : scrollView.bounds.height - PageRulerView.height - top
+    }
+
     private var updatingPageLayout = false
     private func updateColumnInset() {
         guard !updatingPageLayout else { return }
@@ -252,9 +266,7 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
             textView.textContainerInset = NSSize(width: pageX + margins.left, height: base.height)
             textView.textContainer?.containerSize = NSSize(width: column, height: CGFloat.greatestFiniteMagnitude)
             textView.setFrameSize(NSSize(width: max(available, pageX + page + base.width), height: textView.frame.height))
-            let top: CGFloat = 8
-            let y = scrollView.isFlipped ? top : scrollView.bounds.height - PageRulerView.height - top
-            ruler.frame = NSRect(x: pageX - scrollView.contentView.bounds.minX, y: y, width: page, height: PageRulerView.height)
+            ruler.frame = NSRect(x: pageX - scrollView.contentView.bounds.minX, y: rulerY(), width: page, height: PageRulerView.height)
             ruler.canGrowPage = false
             ruler.setMargins(left: margins.left, right: margins.right)
             ruler.isHidden = false
@@ -265,9 +277,7 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         if abs(textView.textContainerInset.width - side) > 0.5 {
             textView.textContainerInset = NSSize(width: side, height: base.height)
         }
-        let top: CGFloat = 8
-        let y = scrollView.isFlipped ? top : scrollView.bounds.height - PageRulerView.height - top
-        ruler.frame = NSRect(x: side - margins.left, y: y, width: page, height: PageRulerView.height)
+        ruler.frame = NSRect(x: side - margins.left, y: rulerY(), width: page, height: PageRulerView.height)
         ruler.canGrowPage = readingWidthMode == .book
         ruler.maxPageWidth = max(ReaderMetrics.minimumTextWidth, available - 2 * base.width)
         ruler.setMargins(left: margins.left, right: margins.right)
@@ -431,7 +441,7 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
             host.sourcePreview?.textView.performTextFinderAction(proxy)
             return
         }
-        if let host = hostWindowController, host.readerVC != nil { host.showPagedFind(); return }
+        if let reader = hostWindowController?.readerVC { reader.performFindAction(.showFindInterface); return }
         view.window?.makeFirstResponder(textView)
         let proxy = NSMenuItem()
         proxy.tag = NSTextFinder.Action.showFindInterface.rawValue
@@ -626,11 +636,13 @@ extension EditorViewController: NSTextViewDelegate {
         let sel = hostWindowController?.documentSelection ?? textView.selectedRange()
 
         // 커서 바로 앞 문자에서 인라인 속성(font/code/link) 읽기
+        // 선택은 편집기, 속성은 문서에서 읽는다. 마크된 텍스트(한글 조합·인라인 자동완성 예측)는
+        // 확정 전까지 문서에 없어 선택이 문서 끝을 넘을 수 있으므로 문서 범위로 자른다.
         let readPos: Int
         if sel.length > 0 {
             readPos = min(sel.location, storage.length - 1)
         } else if sel.location > 0 {
-            readPos = sel.location - 1
+            readPos = min(sel.location - 1, storage.length - 1)
         } else {
             readPos = 0
         }

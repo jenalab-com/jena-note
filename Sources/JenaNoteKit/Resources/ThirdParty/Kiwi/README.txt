@@ -19,7 +19,7 @@ streamvbyte 862c2e7a4c39717b5a6e590c8a784bcd7924b20b
 
 Native framework: built locally from the vendored source snapshot.
 Kiwi source commit: 724d00718f527bac3f8aef2f6ae3b6523b2aae74
-Build recipe: scripts/build-kiwi.sh (macOS arm64 + x86_64, mimalloc ON, cpuinfo OFF).
+Build recipe: Vendor/Kiwi/scripts/build-kiwi.sh (macOS arm64 + x86_64, mimalloc ON, cpuinfo OFF).
 Source/dependency manifest: Vendor/Kiwi/upstream.json.
 The cpuinfo license is retained for reference; cpuinfo is not linked in this build.
 Model archive SHA-256:

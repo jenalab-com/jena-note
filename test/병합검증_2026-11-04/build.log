@@ -1,0 +1,13 @@
+swift build -c release --product JenaNote
+Another instance of SwiftPM (PID: 17936) is already running using '/Volumes/Backup/Project/jena/source/jena-note/.build', waiting until that process has finished execution...[0/1] Planning build
+Building for production...
+[0/6] Copying libkiwi.a
+[1/6] Write sources
+[2/6] Copying ThirdParty
+[3/6] Write swift-version--58304C5D6DBC2206.txt
+[5/7] Compiling JenaNoteKit AIChatComposerView.swift
+[6/8] Compiling JenaNote main.swift
+[6/8] Write Objects.LinkFileList
+[7/8] Linking JenaNote
+Build of product 'JenaNote' complete! (27.80s)
+✓ 빌드 완료: .build/JenaNote.app

@@ -22,7 +22,7 @@ CLAUDE.md
 plan.md
 
 
-# Pinned Kiwi model, explicitly restored by scripts/fetch-kiwi-model.sh
+# Pinned Kiwi model, explicitly restored by Vendor/Kiwi/scripts/fetch-kiwi-model.sh
 Sources/JenaNoteKit/Resources/KiwiModel/
 
 # Generated locally from the tracked Kiwi source snapshot

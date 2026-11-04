@@ -28,6 +28,25 @@ final class PagedHostView: NSView {
     }
 }
 
+/// 찾기 바가 나타나거나 사라질 때 NSScrollView 는 다시 tile 한다. 스크롤뷰 위에 직접 얹은
+/// 뷰(페이지 오버레이, 가로 치수자)는 이 순간을 알아야 찾기 바를 가리지 않게 다시 배치할 수 있다.
+final class TileReportingScrollView: NSScrollView {
+    var onTile: (() -> Void)?
+    override func tile() {
+        super.tile()
+        onTile?()
+    }
+}
+
+extension NSScrollView {
+    /// 찾기 바가 본문 위에 떠 있으면 그 높이. 찾기 바는 본문 영역을 줄이지 않고 위에 겹쳐 뜨므로,
+    /// 스크롤뷰에 직접 얹은 뷰는 이만큼 비켜야 찾기 바를 가리지 않는다.
+    var findBarTopInset: CGFloat {
+        guard isFindBarVisible, findBarPosition == .aboveContent, let bar = findBarView else { return 0 }
+        return bar.frame.height
+    }
+}
+
 /// 본문 방향키는 NSTextView의 커서 이동에 맡기고 Page Up/Down만 페이지를 넘긴다.
 final class PageTextView: NSTextView {
     private var proofreadingTrackingArea: NSTrackingArea?
@@ -65,9 +84,23 @@ final class PageTextView: NSTextView {
 
     var onPageKey: ((Bool) -> Void)?
     var onInputFinished: (() -> Void)?
-    var onFind: (() -> Void)?
+    /// 찾기 메뉴·단축키(⌘F·⌘G·⇧⌘G 등)를 페이지 조판 전체의 찾기로 넘긴다.
+    var onFindAction: ((NSTextFinder.Action) -> Void)?
+    var validateFindAction: ((NSTextFinder.Action) -> Bool)?
 
-    override func performTextFinderAction(_ sender: Any?) { onFind?() }
+    override func performTextFinderAction(_ sender: Any?) {
+        guard let tag = (sender as? NSValidatedUserInterfaceItem)?.tag,
+              let action = NSTextFinder.Action(rawValue: tag) else { return }
+        onFindAction?(action)
+    }
+
+    override func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
+        if item.action == #selector(performTextFinderAction(_:)),
+           let action = NSTextFinder.Action(rawValue: item.tag) {
+            return validateFindAction?(action) ?? false
+        }
+        return super.validateUserInterfaceItem(item)
+    }
 
     override func keyDown(with event: NSEvent) {
         if !hasMarkedText(), event.keyCode == 121 || event.keyCode == 116 {
@@ -189,7 +222,9 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
 
     // MARK: - Layout (scroll mode)
     override func loadView() {
-        scrollView = NSScrollView()
+        let readerScrollView = TileReportingScrollView()
+        readerScrollView.onTile = { [weak self] in self?.findBarLayoutChanged() }
+        scrollView = readerScrollView
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
@@ -255,7 +290,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         defer {
             pageIndicator?.frame = NSRect(x: 0, y: host.bounds.height - 26, width: host.bounds.width, height: 18)
         }
-        host.frame = scrollView.bounds
+        host.frame = pagedHostFrame()
         guard widthMode == .book, let paper = DocumentPaperSize.selected.points else {
             host.bounds = NSRect(origin: .zero, size: host.frame.size)
             return
@@ -550,6 +585,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
     }
 
     private func removePagedOverlay() {
+        if scrollView.isFindBarVisible { pagedFinder?.performAction(.hideFindInterface) }
         tearDownPageViews()     // 텍스트 시스템을 놓기 전에 페이지뷰부터 떼어낸다
         pagedHost?.removeFromSuperview()
         cancelPaginationWork()
@@ -630,6 +666,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         if let selection = selection, NSMaxRange(selection) <= storage.length, hadFocus {
             selectInVisiblePage(selection)
         }
+        drawFindHighlights()
         schedulePagination()
     }
 
@@ -799,7 +836,8 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         tv.onPageKey = { [weak self] next in
             if next { self?.goToNextPage() } else { self?.goToPreviousPage() }
         }
-        tv.onFind = { [weak self] in self?.formattingTarget?.showFindBar(nil) }
+        tv.onFindAction = { [weak self] action in self?.performFindAction(action) }
+        tv.validateFindAction = { [weak self] action in self?.validateFindAction(action) ?? false }
         tv.onInputFinished = { [weak self] in self?.scheduleEditRefresh() }
         syncTypingAttributes(tv)
         return tv
@@ -859,6 +897,8 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         sourceContent.replaceCharacters(in: oldRange, with: replacement)
         anchorOffset = ReadingAnchor.offsetAfterEdit(anchorOffset, range: oldRange,
                                                      replacementLength: replacement.length)
+        if pagedFinder != nil { findMatchesNeedRefresh = true }
+        pagedFinder?.noteClientStringWillChange()
         paginator?.invalidate(editedRange: editedRange)
         hasPendingEdit = true
         isPaginationComplete = false
@@ -909,6 +949,8 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         let styled = ReaderMetrics.styled(replacement, scale: scale, font: fontFamily,
                                          lineHeightMultiple: lineSpacing, weight: fontWeight,
                                          maxImageWidth: textWidthForCurrentSettings())
+        if pagedFinder != nil { findMatchesNeedRefresh = true }
+        pagedFinder?.noteClientStringWillChange()
         isApplyingContent = true
         storage.replaceCharacters(in: range, with: styled)
         isApplyingContent = false
@@ -1059,6 +1101,10 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
             if needsAnchorApply { applyAnchor() }
             return
         }
+        layoutPages(host)
+    }
+
+    private func layoutPages(_ host: PagedHostView) {
         layoutPaperHost(host)
         // 페이지 경계는 컨테이너 크기(컬럼 폭 × 페이지 높이)에만 의존한다. 창 폭만 바뀐
         // 리사이즈는 배치·펼침면 판정만 다시 하면 되므로 재분할(비용 큼)을 건너뛴다.
@@ -1069,6 +1115,199 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         } else {
             showCurrentSpread()
         }
+    }
+
+    // MARK: - Find (ADR-0007)
+    // 페이지 조판도 스크롤 조판과 같은 macOS 찾기 바를 쓴다. 찾기 바는 이 스크롤뷰에 붙고,
+    // PagedFindClient 가 페이지들을 한 문서로 보여준다.
+
+    private(set) lazy var findClient = PagedFindClient(reader: self)
+    private var pagedFinder: NSTextFinder?
+    private var findMatchObservation: NSKeyValueObservation?
+    /// 모든 일치와 현재 일치. 강조는 모든 쪽이 공유하는 레이아웃 관리자의 임시 속성으로 그린다.
+    /// NSTextFinder 의 강조 레이어는 그때 보이던 페이지 뷰에 붙어 쪽을 넘기면 사라지기 때문이다.
+    /// 임시 속성이라 문서 내용·저장·실행 취소와 무관하다.
+    private(set) var findMatches: [NSRange] = []
+    private(set) var currentFindMatch: NSRange?
+    /// `findMatches` 를 받을 때의 검색어. 쪽을 넘기면 NSTextFinder 가 일치 목록을 한 번 비우고
+    /// 다시 채우지 않는다(찾기 바의 개수는 그대로다). 검색어가 같으면 그 비움은 무시한다.
+    private var findMatchesQuery = ""
+    /// 본문이 바뀌면 일치 위치도 바뀌므로 다음 비움은 진짜로 받아들인다.
+    private var findMatchesNeedRefresh = false
+
+    private func makeFinderIfNeeded() -> NSTextFinder {
+        if let finder = pagedFinder { return finder }
+        let finder = NSTextFinder()
+        finder.client = findClient
+        finder.findBarContainer = scrollView
+        finder.isIncrementalSearchingEnabled = true
+        finder.incrementalSearchingShouldDimContentView = false
+        findMatchObservation = finder.observe(\.incrementalMatchRanges, options: [.new]) { [weak self] finder, _ in
+            let ranges = finder.incrementalMatchRanges.map(\.rangeValue)
+            DispatchQueue.main.async { self?.setFindMatches(ranges) }
+        }
+        pagedFinder = finder
+        return finder
+    }
+
+    func performFindAction(_ action: NSTextFinder.Action) {
+        guard pageMode == .paged, pagedHost != nil else { return }
+        makeFinderIfNeeded().performAction(action)
+    }
+
+    func validateFindAction(_ action: NSTextFinder.Action) -> Bool {
+        guard pageMode == .paged, pagedHost != nil else { return false }
+        return makeFinderIfNeeded().validateAction(action)
+    }
+
+    /// 페이지 오버레이 자리 — 찾기 바가 보이면 그 높이만큼 비켜 둔다.
+    private func pagedHostFrame() -> NSRect {
+        var frame = scrollView.bounds
+        let inset = scrollView.findBarTopInset
+        if scrollView.isFlipped { frame.origin.y += inset }
+        frame.size.height = max(0, frame.height - inset)
+        return frame
+    }
+
+    /// 찾기 바가 열리고 닫힐 때(스크롤뷰 tile) 페이지를 다시 배치한다. tile 은 레이아웃 도중이라
+    /// 다음 차례로 미룬다.
+    private func findBarLayoutChanged() {
+        if pagedFinder != nil, !scrollView.isFindBarVisible, !findMatches.isEmpty || currentFindMatch != nil {
+            DispatchQueue.main.async { [weak self] in self?.clearFindHighlights() }
+        }
+        guard pageMode == .paged, let host = pagedHost, host.frame != pagedHostFrame() else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, self.pageMode == .paged, let host = self.pagedHost else { return }
+            self.layoutPages(host)
+        }
+    }
+
+    var findableString: String { pagedStorage?.string ?? sourceContent.string }
+
+    private func pageView(forPage page: Int) -> PageTextView? {
+        guard page < pageContainers.count else { return nil }
+        return pageViews.first { $0.textContainer === pageContainers[page] }
+    }
+
+    /// 찾기가 그리는 뷰. 쪽을 넘겨도 바뀌지 않는 페이지 오버레이를 하나의 내용 뷰로 내준다 —
+    /// 페이지 뷰를 내주면 쪽을 넘길 때 그 뷰가 사라지면서 NSTextFinder 가 현재 일치를 잃어
+    /// 이전 찾기가 제자리에 머물렀다.
+    func findContentView(at index: Int) -> (NSView, NSRange)? {
+        guard pageMode == .paged, let host = pagedHost, let storage = pagedStorage else { return nil }
+        return (host, NSRange(location: 0, length: storage.length))
+    }
+
+    /// 일치 범위의 사각형 — 페이지 오버레이 좌표. 화면에 없는 쪽이면 빈 배열.
+    func findRects(for range: NSRange) -> [NSRect] {
+        guard let layout = paginator?.layoutManager, let host = pagedHost else { return [] }
+        var rects: [NSRect] = []
+        for tv in pageViews {
+            guard let container = tv.textContainer,
+                  let page = pageContainers.firstIndex(where: { $0 === container }),
+                  page < pageCharRanges.count else { continue }
+            let clipped = NSIntersectionRange(range, pageCharRanges[page])
+            guard clipped.length > 0 else { continue }
+            let glyphs = layout.glyphRange(forCharacterRange: clipped, actualCharacterRange: nil)
+            layout.enumerateEnclosingRects(forGlyphRange: glyphs,
+                                           withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0),
+                                           in: container) { rect, _ in
+                let inView = rect.offsetBy(dx: tv.textContainerOrigin.x, dy: tv.textContainerOrigin.y)
+                rects.append(tv.convert(inView, to: host))
+            }
+        }
+        return rects
+    }
+
+    /// 찾기 표시(노란 상자) 안에 글자를 그린다 — 오버레이 좌표계에서 해당 쪽 자리에.
+    func drawFindCharacters(in range: NSRange) {
+        guard let layout = paginator?.layoutManager, let host = pagedHost else { return }
+        for tv in pageViews {
+            guard let container = tv.textContainer,
+                  let page = pageContainers.firstIndex(where: { $0 === container }),
+                  page < pageCharRanges.count else { continue }
+            let clipped = NSIntersectionRange(range, pageCharRanges[page])
+            guard clipped.length > 0 else { continue }
+            let glyphs = layout.glyphRange(forCharacterRange: clipped, actualCharacterRange: nil)
+            let origin = tv.convert(tv.textContainerOrigin, to: host)
+            layout.drawGlyphs(forGlyphRange: glyphs, at: origin)
+        }
+    }
+
+    /// 일치가 있는 쪽으로 넘긴다. 포커스는 건드리지 않는다.
+    /// `rangeIsVisible` 은 커서용이라 보이는 범위의 끝 위치도 보인다고 친다 — 다음 쪽 첫 글자에서
+    /// 시작하는 일치를 놓치므로 일치 전체가 보이는 범위 안에 있는지로 판정한다.
+    func revealFindRange(_ range: NSRange) {
+        let visible = visibleCharacterRange
+        guard pageMode == .paged, let paginator = paginator, NSMaxRange(range) <= paginator.storage.length,
+              range.location < visible.location || NSMaxRange(range) > NSMaxRange(visible) else { return }
+        paginator.ensureCharacter(range.location)
+        currentPage = pageIndex(containing: range.location)
+        showCurrentSpread()
+    }
+
+    /// 빠른 검색 중 NSTextFinder 는 선택을 바꾸지 않고 현재 일치만 보여 달라고 한다. 그 범위를
+    /// 현재 위치로 기억해 두어야 찾기를 다시 시작해도 다음 일치부터 이어진다.
+    func noteFindMatch(_ range: NSRange) {
+        guard pageMode == .paged, NSMaxRange(range) <= (pagedStorage?.length ?? 0) else { return }
+        lastSelection = range
+        currentFindMatch = range
+        drawFindHighlights()
+    }
+
+    func setFindMatches(_ ranges: [NSRange], query: String? = nil) {
+        let query = query ?? findBarQuery()
+        if ranges.isEmpty, !findMatchesNeedRefresh, !query.isEmpty, query == findMatchesQuery, !findMatches.isEmpty {
+            return
+        }
+        findMatchesNeedRefresh = false
+        findMatchesQuery = query
+        findMatches = ranges
+        if let current = currentFindMatch, !ranges.isEmpty, !ranges.contains(current) { currentFindMatch = nil }
+        if ranges.isEmpty { currentFindMatch = nil }
+        drawFindHighlights()
+    }
+
+    /// 찾기 바 검색창의 글자. NSTextFinder 는 검색어를 공개하지 않아 찾기 바에서 읽는다.
+    private func findBarQuery() -> String {
+        func field(in view: NSView) -> NSSearchField? {
+            if let search = view as? NSSearchField { return search }
+            for sub in view.subviews { if let found = field(in: sub) { return found } }
+            return nil
+        }
+        guard let bar = scrollView.findBarView else { return "" }
+        return field(in: bar)?.stringValue ?? ""
+    }
+
+    private func clearFindHighlights() {
+        findMatches = []
+        findMatchesQuery = ""
+        currentFindMatch = nil
+        drawFindHighlights()
+    }
+
+    private func drawFindHighlights() {
+        guard let layout = paginator?.layoutManager, let storage = pagedStorage else { return }
+        let full = NSRange(location: 0, length: storage.length)
+        layout.removeTemporaryAttribute(.backgroundColor, forCharacterRange: full)
+        let visibleBar = pageMode == .paged && scrollView.isFindBarVisible
+        guard visibleBar else { return }
+        for range in findMatches where NSMaxRange(range) <= storage.length {
+            layout.addTemporaryAttribute(.backgroundColor, value: Self.findMatchColor, forCharacterRange: range)
+        }
+        if let current = currentFindMatch, NSMaxRange(current) <= storage.length {
+            layout.addTemporaryAttribute(.backgroundColor, value: Self.currentFindMatchColor, forCharacterRange: current)
+        }
+    }
+
+    static let findMatchColor = NSColor.findHighlightColor.withAlphaComponent(0.35)
+    static let currentFindMatchColor = NSColor.findHighlightColor
+
+    /// 찾은 일치를 선택한다. 찾기 바 검색창에서 계속 입력·Enter 하도록 포커스는 옮기지 않는다.
+    func selectFindRange(_ range: NSRange) {
+        guard pageMode == .paged, NSMaxRange(range) <= (pagedStorage?.length ?? 0) else { return }
+        revealFindRange(range)
+        lastSelection = range
+        pageView(forPage: pageIndex(containing: range.location))?.setSelectedRange(range)
     }
 
     override func viewDidAppear() {

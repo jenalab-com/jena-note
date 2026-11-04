@@ -309,6 +309,10 @@ final class KiwiProofreadingEngine: @unchecked Sendable {
     ///   Ordinary one-syllable nouns still split (`책상위에` → `책상 위에`); names have separate protection.
     private static let sinoNounSuffixes: Set<String> = ["량", "률", "율", "력"]
     private static let nominalParticles: Set<String> = ["뿐", "대로", "만큼"]
+    /// Native numeral determiners Kiwi tags MM after a numeral (`열/NR 두/MM`).
+    private static let numeralDeterminers: Set<String> = ["한", "두", "세", "네", "서", "석", "너", "넉", "닷", "엿"]
+    /// 제44항 group units: a number may be spaced after these (`십이억 삼천`).
+    private static let numeralGroupUnits = ["만", "억", "조", "경"]
 
     static func orthographySpacing(_ tokens: [(form: String, tag: String, range: NSRange)], in text: String) -> (joins: Set<Int>, splits: Set<Int>) {
         let ns = text as NSString
@@ -336,6 +340,15 @@ final class KiwiProofreadingEngine: @unchecked Sendable {
                 joins.insert(offset)
             } else if attached(boundary), current.tag == "NNG", previous.tag.hasPrefix("NN"), previous.tag != "NNB",
                       Self.sinoNounSuffixes.contains(current.form), syllables(previous.range) >= 2 {
+                joins.insert(offset)
+            } else if attached(boundary), NSMaxRange(previous.range) == boundary, current.tag.hasPrefix("J") {
+                // 제41항: a particle stays on the word before it. Kiwi's spacing re-analyzes the sentence
+                // on its own and can read `렌즈가방의` as `렌즈 가방의`.
+                joins.insert(offset)
+            } else if attached(boundary), NSMaxRange(previous.range) == boundary, previous.tag == "NR",
+                      current.tag == "NR" || (current.tag == "MM" && Self.numeralDeterminers.contains(current.form)),
+                      !Self.numeralGroupUnits.contains(where: previous.form.hasSuffix) {
+                // 제44항: numbers are spaced by 만 groups, so `열두` and `스물다섯` are one word.
                 joins.insert(offset)
             }
         }

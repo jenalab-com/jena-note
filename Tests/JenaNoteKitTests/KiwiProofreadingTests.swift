@@ -185,6 +185,36 @@ final class KiwiProofreadingTests: XCTestCase {
         XCTAssertEqual(rules("웃을 뿐", [("웃", "VV", 0, 1), ("을", "ETM", 1, 1), ("뿐", "NNB", 3, 1)]).joins, [])
     }
 
+    func testOrthographySpacingKeepsParticlesAndNumeralsAttached() {
+        func joins(_ text: String, _ tokens: [(String, String, Int, Int)]) -> Set<Int> {
+            KiwiProofreadingEngine.orthographySpacing(tokens.map { ($0.0, $0.1, NSRange(location: $0.2, length: $0.3)) }, in: text).joins
+        }
+        // 제41항: a particle stays on the word before it (`렌즈가`, not `렌즈 가`).
+        XCTAssertEqual(joins("렌즈가", [("렌즈", "NNG", 0, 2), ("가", "JKS", 2, 1)]), [2])
+        // A spaced particle is left to the existing removal rules.
+        XCTAssertEqual(joins("렌즈 가", [("렌즈", "NNG", 0, 2), ("가", "JKS", 3, 1)]), [])
+        // 제44항: numbers are one word within a 만 group (`열두`, `스물다섯`).
+        XCTAssertEqual(joins("열두", [("열", "NR", 0, 1), ("두", "MM", 1, 1)]), [1])
+        XCTAssertEqual(joins("스물다섯", [("스물", "NR", 0, 2), ("다섯", "NR", 2, 2)]), [2])
+        // ...but may be spaced after a group unit, and a non-numeral determiner is not joined.
+        XCTAssertEqual(joins("십이억삼천", [("십이억", "NR", 0, 3), ("삼천", "NR", 3, 2)]), [])
+        XCTAssertEqual(joins("열그", [("열", "NR", 0, 1), ("그", "MM", 1, 1)]), [])
+    }
+
+    /// 데모 원고에서 나온 오탐. Kiwi 띄어쓰기는 문장을 따로 분석해 조사를 다음 말과 묶거나
+    /// (`렌즈 가방의`, `해 가지고`) 수사를 가른다(`열 두`).
+    func testCorrectSentencesKeepParticleAndNumeralSpacing() async throws {
+        for source in ["윤서가 등대에 올라간 것은 열두 살 겨울이었다.",
+                       "거대한 렌즈가 방의 한가운데를 차지하고 있었다.",
+                       "해가 지고, 첫 불빛이 바다로 뻗어 나가는 순간이었다."] {
+            let corrected = try await KiwiProofreadingEngine.shared.check(source)
+            XCTAssertEqual(corrected, source)
+        }
+        // 실제 띄어쓰기 오류는 계속 고친다.
+        let fixed = try await KiwiProofreadingEngine.shared.check("맛있는 걸 사 갈수 있으면 좋겠어요.")
+        XCTAssertEqual(fixed, "맛있는 걸 사 갈 수 있으면 좋겠어요.")
+    }
+
     func testCorrectSentenceWithUnfamiliarNameHasNoTooltipSuggestion() async throws {
         let source = "그제야 리에느가 빵을 받았다."
         let corrected = try await KiwiProofreadingEngine.shared.check(source)

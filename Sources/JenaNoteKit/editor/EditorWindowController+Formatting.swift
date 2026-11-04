@@ -121,26 +121,4 @@ extension EditorWindowController {
                 ?? SearchMatchLocator.range(ofOccurrence: 0, query: jump.query, in: doc.content.string) else { return }
         selectDocumentRange(range)
     }
-
-    func showPagedFind() {
-        guard let doc = document as? MarkdownDocument, let window = window else { return }
-        let alert = NSAlert()
-        alert.messageText = L10n.tr("toolbar.find")
-        alert.addButton(withTitle: L10n.tr("toolbar.find"))
-        alert.addButton(withTitle: L10n.tr("confirm.cancel"))
-        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
-        alert.accessoryView = field
-        let start = NSMaxRange(documentSelection)
-        alert.beginSheetModal(for: window) { [weak self, weak doc] result in
-            guard let self = self, let doc = doc, self.document === doc,
-                  result == .alertFirstButtonReturn, !field.stringValue.isEmpty else { return }
-            let text = doc.content.string as NSString
-            let offset = min(start, text.length)
-            var range = text.range(of: field.stringValue, options: .caseInsensitive,
-                                   range: NSRange(location: offset, length: text.length - offset))
-            if range.location == NSNotFound { range = text.range(of: field.stringValue, options: .caseInsensitive) }
-            if range.location != NSNotFound { self.selectDocumentRange(range) } else { NSSound.beep() }
-        }
-        window.makeFirstResponder(field)
-    }
 }
