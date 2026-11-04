@@ -25,7 +25,7 @@ final class LiveProofreadingController {
     private(set) var markedRanges: [NSRange] = []
     private static let logger = Logger(subsystem: "com.jenalab.jenanote", category: "proofreading")
 
-    init(textView: NSTextView, delay: TimeInterval = 0.5, dictionary: PersonalDictionaryStore = .shared,
+    init(textView: NSTextView, delay: TimeInterval = 2, dictionary: PersonalDictionaryStore = .shared,
          check: @escaping Check = { try await KiwiProofreadingEngine.shared.check($0) }) {
         self.textView = textView
         self.dictionary = dictionary
