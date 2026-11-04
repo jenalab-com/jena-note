@@ -76,9 +76,13 @@ final class LiveProofreadingController {
     }
 
     func refresh() {
+        let current = revision
         guard !stopped, let view = textView, view.window != nil, view.isEditable,
               !view.isHiddenOrHasHiddenAncestor, !view.hasMarkedText(),
               let layout = view.layoutManager, let container = view.textContainer else { return }
+        // layoutManager 를 처음 읽으면 TextKit 1 로 바뀌며 편집 알림이 나가 그 안에서 schedule 이 불린다.
+        // 다음 회차가 예약됐으니 여기서 멈춘다 — 둘 다 돌면 같은 후보가 두 번 들어간다.
+        guard current == revision else { return }
         let document = view.window?.windowController?.document as? MarkdownDocument
         if observedDocument !== document {
             observedDocument = document
@@ -102,7 +106,6 @@ final class LiveProofreadingController {
         let end = min(NSMaxRange(paragraph), NSMaxRange(visible) + 500, start + 6000)
         let context = ns.rangeOfComposedCharacterSequences(for: NSRange(location: start, length: max(0, end - start)))
         let pieces = ProofreadingAnnotations.chunks(source, in: context)
-        let current = revision
         clear()
         checkedSource = source
         task = Task { @MainActor [weak self, weak view] in
