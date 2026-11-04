@@ -126,19 +126,16 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         plainPaste.keyEquivalentModifierMask = [.command, .shift]
         editMenu.addItem(withTitle: L10n.tr("menu.edit.selectAll"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editMenu.addItem(.separator())
-        let find = editMenu.addItem(withTitle: L10n.tr("menu.edit.find"),
-                                    action: #selector(NSResponder.performTextFinderAction(_:)),
+        editMenu.addItem(withTitle: L10n.tr("menu.edit.find"),
+                                    action: #selector(EditorWindowController.focusDocumentFind(_:)),
                                     keyEquivalent: "f")
-        find.tag = NSTextFinder.Action.showFindInterface.rawValue
-        let findNext = editMenu.addItem(withTitle: L10n.tr("menu.edit.findNext"),
-                                        action: #selector(NSResponder.performTextFinderAction(_:)),
-                                        keyEquivalent: "g")
-        findNext.tag = NSTextFinder.Action.nextMatch.rawValue
+        editMenu.addItem(withTitle: L10n.tr("menu.edit.findNext"),
+                         action: #selector(EditorWindowController.findNextInDocument(_:)),
+                         keyEquivalent: "g")
         let findPrev = editMenu.addItem(withTitle: L10n.tr("menu.edit.findPrevious"),
-                                        action: #selector(NSResponder.performTextFinderAction(_:)),
+                                        action: #selector(EditorWindowController.findPreviousInDocument(_:)),
                                         keyEquivalent: "g")
         findPrev.keyEquivalentModifierMask = [.command, .shift]
-        findPrev.tag = NSTextFinder.Action.previousMatch.rawValue
         let findReplace = editMenu.addItem(withTitle: L10n.tr("menu.edit.findReplace"),
                                            action: #selector(NSResponder.performTextFinderAction(_:)),
                                            keyEquivalent: "f")

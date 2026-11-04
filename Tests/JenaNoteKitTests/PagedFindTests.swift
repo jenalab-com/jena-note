@@ -2,11 +2,10 @@ import AppKit
 import XCTest
 @testable import JenaNoteKit
 
-/// 페이지 조판에서도 문서 내 찾기가 macOS 찾기 바(NSTextFinder)로 동작해야 한다(ADR-0007).
+/// 헤더 검색창은 어느 보기에서든 문서 전체를 바로 찾아야 한다(ADR-0007).
 ///
-/// 회귀 배경: 페이지 조판은 텍스트가 여러 페이지 뷰로 나뉘어 표준 찾기 바를 쓸 수 없어,
-/// 돋보기가 알림창으로 검색어를 받아 다음 한 곳으로만 이동했다. 모든 일치 강조·개수·
-/// 이전/다음 이동이 없었다.
+/// 회귀 배경: 페이지 조판은 텍스트가 여러 페이지 뷰로 나뉘어 있고, 찾기 바는 페이지 배경에
+/// 덮여 입력해도 보이지 않았다. 지금은 헤더 검색창이 찾기를 맡는다.
 final class PagedFindTests: XCTestCase {
     private var saved: [String: Any] = [:]
     private let keys = ["jn_readingPageMode", "jn_readingFontScale", "jn_readingFont", "jn_readingWeight", "jn_readingLineSpacing"]
@@ -61,47 +60,64 @@ final class PagedFindTests: XCTestCase {
         }
     }
 
-    func testToolbarFindShowsNativeFindBarAboveThePages() throws {
-        let (doc, controller, window) = makeWindow()
-        defer { close(doc, controller, window) }
-        let reader = try XCTUnwrap(controller.readerVC)
-        let scrollView = try XCTUnwrap(reader.view as? NSScrollView)
-
-        controller.editorVC.showFindBar(nil)
-        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
-
-        XCTAssertTrue(scrollView.isFindBarVisible, "페이지 조판의 돋보기가 찾기 바를 열어야 한다")
-        let bar = try XCTUnwrap(scrollView.findBarView)
-        let host = try XCTUnwrap(scrollView.subviews.first { $0 is PagedHostView })
-        XCTAssertFalse(host.frame.intersects(bar.frame), "페이지가 찾기 바를 가리면 안 된다")
-        XCTAssertGreaterThan(host.frame.height, 0)
+    private func highlight(_ layout: NSLayoutManager?, at index: Int) -> NSColor? {
+        layout?.temporaryAttribute(.backgroundColor, atCharacterIndex: index, effectiveRange: nil) as? NSColor
     }
 
-    func testFindClientExposesTheWholeDocumentAndRevealsMatchesOnLaterPages() throws {
+    private func pageLayout(_ reader: ReaderViewController) -> NSLayoutManager? {
+        reader.visiblePageTextViews.first?.layoutManager
+    }
+
+    private func findField(_ window: NSWindow) throws -> DocumentFindField {
+        let toolbar = try XCTUnwrap(window.toolbar)
+        return try XCTUnwrap(toolbar.items.compactMap { $0.view as? DocumentFindField }.first)
+    }
+
+    func testHeaderStartsWithTheFindFieldAndHasNoFindButton() throws {
+        let (doc, controller, window) = makeWindow()
+        defer { close(doc, controller, window) }
+        let toolbar = try XCTUnwrap(window.toolbar as? ReaderToolbar)
+        let ids = toolbar.toolbarDefaultItemIdentifiers(toolbar).map(\.rawValue)
+
+        XCTAssertEqual(ids.first, "documentFind", "검색창은 헤더 맨 왼쪽에 있다")
+        XCTAssertFalse(ids.contains("find"), "돋보기 버튼은 없어졌다")
+    }
+
+    func testCommandFFocusesTheHeaderFieldAndFindingKeepsThatFocus() throws {
         let (doc, controller, window) = makeWindow()
         defer { close(doc, controller, window) }
         let reader = try XCTUnwrap(controller.readerVC)
-        let client = reader.findClient
+        let field = try findField(window)
 
-        XCTAssertEqual(client.string, doc.content.string, "찾기는 보이는 페이지가 아니라 문서 전체를 대상으로 한다")
-        let all = matches("등대", in: client.string)
-        XCTAssertEqual(all.count, 120)
+        controller.focusDocumentFind(nil)
+        XCTAssertTrue(field.currentEditor() != nil, "⌘F 는 헤더 검색창으로 간다")
+        let responder = window.firstResponder
 
-        let first = try XCTUnwrap(client.visibleCharacterRanges.first?.rangeValue)
-        let target = try XCTUnwrap(all.last)
-        XCTAssertGreaterThan(target.location, NSMaxRange(first), "전제: 마지막 일치는 첫 화면 밖에 있다")
+        controller.documentFinder.search("등대")
+        controller.documentFinder.move(forward: true)
 
-        client.scrollRangeToVisible(target)
-        let visible = try XCTUnwrap(client.visibleCharacterRanges.first?.rangeValue)
-        XCTAssertTrue(NSLocationInRange(target.location, visible), "다음 일치가 있는 페이지로 넘어가야 한다")
+        XCTAssertEqual(reader.findMatches.count, 120)
+        XCTAssertTrue(window.firstResponder === responder, "검색창에서 계속 입력·Enter 할 수 있어야 한다")
+    }
 
-        var effective = NSRange()
-        let content = client.contentView(at: target.location, effectiveCharacterRange: &effective)
-        XCTAssertTrue(content is PagedHostView, "쪽을 넘겨도 바뀌지 않는 오버레이를 내용 뷰로 내줘야 한다")
-        XCTAssertTrue(NSLocationInRange(target.location, effective))
-        let rects = try XCTUnwrap(client.rects(forCharacterRange: target))
-        XCTAssertFalse(rects.isEmpty, "강조할 위치를 알려줘야 한다")
-        for value in rects { XCTAssertTrue(content.bounds.intersects(value.rectValue)) }
+    func testFindingRevealsMatchesOnLaterPagesAndWraps() throws {
+        let (doc, controller, window) = makeWindow()
+        defer { close(doc, controller, window) }
+        let reader = try XCTUnwrap(controller.readerVC)
+        let finder = controller.documentFinder
+        finder.search("등대")
+        let all = matches("등대", in: reader.findableString)
+        XCTAssertEqual(reader.findableString, doc.content.string, "찾기는 보이는 페이지가 아니라 문서 전체를 대상으로 한다")
+        XCTAssertEqual(finder.current, all[0])
+
+        finder.move(forward: false)
+
+        let last = try XCTUnwrap(all.last)
+        XCTAssertEqual(finder.current, last, "처음에서 이전은 마지막 일치로 돈다")
+        XCTAssertTrue(NSLocationInRange(last.location, reader.visibleCharacterRange), "일치가 있는 쪽으로 넘어가야 한다")
+
+        finder.move(forward: true)
+        XCTAssertEqual(finder.current, all[0], "마지막에서 다음은 처음 일치로 돈다")
     }
 
     /// 다음 쪽 첫 글자에서 시작하는 일치는 보이는 범위의 끝 위치와 같다. 커서 기준 판정으로는
@@ -110,98 +126,89 @@ final class PagedFindTests: XCTestCase {
         let (doc, controller, window) = makeWindow()
         defer { close(doc, controller, window) }
         let reader = try XCTUnwrap(controller.readerVC)
-        let client = reader.findClient
-        let visible = try XCTUnwrap(client.visibleCharacterRanges.first?.rangeValue)
+        let visible = reader.visibleCharacterRange
         let boundary = NSRange(location: NSMaxRange(visible), length: 2)
-        XCTAssertLessThanOrEqual(NSMaxRange(boundary), (client.string as NSString).length)
+        XCTAssertLessThanOrEqual(NSMaxRange(boundary), (reader.findableString as NSString).length)
 
-        client.scrollRangeToVisible(boundary)
+        reader.revealFindMatch(boundary)
 
-        let after = try XCTUnwrap(client.visibleCharacterRanges.first?.rangeValue)
+        let after = reader.visibleCharacterRange
         XCTAssertGreaterThanOrEqual(NSMaxRange(after), NSMaxRange(boundary), "다음 쪽으로 넘어가야 한다")
         XCTAssertLessThanOrEqual(after.location, boundary.location)
     }
 
-    func testFindSelectionMovesWithoutStealingFocusFromTheFindBar() throws {
+    /// 모든 일치를 강조하고 현재 일치는 더 진하게 칠한다. 쪽을 넘겨도 남고, 검색을 끝내면 지운다.
+    func testAllMatchesStayHighlightedAcrossPagesUntilTheSearchEnds() throws {
         let (doc, controller, window) = makeWindow()
         defer { close(doc, controller, window) }
         let reader = try XCTUnwrap(controller.readerVC)
-        let client = reader.findClient
-        let target = try XCTUnwrap(matches("등대", in: client.string).dropFirst(60).first)
-        let field = NSTextField()
-        window.contentView?.addSubview(field)
-        window.makeFirstResponder(field)
-        let responder = window.firstResponder
+        let finder = controller.documentFinder
+        finder.search("등대")
+        finder.move(forward: true)
+        let all = finder.matches
 
-        client.selectedRanges = [NSValue(range: target)]
-        client.scrollRangeToVisible(target)
+        XCTAssertEqual(highlight(pageLayout(reader), at: all[0].location), DocumentFinder.matchColor)
+        XCTAssertEqual(highlight(pageLayout(reader), at: all[1].location), DocumentFinder.currentMatchColor)
+        XCTAssertNil(highlight(pageLayout(reader), at: all[0].location + 3), "일치가 아닌 글자는 칠하지 않는다")
 
-        XCTAssertEqual(client.firstSelectedRange, target)
-        XCTAssertTrue(window.firstResponder === responder, "검색창에서 계속 입력·Enter 할 수 있어야 한다")
-        field.removeFromSuperview()
-    }
-
-    private func highlight(_ reader: ReaderViewController, at index: Int) -> NSColor? {
-        guard let host = (reader.view as? NSScrollView)?.subviews.first(where: { $0 is PagedHostView }),
-              let layout = host.subviews.compactMap({ $0 as? NSTextView }).first?.layoutManager else { return nil }
-        return layout.temporaryAttribute(.backgroundColor, atCharacterIndex: index, effectiveRange: nil) as? NSColor
-    }
-
-    /// 모든 일치를 강조하고 현재 일치는 더 진하게 칠한다. 쪽을 넘겨도 남고, 찾기 바를 닫으면 지운다.
-    func testAllMatchesStayHighlightedAcrossPagesUntilTheFindBarCloses() throws {
-        let (doc, controller, window) = makeWindow()
-        defer { close(doc, controller, window) }
-        let reader = try XCTUnwrap(controller.readerVC)
-        let scrollView = try XCTUnwrap(reader.view as? NSScrollView)
-        controller.editorVC.showFindBar(nil)
-        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
-        let all = matches("등대", in: reader.findClient.string)
-
-        reader.setFindMatches(all)
-        reader.findClient.scrollRangeToVisible(all[1])
-
-        XCTAssertEqual(highlight(reader, at: all[0].location), ReaderViewController.findMatchColor)
-        XCTAssertEqual(highlight(reader, at: all[1].location), ReaderViewController.currentFindMatchColor)
-        XCTAssertNil(highlight(reader, at: all[0].location + 3), "일치가 아닌 글자는 칠하지 않는다")
-
+        finder.move(forward: false)
+        finder.move(forward: false)
         let later = try XCTUnwrap(all.last)
-        reader.findClient.scrollRangeToVisible(later)
-        XCTAssertEqual(highlight(reader, at: later.location), ReaderViewController.currentFindMatchColor,
+        XCTAssertEqual(highlight(pageLayout(reader), at: later.location), DocumentFinder.currentMatchColor,
                        "넘어간 쪽에서도 강조가 보여야 한다")
-        let otherOnLaterPage = try XCTUnwrap(all.dropLast().last)
-        if NSLocationInRange(otherOnLaterPage.location, reader.visibleCharacterRange) {
-            XCTAssertEqual(highlight(reader, at: otherOnLaterPage.location), ReaderViewController.findMatchColor)
-        }
+        XCTAssertNotEqual(reader.selectedTextRange, later, "찾는 동안 선택하면 회색이 강조를 덮는다")
 
-        reader.performFindAction(.hideFindInterface)
-        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
-        XCTAssertFalse(scrollView.isFindBarVisible)
-        XCTAssertNil(highlight(reader, at: later.location), "찾기를 닫으면 강조를 지운다")
+        controller.cancelDocumentFind()
+
+        XCTAssertNil(highlight(pageLayout(reader), at: later.location), "Esc 는 강조를 지운다")
+        XCTAssertEqual(try findField(window).stringValue, "")
+        XCTAssertTrue(window.firstResponder is PageTextView, "Esc 는 본문으로 돌아간다")
+        XCTAssertEqual(reader.selectedTextRange, later, "Esc 는 현재 일치를 선택해 둔다")
     }
 
-    /// 쪽을 넘기면 NSTextFinder 가 일치 목록을 한 번 비운다. 검색어가 그대로면 강조를 지키고,
-    /// 검색어가 바뀌어 일치가 없으면 지운다.
-    func testTransientEmptyMatchListKeepsHighlightsUntilTheQueryChanges() throws {
+    func testSearchFollowsTheViewAndClearsTheOldHighlights() throws {
         let (doc, controller, window) = makeWindow()
         defer { close(doc, controller, window) }
-        let reader = try XCTUnwrap(controller.readerVC)
-        controller.editorVC.showFindBar(nil)
-        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
-        let all = matches("등대", in: reader.findClient.string)
+        let finder = controller.documentFinder
+        finder.search("등대")
+        let first = try XCTUnwrap(finder.current)
 
-        reader.setFindMatches(all, query: "등대")
-        reader.setFindMatches([], query: "등대")
-        XCTAssertEqual(reader.findMatches, all, "같은 검색어의 일시적인 비움은 무시한다")
-        XCTAssertEqual(highlight(reader, at: all[0].location), ReaderViewController.findMatchColor)
+        controller.applyReadingPageMode(.scroll)
 
-        reader.setFindMatches([], query: "등대지기")
-        XCTAssertTrue(reader.findMatches.isEmpty, "검색어가 바뀌어 일치가 없으면 지운다")
-        XCTAssertNil(highlight(reader, at: all[0].location))
+        let editorLayout = controller.editorVC.textView.layoutManager
+        XCTAssertEqual(finder.matches.count, 120, "보기를 바꿔도 검색은 이어진다")
+        XCTAssertEqual(highlight(editorLayout, at: first.location), DocumentFinder.currentMatchColor)
+
+        controller.showMarkdownSource(nil)
+        let source = try XCTUnwrap(controller.sourcePreview?.textView)
+        XCTAssertEqual(finder.matches.count, 120)
+        XCTAssertNil(highlight(editorLayout, at: first.location), "떠난 화면의 강조는 지운다")
+        XCTAssertNotNil(highlight(source.layoutManager, at: try XCTUnwrap(finder.current).location))
+        controller.showMarkdownSource(nil)
     }
 
-    /// 스크롤 조판의 가로 치수자는 본문 위에 떠 있다. 찾기 바가 열리면 그 아래로 내려가야
+    func testEditingRefreshesMatchesWithoutMovingTheView() throws {
+        let (doc, controller, window) = makeWindow()
+        defer { close(doc, controller, window) }
+        controller.applyReadingPageMode(.scroll)
+        let finder = controller.documentFinder
+        let text = try XCTUnwrap(controller.editorVC.textView)
+        finder.search("등대")
+        let count = finder.matches.count
+
+        text.insertText("등대 ", replacementRange: NSRange(location: 0, length: 0))
+
+        XCTAssertEqual(finder.matches.count, count + 1, "본문이 바뀌면 일치도 다시 센다")
+    }
+
+    func testFindingIsCaseInsensitiveAndFindsNothingForEmptyQuery() {
+        XCTAssertEqual(DocumentFinder.ranges(of: "abc", in: "ABC abc"), [NSRange(location: 0, length: 3), NSRange(location: 4, length: 3)])
+        XCTAssertTrue(DocumentFinder.ranges(of: "", in: "abc").isEmpty)
+    }
+
+    /// 스크롤 조판의 가로 치수자는 본문 위에 떠 있다. 바꾸기 찾기 바가 열리면 그 아래로 내려가야
     /// 검색창을 가리지 않는다.
-    func testScrollLayoutRulerMovesBelowTheFindBar() throws {
+    func testScrollLayoutRulerMovesBelowTheReplaceBar() throws {
         let (doc, controller, window) = makeWindow()
         defer { close(doc, controller, window) }
         controller.applyReadingPageMode(.scroll)
@@ -211,7 +218,9 @@ final class PagedFindTests: XCTestCase {
         window.layoutIfNeeded()
         XCTAssertFalse(editor.ruler.isHidden, "전제: 읽기 조판의 치수자가 보인다")
 
-        editor.showFindBar(nil)
+        let proxy = NSMenuItem()
+        proxy.tag = NSTextFinder.Action.showReplaceInterface.rawValue
+        editor.textView.performTextFinderAction(proxy)
         RunLoop.main.run(until: Date().addingTimeInterval(0.3))
 
         XCTAssertTrue(scrollView.isFindBarVisible)

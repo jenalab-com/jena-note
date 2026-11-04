@@ -433,21 +433,6 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         performFormatting { FormatCommands.insertHorizontalRule($0) }
     }
 
-    /// 툴바 🔍 버튼 → 찾기 바 노출.
-    @objc func showFindBar(_ sender: Any?) {
-        if let host = hostWindowController, host.isShowingSource {
-            let proxy = NSMenuItem()
-            proxy.tag = NSTextFinder.Action.showFindInterface.rawValue
-            host.sourcePreview?.textView.performTextFinderAction(proxy)
-            return
-        }
-        if let reader = hostWindowController?.readerVC { reader.performFindAction(.showFindInterface); return }
-        view.window?.makeFirstResponder(textView)
-        let proxy = NSMenuItem()
-        proxy.tag = NSTextFinder.Action.showFindInterface.rawValue
-        textView.performTextFinderAction(proxy)
-    }
-
     // MARK: - Image Insertion
 
     /// 툴바 이미지 버튼 → 이미지 선택 → attachments로 복사 → 커서 위치에 삽입.
@@ -601,7 +586,7 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
             #selector(setBodyText), #selector(toggleUnorderedList), #selector(toggleOrderedList),
             #selector(toggleBlockquote), #selector(insertLink), #selector(insertHorizontalRule),
             #selector(insertImage), #selector(changeLineSpacing),
-            #selector(changeTextColor), #selector(showColorPanel), #selector(showFindBar)
+            #selector(changeTextColor), #selector(showColorPanel)
         ]
         if formatSelectors.contains(aSelector) { return true }
         return super.responds(to: aSelector)

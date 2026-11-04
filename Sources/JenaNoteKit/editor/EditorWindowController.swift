@@ -36,7 +36,8 @@ class EditorWindowController: NSWindowController {
 
     /// 페이지 보기에서는 페이지 편집기, 스크롤 보기에서는 연속 편집기를 사용한다.
     private(set) var readerVC: ReaderViewController?
-    private var readerToolbar: ReaderToolbar?
+    private(set) var readerToolbar: ReaderToolbar?
+    let documentFinder = DocumentFinder()
     private var bookmarkPopover: NSPopover?
 
     /// 지금 읽던 자리를 쥐고 있는 화면 — 페이징이면 리더 오버레이, 스크롤이면 에디터.
@@ -151,6 +152,7 @@ class EditorWindowController: NSWindowController {
 
     /// 텍스트로부터 글자수를 계산해 상태바를 갱신한다.
     func updateCharCount(for text: String) {
+        documentFinder.refresh()
         let counts = TextMetrics.counts(for: text)
         let noSpaces = TextMetrics.formatted(counts.noSpaces)
         let withSpaces = TextMetrics.formatted(counts.withSpaces)
@@ -163,8 +165,12 @@ class EditorWindowController: NSWindowController {
         let toolbar = ReaderToolbar(identifier: NSToolbar.Identifier("UnifiedToolbar"))
         toolbar.target = self
         toolbar.formatTarget = editorVC
+        toolbar.documentFinder = documentFinder
+        toolbar.onFindCancel = { [weak self] in self?.cancelDocumentFind() }
+        documentFinder.onChange = { [weak toolbar] in toolbar?.updateFindCount(current: $0, total: $1) }
         window.toolbar = toolbar
         readerToolbar = toolbar
+        documentFindContextChanged()
     }
 
     // MARK: - Document → View 연결
@@ -539,6 +545,7 @@ class EditorWindowController: NSWindowController {
         let item = NSSplitViewItem(viewController: vc)
         item.minimumThickness = 360
         split.insertSplitViewItem(item, at: 1)
+        documentFindContextChanged()
     }
 
     // MARK: - Reader Toolbar Actions

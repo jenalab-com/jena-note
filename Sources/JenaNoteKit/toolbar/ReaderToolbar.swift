@@ -18,6 +18,10 @@ class ReaderToolbar: NSToolbar {
     private static let itemLists = NSToolbarItem.Identifier("lists")
     private static let itemInsert = NSToolbarItem.Identifier("insert")
     private static let itemProofreading = NSToolbarItem.Identifier("proofreadSelection")
+    private static let itemFind = NSToolbarItem.Identifier("documentFind")
+    weak var documentFinder: DocumentFinder?
+    var onFindCancel: (() -> Void)?
+    private weak var findField: DocumentFindField?
     private weak var proofreadingButton: NSButton?
     private var hasSelectedText = false
 
@@ -31,7 +35,7 @@ class ReaderToolbar: NSToolbar {
         isSourceActive = active
         sourceButton?.state = active ? .on : .off
         for item in items {
-            let allowed = [Self.itemSource, Self.itemAI, NSToolbarItem.Identifier("find")].contains(item.itemIdentifier)
+            let allowed = [Self.itemSource, Self.itemAI, Self.itemFind].contains(item.itemIdentifier)
             (item.view as? NSControl)?.isEnabled = !active || allowed
         }
         pageModeControl?.setEnabled(!active, forSegment: 0)
@@ -93,6 +97,10 @@ class ReaderToolbar: NSToolbar {
             .withSymbolConfiguration(config)
     }
 
+    func focusFindField() { findField?.window?.makeFirstResponder(findField) }
+    func resetFindField() { findField?.reset() }
+    func updateFindCount(current: Int?, total: Int) { findField?.showCount(current: current, total: total) }
+
     /// 책갈피 목록 팝오버를 붙일 기준 뷰.
     var bookmarkAnchorView: NSView? { bookmarkButton }
 }
@@ -100,9 +108,9 @@ class ReaderToolbar: NSToolbar {
 extension ReaderToolbar: NSToolbarDelegate {
 
     func toolbarDefaultItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [ReaderToolbar.itemMode, ReaderToolbar.itemAppearance, ReaderToolbar.itemSource, .space,
+        [ReaderToolbar.itemFind, ReaderToolbar.itemMode, ReaderToolbar.itemAppearance, ReaderToolbar.itemSource, .space,
          ReaderToolbar.itemHeading, .init("bold"), .init("italic"), .init("inlineCode"),
-         ReaderToolbar.itemLists, ReaderToolbar.itemInsert, .init("textColor"), .init("find"),
+         ReaderToolbar.itemLists, ReaderToolbar.itemInsert, .init("textColor"),
          .flexibleSpace, ReaderToolbar.itemBookmark, ReaderToolbar.itemBookmarkList,
          ReaderToolbar.itemProofreading, ReaderToolbar.itemAI]
     }
@@ -115,6 +123,17 @@ extension ReaderToolbar: NSToolbarDelegate {
                  itemForItemIdentifier id: NSToolbarItem.Identifier,
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         switch id {
+        case ReaderToolbar.itemFind:
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.label = L10n.tr("toolbar.find")
+            item.visibilityPriority = .high
+            let field = DocumentFindField()
+            field.onQueryChange = { [weak self] in self?.documentFinder?.search($0) }
+            field.onMove = { [weak self] in self?.documentFinder?.move(forward: $0) }
+            field.onCancel = { [weak self] in self?.onFindCancel?() }
+            findField = field
+            item.view = field
+            return item
         case ReaderToolbar.itemProofreading:
             let item = NSToolbarItem(itemIdentifier: id)
             item.label = L10n.tr("proof.title")
