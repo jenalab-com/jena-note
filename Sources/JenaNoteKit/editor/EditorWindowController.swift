@@ -31,6 +31,10 @@ class EditorWindowController: NSWindowController {
     /// requests may complete after later ones; only the latest is applied.
     private var pendingSwap: (id: Int, url: URL)?
     private var swapCounter = 0
+    var documentLoadingView: DocumentLoadingView?
+    var documentLoadingDelay: DispatchWorkItem?
+    /// 사이드바 오른쪽의 문서 영역.
+    var documentPaneView: NSView? { splitVC?.splitViewItems.last?.viewController.view }
 
     // MARK: - Unified document layout
 
@@ -201,6 +205,8 @@ class EditorWindowController: NSWindowController {
                 }
             }
             if let doc = newValue as? MarkdownDocument, editorVC != nil {
+                showDocumentLoadingIfLarge(doc)
+                defer { endDocumentLoading() }
                 editorVC.loadContent(of: doc)
                 if let reader = readerVC { reader.updateContent(doc.content) }
                 else if !isAIActive && !isShowingSource { applyReadingPageMode(SettingsManager.shared.readingPageMode) }
@@ -756,6 +762,7 @@ extension EditorWindowController: SidebarFileOpener {
         swapCounter += 1
         let request = (id: swapCounter, url: url.standardizedFileURL)
         pendingSwap = request
+        beginDocumentLoading(of: url)
         documentOpener(url) { [weak self] newDoc, alreadyOpen, error in
             guard let self = self else { return }
             // 클라우드 드라이브에서 읽는 사이 다른 파일을 눌렀다면 이 결과는 버린다.
@@ -769,6 +776,7 @@ extension EditorWindowController: SidebarFileOpener {
                 return
             }
             self.pendingSwap = nil
+            defer { self.endDocumentLoading() }
             guard error == nil, let newDoc = newDoc else {
                 self.pendingSearchJump = nil
                 self.updateSidebarSelection()
