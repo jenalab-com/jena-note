@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "JenaNote",
-    platforms: [.macOS(.v11)],
+    platforms: [.macOS(.v13)],
     targets: [
         .binaryTarget(name: "Kiwi", path: "Vendor/Kiwi/Kiwi.xcframework"),
         .target(name: "JenaNoteKit", dependencies: ["Kiwi"], path: "Sources/JenaNoteKit",
