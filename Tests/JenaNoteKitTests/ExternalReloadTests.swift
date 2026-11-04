@@ -46,6 +46,8 @@ final class ExternalReloadTests: XCTestCase {
 
     func testDoesNotClobberUnsavedEdits() throws {
         let (doc, url) = try makeDocument(initialText: "원래 내용")
+        // 수정 상태로 남기면 임시 폴더를 지운 뒤 자동 저장이 실패해, 오류 창이 뒤 테스트를 멈춘다.
+        defer { doc.updateChangeCount(.changeCleared) }
         doc.textDidChange(NSAttributedString(string: "미저장 편집"))
         try rewriteOnDisk(url, text: "바뀐 내용")
 
