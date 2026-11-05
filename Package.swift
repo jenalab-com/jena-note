@@ -25,7 +25,7 @@ let appTargets: [Target] = [
     ),
     .testTarget(
         name: "JenaNoteKitTests",
-        dependencies: ["JenaNoteKit"],
+        dependencies: ["JenaNoteKit", "JenaNoteCoreTestSupport"],
         path: "Tests/JenaNoteKitTests"
     ),
 ]
@@ -41,9 +41,10 @@ let package = Package(
         .target(name: "JenaNoteCore", dependencies: ["Kiwi"], path: "shared/JenaNoteCore",
                 resources: [.copy("Resources/KiwiModel")],
                 linkerSettings: coreLinkerSettings),
+        .target(name: "JenaNoteCoreTestSupport", path: "shared/TestSupport"),
         .testTarget(
             name: "JenaNoteCoreTests",
-            dependencies: ["JenaNoteCore"],
+            dependencies: ["JenaNoteCore", "JenaNoteCoreTestSupport"],
             path: "shared/Tests/JenaNoteCoreTests",
             linkerSettings: coreLinkerSettings
         ),

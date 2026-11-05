@@ -12,7 +12,7 @@ enum DocumentEndnotes {
         let range: NSRange
     }
     static func validID(_ id: String) -> Bool {
-        !id.isEmpty && id.count <= 64 && id.unicodeScalars.allSatisfy { CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-").contains($0) }
+        MarkdownNote.validID(id)
     }
     static func reference(_ id: String, font: NSFont = MemoFont.body) -> NSAttributedString {
         NSAttributedString(string: "[\(id)]", attributes: [.font: font, .foregroundColor: NSColor.labelColor, .mdNoteReference: id])
@@ -25,9 +25,7 @@ enum DocumentEndnotes {
         return result
     }
     static func parseDefinition(_ line: String) -> (id: String, text: String)? {
-        guard line.hasPrefix("[^"), let end = line.range(of: "]:"),
-              validID(String(line[line.index(line.startIndex, offsetBy: 2)..<end.lowerBound])) else { return nil }
-        return (String(line[line.index(line.startIndex, offsetBy: 2)..<end.lowerBound]), String(line[end.upperBound...]).trimmingCharacters(in: .whitespaces))
+        MarkdownNote.parseDefinition(line)
     }
     static func notes(in content: NSAttributedString) -> [Note] {
         var notes: [Note] = []

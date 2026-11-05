@@ -941,3 +941,376 @@ enum MarkdownSerializer {
         return (num, String(line[line.index(after: afterDot)...]))
     }
 }
+
+// MARK: - Shared Library Bridge
+
+// The same conversion built on JenaNoteCore. The app does not call this yet. parse and serialize
+// above stay in charge until MarkdownCoreParityTests passes on a Mac; then they forward here and
+// the older code above is removed.
+extension MarkdownSerializer {
+
+    static func coreParse(_ markdown: String, baseURL: URL? = nil) -> NSAttributedString {
+        render(MarkdownParser.parse(markdown), baseURL: baseURL)
+    }
+
+    static func coreSerialize(_ attributed: NSAttributedString) -> String {
+        MarkdownWriter.write(blocks(from: attributed))
+    }
+
+    // MARK: Model → NSAttributedString
+
+    static func render(_ blocks: [MarkdownBlock], baseURL: URL?) -> NSAttributedString {
+        let result = NSMutableAttributedString()
+        let newline = NSAttributedString(string: "\n", attributes: bodyAttributes())
+
+        for block in blocks {
+            switch block {
+            case .blank:
+                result.append(newline)
+            case .horizontalRule:
+                result.append(makeHorizontalRule())
+            case .codeBlock(let lines):
+                result.append(makeCodeBlock(lines.joined(separator: "\n") + "\n"))
+            case .table(let table):
+                result.append(renderTable(table))
+            case .noteDefinition(let id, let runs):
+                let note = NSMutableAttributedString(string: "[\(id)] ", attributes: bodyAttributes())
+                note.addAttribute(.mdNoteDefinition, value: id, range: NSRange(location: 0, length: note.length))
+                note.append(renderRuns(runs, baseFont: MemoFont.body, baseURL: baseURL))
+                note.append(newline)
+                result.append(note)
+            case .heading(let level, let runs):
+                let font: NSFont
+                let blockType: String
+                switch level {
+                case 1: font = MemoFont.h1; blockType = "h1"
+                case 2: font = MemoFont.h2; blockType = "h2"
+                default: font = MemoFont.h3; blockType = "h3"
+                }
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: font,
+                    .foregroundColor: NSColor.labelColor,
+                    .mdBlockType: blockType,
+                    .paragraphStyle: headingParagraphStyle()
+                ]
+                result.append(renderRuns(runs, baseFont: font, baseURL: baseURL))
+                result.append(NSAttributedString(string: "\n", attributes: attrs))
+            case .blockquote(let runs):
+                let content = NSMutableAttributedString(attributedString: renderRuns(runs, baseFont: MemoFont.body, baseURL: baseURL))
+                content.addAttributes([.mdBlockType: "blockquote", .paragraphStyle: blockquoteParagraphStyle()],
+                                      range: NSRange(location: 0, length: content.length))
+                content.append(NSAttributedString(string: "\n", attributes: [
+                    .font: MemoFont.body,
+                    .foregroundColor: NSColor.secondaryLabelColor,
+                    .mdBlockType: "blockquote",
+                    .paragraphStyle: blockquoteParagraphStyle()
+                ]))
+                result.append(content)
+            case .listItem(let ordered, let index, let runs):
+                let blockType = ordered ? "ol" : "ul"
+                var attrs: [NSAttributedString.Key: Any] = [
+                    .font: MemoFont.body,
+                    .foregroundColor: NSColor.labelColor,
+                    .mdBlockType: blockType,
+                    .paragraphStyle: listParagraphStyle()
+                ]
+                if ordered { attrs[.mdListIndex] = index }
+                let item = NSMutableAttributedString(string: ordered ? "\(index).\t" : "•\t", attributes: attrs)
+                let content = NSMutableAttributedString(attributedString: renderRuns(runs, baseFont: MemoFont.body, baseURL: baseURL))
+                content.addAttributes([.mdBlockType: blockType, .paragraphStyle: listParagraphStyle()],
+                                      range: NSRange(location: 0, length: content.length))
+                item.append(content)
+                item.append(NSAttributedString(string: "\n", attributes: attrs))
+                result.append(item)
+            case .paragraph(let runs):
+                let content = NSMutableAttributedString(attributedString: renderRuns(runs, baseFont: MemoFont.body, baseURL: baseURL))
+                content.addAttributes([.mdBlockType: "body", .paragraphStyle: bodyParagraphStyle()],
+                                      range: NSRange(location: 0, length: content.length))
+                content.append(newline)
+                result.append(content)
+            }
+        }
+        return result
+    }
+
+    private static func renderRuns(_ runs: [MarkdownRun], baseFont: NSFont, baseURL: URL?) -> NSAttributedString {
+        let result = NSMutableAttributedString()
+        for run in runs {
+            let piece: NSMutableAttributedString
+            switch run.content {
+            case .noteReference(let id):
+                piece = NSMutableAttributedString(attributedString: DocumentEndnotes.reference(id, font: baseFont))
+            case .image(let path, let alt, let width):
+                piece = NSMutableAttributedString(attributedString: makeImageAttachment(relPath: path, alt: alt, width: width, baseURL: baseURL))
+            case .text(let text):
+                var attrs: [NSAttributedString.Key: Any] = [.foregroundColor: NSColor.labelColor]
+                if run.code {
+                    attrs[.font] = MemoFont.code
+                    attrs[.mdInlineCode] = true
+                } else if let link = run.link {
+                    attrs[.font] = baseFont
+                    attrs[.foregroundColor] = NSColor.linkColor
+                    attrs[.link] = link
+                    attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue
+                } else if run.bold && run.italic {
+                    attrs[.font] = MemoFont.boldItalic(from: baseFont)
+                } else if run.bold {
+                    attrs[.font] = MemoFont.bold(from: baseFont)
+                } else if run.italic {
+                    attrs[.font] = MemoFont.italic(from: baseFont)
+                } else {
+                    attrs[.font] = baseFont
+                }
+                piece = NSMutableAttributedString(string: text, attributes: attrs)
+            }
+            if let hex = run.color, let color = MarkdownColor.fromHex(hex) {
+                piece.addAttributes([.foregroundColor: color, .mdCustomColor: true],
+                                    range: NSRange(location: 0, length: piece.length))
+            }
+            result.append(piece)
+        }
+        return result
+    }
+
+    private static func renderTable(_ model: MarkdownTable) -> NSAttributedString {
+        let columnCount = model.rows.map(\.count).max() ?? 1
+        let table = NSTextTable()
+        table.numberOfColumns = columnCount
+        table.setContentWidth(100, type: .percentageValueType)
+        table.collapsesBorders = false
+
+        let result = NSMutableAttributedString()
+        let columnWidth = CGFloat(100.0 / Double(columnCount))
+
+        for (rowIndex, row) in model.rows.enumerated() {
+            let isHeader = rowIndex == model.headerRow
+            for column in 0..<columnCount {
+                let block = NSTextTableBlock(table: table, startingRow: rowIndex, rowSpan: 1,
+                                             startingColumn: column, columnSpan: 1)
+                block.setValue(columnWidth, type: .percentageValueType, for: .width)
+                for edge: NSRectEdge in [.minX, .minY, .maxX, .maxY] {
+                    block.setWidth(1, type: .absoluteValueType, for: .border, edge: edge)
+                    block.setBorderColor(NSColor.separatorColor, for: edge)
+                    block.setWidth(6, type: .absoluteValueType, for: .padding, edge: edge)
+                }
+                if isHeader { block.backgroundColor = NSColor.controlBackgroundColor }
+
+                let paragraph = NSMutableParagraphStyle()
+                paragraph.textBlocks = [block]
+
+                let font = isHeader ? MemoFont.bold(from: MemoFont.body) : MemoFont.body
+                var attrs: [NSAttributedString.Key: Any] = [
+                    .font: font,
+                    .foregroundColor: NSColor.labelColor,
+                    .paragraphStyle: paragraph,
+                    .mdBlockType: "table-cell"
+                ]
+                if isHeader { attrs[.mdTableHeader] = true }
+
+                let cellRuns = column < row.count ? row[column] : []
+                for run in cellRuns {
+                    let piece = NSMutableAttributedString(attributedString: renderRuns([run], baseFont: font, baseURL: nil))
+                    let range = NSRange(location: 0, length: piece.length)
+                    piece.addAttributes(attrs, range: range)
+                    // The table's attributes must not erase a color the author chose.
+                    if let hex = run.color, let color = MarkdownColor.fromHex(hex) {
+                        piece.addAttribute(.foregroundColor, value: color, range: range)
+                    }
+                    result.append(piece)
+                }
+                result.append(NSAttributedString(string: "\n", attributes: attrs))
+            }
+        }
+        return result
+    }
+
+    // MARK: NSAttributedString → Model
+
+    static func blocks(from attributed: NSAttributedString) -> [MarkdownBlock] {
+        var blocks: [MarkdownBlock] = []
+        let full = attributed.string as NSString
+        let length = attributed.length
+        var pos = 0
+
+        func appendCodeLine(_ line: String) {
+            if case .codeBlock(let lines)? = blocks.last {
+                blocks[blocks.count - 1] = .codeBlock(lines: lines + [line])
+            } else {
+                blocks.append(.codeBlock(lines: [line]))
+            }
+        }
+
+        while pos < length {
+            var paraEnd = pos
+            while paraEnd < length && full.character(at: paraEnd) != 10 { paraEnd += 1 }
+            let paraRange = NSRange(location: pos, length: paraEnd - pos)
+
+            if paraRange.length == 0 {
+                if paraEnd < length {
+                    let type = attributed.attributes(at: paraEnd, effectiveRange: nil)[.mdBlockType] as? String
+                    if type == "hr" {
+                        blocks.append(.horizontalRule)
+                    } else if type == "codeblock" {
+                        appendCodeLine("")
+                    } else {
+                        blocks.append(.blank)
+                    }
+                }
+                pos = paraEnd + 1
+                continue
+            }
+
+            let paraAttrs = attributed.attributes(at: pos, effectiveRange: nil)
+            let blockType: String = {
+                if let type = paraAttrs[.mdBlockType] as? String { return type }
+                if paraEnd < length {
+                    return (attributed.attributes(at: paraEnd, effectiveRange: nil)[.mdBlockType] as? String) ?? "body"
+                }
+                return "body"
+            }()
+            let paraText = full.substring(with: paraRange)
+
+            if let id = paraAttrs[.mdNoteDefinition] as? String, paraText.hasPrefix("[\(id)] ") {
+                let prefixLength = ("[\(id)] " as NSString).length
+                let bodyRange = NSRange(location: pos + prefixLength, length: paraRange.length - prefixLength)
+                blocks.append(.noteDefinition(id: id, runs: runs(in: attributed, range: bodyRange, baseFont: MemoFont.body)))
+                pos = paraEnd + 1
+                continue
+            }
+
+            if blockType == "table-cell",
+               let style = paraAttrs[.paragraphStyle] as? NSParagraphStyle,
+               let block = style.textBlocks.first as? NSTextTableBlock {
+                let (table, next) = readTable(attributed, startPos: pos, table: block.table)
+                if let table { blocks.append(.table(table)) }
+                pos = next
+                continue
+            }
+
+            switch blockType {
+            case "h1":
+                blocks.append(.heading(level: 1, runs: runs(in: attributed, range: paraRange, baseFont: MemoFont.h1)))
+            case "h2":
+                blocks.append(.heading(level: 2, runs: runs(in: attributed, range: paraRange, baseFont: MemoFont.h2)))
+            case "h3":
+                blocks.append(.heading(level: 3, runs: runs(in: attributed, range: paraRange, baseFont: MemoFont.h3)))
+            case "blockquote":
+                blocks.append(.blockquote(runs(in: attributed, range: paraRange, baseFont: MemoFont.body)))
+            case "ul":
+                let skip = (paraRange.length >= 2 &&
+                            full.character(at: paraRange.location) == 0x2022 &&
+                            full.character(at: paraRange.location + 1) == 9) ? 2 : 0
+                let range = NSRange(location: paraRange.location + skip, length: paraRange.length - skip)
+                blocks.append(.listItem(ordered: false, index: 0, runs: runs(in: attributed, range: range, baseFont: MemoFont.body)))
+            case "ol":
+                var skip = 0
+                for character in paraText {
+                    skip += 1
+                    if character == "\t" { break }
+                }
+                let range = NSRange(location: paraRange.location + skip, length: max(0, paraRange.length - skip))
+                blocks.append(.listItem(ordered: true, index: paraAttrs[.mdListIndex] as? Int ?? 1,
+                                        runs: runs(in: attributed, range: range, baseFont: MemoFont.body)))
+            case "hr":
+                blocks.append(.horizontalRule)
+            case "codeblock":
+                appendCodeLine(paraText)
+            default:
+                blocks.append(.paragraph(runs(in: attributed, range: paraRange, baseFont: MemoFont.body)))
+            }
+
+            pos = paraEnd + 1
+        }
+        return blocks
+    }
+
+    private static func readTable(_ attributed: NSAttributedString, startPos: Int,
+                                  table: NSTextTable) -> (MarkdownTable?, Int) {
+        let full = attributed.string as NSString
+        let length = attributed.length
+        var pos = startPos
+
+        var cells: [(row: Int, column: Int, runs: [MarkdownRun], isHeader: Bool)] = []
+        while pos < length {
+            var paraEnd = pos
+            while paraEnd < length && full.character(at: paraEnd) != 10 { paraEnd += 1 }
+            let paraRange = NSRange(location: pos, length: paraEnd - pos)
+            let attrs = attributed.attributes(at: pos, effectiveRange: nil)
+            guard let style = attrs[.paragraphStyle] as? NSParagraphStyle,
+                  let block = style.textBlocks.first as? NSTextTableBlock,
+                  block.table === table else { break }
+            cells.append((block.startingRow, block.startingColumn,
+                          runs(in: attributed, range: paraRange, baseFont: MemoFont.body),
+                          attrs[.mdTableHeader] as? Bool == true))
+            pos = paraEnd + 1
+        }
+        guard !cells.isEmpty else { return (nil, pos) }
+
+        let rowCount = (cells.map(\.row).max() ?? 0) + 1
+        let columnCount = (cells.map(\.column).max() ?? 0) + 1
+        var rows = Array(repeating: Array(repeating: [MarkdownRun](), count: columnCount), count: rowCount)
+        var headerRow = 0
+        for cell in cells {
+            rows[cell.row][cell.column] = cell.runs
+            if cell.isHeader { headerRow = cell.row }
+        }
+        return (MarkdownTable(rows: rows, headerRow: headerRow), pos)
+    }
+
+    private static func runs(in attributed: NSAttributedString, range: NSRange, baseFont: NSFont) -> [MarkdownRun] {
+        var result: [MarkdownRun] = []
+        let full = attributed.string as NSString
+        var i = range.location
+        let end = range.location + range.length
+        let baseTraits = baseFont.fontDescriptor.symbolicTraits
+
+        while i < end {
+            var effectiveRange = NSRange()
+            let attrs = attributed.attributes(at: i, effectiveRange: &effectiveRange)
+            let start = max(effectiveRange.location, i)
+            let stop = min(effectiveRange.location + effectiveRange.length, end)
+            let text = full.substring(with: NSRange(location: start, length: max(0, stop - start)))
+
+            if let id = attrs[.mdNoteReference] as? String {
+                let marker = "[\(id)]" as NSString
+                if i + marker.length <= end,
+                   full.substring(with: NSRange(location: i, length: marker.length)) == marker as String {
+                    result.append(MarkdownRun(.noteReference(id)))
+                    i += marker.length
+                    continue
+                }
+            }
+
+            if attrs[.attachment] != nil {
+                if let path = attrs[.mdImageRelPath] as? String {
+                    result.append(MarkdownRun(.image(path: path, alt: attrs[.mdImageAlt] as? String ?? "",
+                                                     width: attrs[.mdImageWidth] as? Int)))
+                }
+                i = effectiveRange.location + effectiveRange.length
+                continue
+            }
+
+            let font = attrs[.font] as? NSFont ?? MemoFont.body
+            let traits = font.fontDescriptor.symbolicTraits
+            let isReaderBold = attrs[.mdReaderBold] as? Bool == true
+            var link: String?
+            if let url = attrs[.link] as? URL {
+                link = url.absoluteString
+            } else if let string = attrs[.link] as? String {
+                link = string
+            }
+            var color: String?
+            if attrs[.mdCustomColor] as? Bool == true, let value = attrs[.foregroundColor] as? NSColor {
+                color = MarkdownColor.toHex(value)
+            }
+            result.append(MarkdownRun(text: text,
+                                      bold: traits.contains(.bold) && !baseTraits.contains(.bold) && !isReaderBold,
+                                      italic: traits.contains(.italic) && !baseTraits.contains(.italic),
+                                      code: attrs[.mdInlineCode] as? Bool == true,
+                                      link: link,
+                                      color: color))
+            i = effectiveRange.location + effectiveRange.length
+        }
+        return result
+    }
+}
