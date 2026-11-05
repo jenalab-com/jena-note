@@ -12,6 +12,8 @@ final class SettingsManager {
         static let appearance = "jn_appearance"
         static let readingPageMode = "jn_readingPageMode"
         static let readingFontScale = "jn_readingFontScale"
+        static let documentFontSize = "jn_documentFontSize"
+        static let documentLetterSpacing = "jn_documentLetterSpacing"
         static let readingLineLength = "jn_readingLineLength"
         static let readingFont = "jn_readingFont"
         static let readingWeight = "jn_readingWeight"
@@ -193,12 +195,47 @@ final class SettingsManager {
     var readingFontScale: CGFloat {
         get {
             let v = defaults.object(forKey: Key.readingFontScale) as? Double
-            return CGFloat(v ?? 1.0)
+            return Self.snappedFontScale(CGFloat(v ?? 1.3))
         }
         set {
-            let clamped = min(max(newValue, 0.8), 2.0)
-            defaults.set(Double(clamped), forKey: Key.readingFontScale)
+            defaults.set(Double(Self.snappedFontScale(newValue)), forKey: Key.readingFontScale)
         }
+    }
+
+    /// 화면 배율은 10% 단위다. 읽을 때도 맞춰서 예전에 저장된 103% 같은 값이 남지 않게 한다.
+    private static func snappedFontScale(_ value: CGFloat) -> CGFloat {
+        min(max((value * 10).rounded() / 10, 0.8), 2.0)
+    }
+
+    /// 문서의 실제 본문 글자 크기(pt). 화면 배율(`readingFontScale`)과 따로 움직인다.
+    static let documentFontSizeRange: ClosedRange<CGFloat> = 8...30
+
+    var documentFontSize: CGFloat {
+        get {
+            let v = defaults.object(forKey: Key.documentFontSize) as? Double
+            return v.map { CGFloat($0) } ?? MemoFont.body.pointSize
+        }
+        set {
+            let range = Self.documentFontSizeRange
+            defaults.set(Double(min(max(newValue, range.lowerBound), range.upperBound)), forKey: Key.documentFontSize)
+        }
+    }
+
+    /// 자간(글자 크기에 대한 %). 화면과 내보내기에 함께 쓴다.
+    static let documentLetterSpacingRange: ClosedRange<CGFloat> = -10...20
+
+    var documentLetterSpacing: CGFloat {
+        get { CGFloat(defaults.object(forKey: Key.documentLetterSpacing) as? Double ?? 0) }
+        set {
+            let range = Self.documentLetterSpacingRange
+            defaults.set(Double(min(max(newValue.rounded(), range.lowerBound), range.upperBound)),
+                         forKey: Key.documentLetterSpacing)
+        }
+    }
+
+    /// 화면에 그릴 때 쓰는 배율 = 실제 글자 크기 × 화면 배율. 제목·코드 글자도 같은 비율로 따라온다.
+    var readingDisplayScale: CGFloat {
+        readingFontScale * documentFontSize / MemoFont.body.pointSize
     }
 
     var readingLineLength: Int {

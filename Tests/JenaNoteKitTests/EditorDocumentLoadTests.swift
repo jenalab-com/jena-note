@@ -51,7 +51,7 @@ final class EditorDocumentLoadTests: XCTestCase {
         let font = vc.textView.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
         XCTAssertNotNil(font)
         // 조판이 입혀졌다면 본문 기준 크기(15pt)가 아니라 배율이 곱해진 크기여야 한다.
-        let expected = MemoFont.body.pointSize * SettingsManager.shared.readingFontScale
+        let expected = MemoFont.body.pointSize * SettingsManager.shared.readingDisplayScale
         XCTAssertEqual(font?.pointSize ?? 0, expected, accuracy: 0.5,
                        "문서를 갈아끼운 뒤 읽기 조판이 풀렸다")
     }

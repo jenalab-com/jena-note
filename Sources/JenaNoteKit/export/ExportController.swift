@@ -61,12 +61,13 @@ final class ExportController: NSObject, NSMenuItemValidation {
     private func writeFile(format: Format, blocks: [Block], imageFailures: Int, to url: URL) {
         let data: Data
         var skipped = imageFailures
+        let settings = SettingsManager.shared
         switch format {
         case .docx:
-            data = DocxWriter.write(blocks)
+            data = DocxWriter.write(blocks, bodySize: settings.documentFontSize, letterSpacing: settings.documentLetterSpacing)
         case .hwpx:
             // hwpx는 1차에서 이미지를 생략한다 — 생략 수를 경고에 반영.
-            let out = HwpxWriter.build(blocks)
+            let out = HwpxWriter.build(blocks, bodySize: settings.documentFontSize, letterSpacing: settings.documentLetterSpacing)
             data = out.data
             skipped = out.imageSkipped
         }

@@ -180,7 +180,7 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
     /// 현재 읽기 설정(배율·서체·행간·굵기)으로 조판한다. 설정은 부를 때마다 읽는다.
     private static func readingStyled(_ source: NSAttributedString) -> NSAttributedString {
         let s = SettingsManager.shared
-        return ReaderMetrics.styled(source, scale: s.readingFontScale, font: s.readingFont,
+        return ReaderMetrics.styled(source, scale: s.readingDisplayScale, font: s.readingFont,
                                     lineHeightMultiple: s.readingLineSpacing,
                                     weight: s.readingWeight)
     }

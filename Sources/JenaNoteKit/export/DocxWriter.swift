@@ -18,8 +18,10 @@ enum DocxWriter {
     /// 1px = 9525 EMU (96dpi 기준).
     private static let emuPerPx = 9525
 
-    static func write(_ blocks: [Block]) -> Data {
+    static func write(_ blocks: [Block], bodySize: CGFloat = MemoFont.body.pointSize,
+                      letterSpacing: CGFloat = 0) -> Data {
         var ctx = Context()
+        ctx.typography = ExportTypography(body: bodySize, letterSpacing: letterSpacing)
         ctx.build(blocks)
 
         var zip = ZipArchive()
@@ -37,6 +39,7 @@ enum DocxWriter {
 
     private struct Context {
         var body = ""
+        var typography = ExportTypography(body: MemoFont.body.pointSize)
         var images: [ImageRef] = []
         // 관계: (rId, type, target, external)
         var rels: [(id: String, type: String, target: String, external: Bool)] = []
@@ -73,14 +76,8 @@ enum DocxWriter {
         // MARK: 블록별 생성
 
         private mutating func appendHeading(level: Int, inlines: [Inline]) {
-            // 제목은 직접 서식: 굵게 + 레벨별 크기(half-point).
-            let sz: Int
-            switch level {
-            case 1: sz = 36   // 18pt
-            case 2: sz = 28   // 14pt
-            default: sz = 24  // 12pt
-            }
-            let runs = runsXML(inlines, forceBold: true, forceSize: sz)
+            // 제목은 직접 서식: 굵게 + 레벨별 크기.
+            let runs = runsXML(inlines, forceBold: true, forceSize: halfPoints(typography.heading(level)))
             let pPr = "<w:pPr><w:spacing w:before=\"240\" w:after=\"120\"/></w:pPr>"
             body += "<w:p>\(pPr)\(runs)</w:p>"
         }
@@ -89,7 +86,9 @@ enum DocxWriter {
             // 1차: numbering.xml 없이 글머리 텍스트 + 들여쓰기로 표현.
             let marker = ordered ? "\(index). " : "•  "
             let pPr = "<w:pPr><w:ind w:left=\"360\" w:hanging=\"360\"/></w:pPr>"
-            let markerRun = "<w:r><w:t xml:space=\"preserve\">\(XMLEscape.text(marker))</w:t></w:r>"
+            let size = halfPoints(typography.body)
+            let markerRun = "<w:r><w:rPr>\(spacingXML(halfPointSize: size))<w:sz w:val=\"\(size)\"/></w:rPr>"
+                + "<w:t xml:space=\"preserve\">\(XMLEscape.text(marker))</w:t></w:r>"
             body += "<w:p>\(pPr)\(markerRun)\(runsXML(inlines))</w:p>"
         }
 
@@ -109,7 +108,7 @@ enum DocxWriter {
             for (i, line) in lines.enumerated() {
                 if i > 0 { runs += "<w:r><w:br/></w:r>" }
                 runs += "<w:r><w:rPr><w:rFonts w:ascii=\"Menlo\" w:hAnsi=\"Menlo\" w:cs=\"Menlo\"/>"
-                    + "<w:sz w:val=\"20\"/></w:rPr><w:t xml:space=\"preserve\">\(XMLEscape.text(line))</w:t></w:r>"
+                    + "<w:sz w:val=\"\(halfPoints(typography.code))\"/></w:rPr><w:t xml:space=\"preserve\">\(XMLEscape.text(line))</w:t></w:r>"
             }
             body += "<w:p>\(pPr)\(runs)</w:p>"
         }
@@ -208,7 +207,9 @@ enum DocxWriter {
             if inline.code {
                 rPr += "<w:rFonts w:ascii=\"Menlo\" w:hAnsi=\"Menlo\" w:cs=\"Menlo\"/>"
             }
-            if let size = forceSize { rPr += "<w:sz w:val=\"\(size)\"/>" }
+            let size = forceSize ?? halfPoints(inline.code ? typography.code : typography.body)
+            if !inline.code { rPr += spacingXML(halfPointSize: size) }
+            rPr += "<w:sz w:val=\"\(size)\"/>"
             // 색상: 인라인 지정 > 기본색 > (링크면 파랑)
             if let color = inline.color {
                 rPr += "<w:color w:val=\"\(hex6(color))\"/>"
@@ -217,8 +218,18 @@ enum DocxWriter {
             } else if let dc = defaultColor {
                 rPr += "<w:color w:val=\"\(hex6(dc))\"/>"
             }
-            let rPrXML = rPr.isEmpty ? "" : "<w:rPr>\(rPr)</w:rPr>"
-            return "<w:r>\(rPrXML)<w:t xml:space=\"preserve\">\(XMLEscape.text(inline.text))</w:t></w:r>"
+            return "<w:r><w:rPr>\(rPr)</w:rPr><w:t xml:space=\"preserve\">\(XMLEscape.text(inline.text))</w:t></w:r>"
+        }
+
+        /// 자간. w:spacing 은 1/20 pt 단위라 글자 크기마다 값이 달라진다.
+        private func spacingXML(halfPointSize: Int) -> String {
+            let twips = Int((CGFloat(halfPointSize) / 2 * typography.letterSpacing / 100 * 20).rounded())
+            return twips == 0 ? "" : "<w:spacing w:val=\"\(twips)\"/>"
+        }
+
+        /// w:sz 는 반 포인트 단위다.
+        private func halfPoints(_ points: CGFloat) -> Int {
+            Int((points * 2).rounded())
         }
 
         private func paragraph(_ runs: String) -> String {

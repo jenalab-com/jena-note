@@ -58,6 +58,34 @@ final class HwpxWriterTests: XCTestCase {
 
     // MARK: - 본문 / 서식 노드
 
+    /// 앱에서 정한 실제 글자 크기가 문서에 그대로 나가고, 제목은 항상 본문보다 크다.
+    func testBodySizeReachesCharPrAndHeadingsStayLarger() throws {
+        let dir = try unzip(HwpxWriter.write([
+            .heading(level: 2, inlines: [Inline(text: "제목")]),
+            .paragraph([Inline(text: "본문")]),
+            .codeBlock("code")
+        ], bodySize: 11))
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let header = try String(contentsOf: dir.appendingPathComponent("Contents/header.xml"), encoding: .utf8)
+
+        XCTAssertTrue(header.contains("height=\"1100\""), "11pt = 1100")
+        XCTAssertTrue(header.contains("height=\"1613\""), "H2는 앱과 같은 22:15 비율이다")
+        XCTAssertTrue(header.contains("height=\"953\""), "코드는 앱과 같은 13:15 비율이다")
+        XCTAssertFalse(header.contains("height=\"1000\""), "예전 10pt 고정이 남으면 안 된다")
+    }
+
+    func testLetterSpacingReachesCharPrAndSkipsCode() throws {
+        let dir = try unzip(HwpxWriter.write([
+            .paragraph([Inline(text: "본문")]),
+            .codeBlock("code")
+        ], bodySize: 11, letterSpacing: -5))
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let header = try String(contentsOf: dir.appendingPathComponent("Contents/header.xml"), encoding: .utf8)
+
+        XCTAssertTrue(header.contains("<hh:spacing hangul=\"-5\" latin=\"-5\""), "본문 자간")
+        XCTAssertTrue(header.contains("<hh:spacing hangul=\"0\""), "코드는 자간 0이다")
+    }
+
     func testSectionContainsText() throws {
         let dir = try unzip(HwpxWriter.write([
             .heading(level: 1, inlines: [Inline(text: "제목입니다")]),

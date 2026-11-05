@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 
 // MARK: - DocumentModel (포맷 중립 중간표현, IR)
 //
@@ -59,4 +59,21 @@ struct ImageRef {
     var fileName: String
     /// 지정 폭(px). 없으면 원본 크기.
     var width: Int?
+}
+
+/// 내보낼 때의 글자 크기(pt). 제목·코드는 앱 화면과 같은 비율로 본문을 따라간다.
+struct ExportTypography {
+    var body: CGFloat
+    /// 자간(글자 크기에 대한 %). 코드에는 쓰지 않는다.
+    var letterSpacing: CGFloat = 0
+
+    var code: CGFloat { scaled(MemoFont.code) }
+
+    func heading(_ level: Int) -> CGFloat {
+        scaled(level == 1 ? MemoFont.h1 : (level == 2 ? MemoFont.h2 : MemoFont.h3))
+    }
+
+    private func scaled(_ font: NSFont) -> CGFloat {
+        body * font.pointSize / MemoFont.body.pointSize
+    }
 }

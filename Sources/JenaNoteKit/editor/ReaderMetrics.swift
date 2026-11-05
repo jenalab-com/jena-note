@@ -28,10 +28,11 @@ enum ReaderMetrics {
                        font family: SettingsManager.ReadingFont,
                        lineHeightMultiple: CGFloat,
                        weight: SettingsManager.ReadingWeight = .regular,
+                       letterSpacing: CGFloat = SettingsManager.shared.documentLetterSpacing,
                        maxImageWidth: CGFloat = .greatestFiniteMagnitude) -> NSAttributedString {
         inParagraphChunks(content) {
             styledInOnePass($0, scale: scale, font: family, lineHeightMultiple: lineHeightMultiple,
-                            weight: weight, maxImageWidth: maxImageWidth)
+                            weight: weight, letterSpacing: letterSpacing, maxImageWidth: maxImageWidth)
         }
     }
 
@@ -60,6 +61,7 @@ enum ReaderMetrics {
                                 font family: SettingsManager.ReadingFont,
                                 lineHeightMultiple: CGFloat,
                                 weight: SettingsManager.ReadingWeight = .regular,
+                                letterSpacing: CGFloat = SettingsManager.shared.documentLetterSpacing,
                                 maxImageWidth: CGFloat = .greatestFiniteMagnitude) -> NSAttributedString {
         let result = NSMutableAttributedString(attributedString: content)
         let full = NSRange(location: 0, length: result.length)
@@ -67,7 +69,7 @@ enum ReaderMetrics {
         // 1) 폰트: 패밀리 교체 + 크기 배율 + 굵기 (trait 유지)
         //    원본 폰트를 .mdBaseFont 에 백업해 둔다 — 조판을 벗길 때 추측 없이 되돌리고,
         //    이미 조판된 텍스트를 다시 조판할 때도 배율이 누적되지 않게 하는 기준이 된다.
-        var fontChanges: [(NSRange, NSFont, NSFont, Bool)] = []
+        var fontChanges: [(NSRange, NSFont, NSFont, Bool, Bool)] = []
         result.enumerateAttribute(.font, in: full) { value, range, _ in
             guard let current = value as? NSFont else { return }
             let origin = (result.attribute(.mdBaseFont, at: range.location, effectiveRange: nil) as? NSFont) ?? current
@@ -80,10 +82,16 @@ enum ReaderMetrics {
             // 원본에 없던 볼드가 조판 과정에서 생겼다면 그건 읽기 굵기지 사용자의 `**볼드**` 가 아니다.
             let addedBold = newFont.fontDescriptor.symbolicTraits.contains(.bold)
                 && !traits.contains(.bold)
-            fontChanges.append((range, newFont, origin, addedBold))
+            fontChanges.append((range, newFont, origin, addedBold, isCode))
         }
-        for (range, f, origin, addedBold) in fontChanges {
+        for (range, f, origin, addedBold, isCode) in fontChanges {
             result.addAttribute(.font, value: f, range: range)
+            // 코드는 고정폭이라 자간을 넣으면 줄이 어긋난다.
+            if letterSpacing != 0, !isCode {
+                result.addAttribute(.kern, value: f.pointSize * letterSpacing / 100, range: range)
+            } else {
+                result.removeAttribute(.kern, range: range)
+            }
             result.addAttribute(.mdBaseFont, value: origin, range: range)
             // 재조판 시 지난 표시가 남지 않도록 매번 새로 세운다.
             if addedBold {
@@ -174,6 +182,7 @@ enum ReaderMetrics {
         result.removeAttribute(.mdBaseFont, range: full)
         result.removeAttribute(.mdBaseParagraph, range: full)
         result.removeAttribute(.mdReaderBold, range: full)
+        result.removeAttribute(.kern, range: full)
         return result
     }
 
@@ -368,6 +377,7 @@ enum ReaderMetrics {
             if pageWidthOverride > 0 { return pageWidthOverride }
             let probe = readerFont(family: family, size: MemoFont.body.pointSize * scale, traits: [])
             let advance = ("한" as NSString).size(withAttributes: [.font: probe]).width
+                + probe.pointSize * SettingsManager.shared.documentLetterSpacing / 100
             return columnWidth(charCount: charCount, glyphAdvance: advance)
         }
     }
@@ -376,7 +386,7 @@ enum ReaderMetrics {
     static func columnWidth(mode: WidthMode) -> CGFloat {
         let s = SettingsManager.shared
         if mode == .book, let paper = DocumentPaperSize.selected.points { return paper.width }
-        return columnWidth(mode: mode, scale: s.readingFontScale,
+        return columnWidth(mode: mode, scale: s.readingDisplayScale,
                            family: s.readingFont, charCount: s.readingLineLength,
                            pageWidthOverride: s.readingPageWidth)
     }

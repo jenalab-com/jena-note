@@ -29,12 +29,15 @@ enum HwpxWriter {
         var imageSkipped: Int
     }
 
-    static func write(_ blocks: [Block]) -> Data {
-        build(blocks).data
+    static func write(_ blocks: [Block], bodySize: CGFloat = MemoFont.body.pointSize,
+                      letterSpacing: CGFloat = 0) -> Data {
+        build(blocks, bodySize: bodySize, letterSpacing: letterSpacing).data
     }
 
-    static func build(_ blocks: [Block]) -> Output {
+    static func build(_ blocks: [Block], bodySize: CGFloat = MemoFont.body.pointSize,
+                      letterSpacing: CGFloat = 0) -> Output {
         var ctx = Context()
+        ctx.typography = ExportTypography(body: bodySize, letterSpacing: letterSpacing)
         ctx.build(blocks)
 
         var zip = ZipArchive()
@@ -54,7 +57,8 @@ enum HwpxWriter {
     private struct CharStyle: Hashable {
         var bold = false
         var italic = false
-        var height = 1000          // 글자 크기 (1/100 pt). 1000 = 10pt.
+        var height: Int            // 글자 크기 (1/100 pt). 1000 = 10pt.
+        var spacing = 0            // 자간 (%).
         var color = "#000000"      // "#RRGGBB"
     }
 
@@ -62,7 +66,8 @@ enum HwpxWriter {
     private struct BlockStyle {
         var bold = false
         var italic = false
-        var height = 1000
+        var height: Int
+        var spacing = 0
         var color = "#000000"
     }
 
@@ -70,6 +75,7 @@ enum HwpxWriter {
 
     private struct Context {
         var body = ""
+        var typography = ExportTypography(body: MemoFont.body.pointSize)
         var charStyles: [CharStyle] = []
         var styleMap: [CharStyle: Int] = [:]
         var imageSkipped = 0
@@ -84,36 +90,37 @@ enum HwpxWriter {
         }
 
         mutating func build(_ blocks: [Block]) {
-            _ = charPrID(CharStyle())   // id 0 = 기본 서식 보장
+            _ = charPrID(CharStyle(height: bodyHeight, spacing: bodySpacing))   // id 0 = 기본 서식 보장
 
             for block in blocks {
                 switch block {
                 case let .heading(level, inlines):
-                    let h = level == 1 ? 1600 : (level == 2 ? 1400 : 1200)
-                    emitPara(paraPr: 0, runs: runsXML(inlines, base: BlockStyle(bold: true, height: h)))
+                    let height = hundredths(typography.heading(level))
+                    emitPara(paraPr: 0, runs: runsXML(inlines, base: BlockStyle(bold: true, height: height, spacing: bodySpacing)))
                 case let .paragraph(inlines):
-                    emitPara(paraPr: 0, runs: runsXML(inlines, base: BlockStyle()))
+                    emitPara(paraPr: 0, runs: runsXML(inlines, base: BlockStyle(height: bodyHeight, spacing: bodySpacing)))
                 case let .listItem(ordered, index, inlines):
                     let marker = ordered ? "\(index). " : "• "
-                    let runs = runXML(text: marker, style: CharStyle()) + runsXML(inlines, base: BlockStyle())
+                    let runs = runXML(text: marker, style: CharStyle(height: bodyHeight, spacing: bodySpacing))
+                        + runsXML(inlines, base: BlockStyle(height: bodyHeight, spacing: bodySpacing))
                     emitPara(paraPr: 1, runs: runs)
                 case let .blockquote(inlines):
-                    emitPara(paraPr: 1, runs: runsXML(inlines, base: BlockStyle(italic: true, color: "#666666")))
+                    emitPara(paraPr: 1, runs: runsXML(inlines, base: BlockStyle(italic: true, height: bodyHeight, spacing: bodySpacing, color: "#666666")))
                 case let .codeBlock(code):
                     for line in code.components(separatedBy: "\n") {
-                        emitPara(paraPr: 1, runs: runXML(text: line, style: CharStyle(color: "#444444")))
+                        emitPara(paraPr: 1, runs: runXML(text: line, style: CharStyle(height: hundredths(typography.code), color: "#444444")))
                     }
                 case let .table(rows, headerRow):
                     // 행별 텍스트 평탄화 (내용 보존, 격자는 hwpx 2차).
                     for (r, row) in rows.enumerated() {
                         let cellTexts = row.map { plainText($0) }
                         let line = cellTexts.joined(separator: "   |   ")
-                        let style = r == headerRow ? CharStyle(bold: true) : CharStyle()
+                        let style = CharStyle(bold: r == headerRow, height: bodyHeight, spacing: bodySpacing)
                         emitPara(paraPr: 0, runs: runXML(text: line, style: style))
                     }
                 case .horizontalRule:
                     emitPara(paraPr: 0, runs: runXML(text: "────────────────────────",
-                                                     style: CharStyle(color: "#999999")))
+                                                     style: CharStyle(height: bodyHeight, color: "#999999")))
                 case .image:
                     imageSkipped += 1   // 1차 hwpx는 이미지 생략
                 }
@@ -123,6 +130,13 @@ enum HwpxWriter {
             if !firstParaEmitted {
                 emitPara(paraPr: 0, runs: "<hp:run charPrIDRef=\"0\"/>")
             }
+        }
+
+        private var bodyHeight: Int { hundredths(typography.body) }
+        private var bodySpacing: Int { Int(typography.letterSpacing.rounded()) }
+
+        private func hundredths(_ points: CGFloat) -> Int {
+            Int((points * 100).rounded())
         }
 
         // MARK: 문단·런
@@ -144,6 +158,7 @@ enum HwpxWriter {
                     bold: inline.bold || base.bold,
                     italic: inline.italic || base.italic,
                     height: base.height,
+                    spacing: inline.code ? 0 : base.spacing,
                     color: inline.color ?? base.color
                 )
                 out += runXML(text: inline.text, style: style)
@@ -225,7 +240,9 @@ enum HwpxWriter {
             + "shadeColor=\"none\" useFontSpace=\"0\" useKerning=\"0\" symMark=\"NONE\" borderFillIDRef=\"2\">"
         s += "<hh:fontRef hangul=\"0\" latin=\"0\" hanja=\"0\" japanese=\"0\" other=\"0\" symbol=\"0\" user=\"0\"/>"
         s += "<hh:ratio hangul=\"100\" latin=\"100\" hanja=\"100\" japanese=\"100\" other=\"100\" symbol=\"100\" user=\"100\"/>"
-        s += "<hh:spacing hangul=\"0\" latin=\"0\" hanja=\"0\" japanese=\"0\" other=\"0\" symbol=\"0\" user=\"0\"/>"
+        let spacing = style.spacing
+        s += "<hh:spacing hangul=\"\(spacing)\" latin=\"\(spacing)\" hanja=\"\(spacing)\" japanese=\"\(spacing)\" "
+            + "other=\"\(spacing)\" symbol=\"\(spacing)\" user=\"\(spacing)\"/>"
         s += "<hh:relSz hangul=\"100\" latin=\"100\" hanja=\"100\" japanese=\"100\" other=\"100\" symbol=\"100\" user=\"100\"/>"
         s += "<hh:offset hangul=\"0\" latin=\"0\" hanja=\"0\" japanese=\"0\" other=\"0\" symbol=\"0\" user=\"0\"/>"
         if style.bold { s += "<hh:bold/>" }

@@ -124,7 +124,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
 
     // MARK: - State
     private var sourceContent: NSMutableAttributedString
-    private var scale: CGFloat = SettingsManager.shared.readingFontScale
+    private var scale: CGFloat = SettingsManager.shared.readingDisplayScale
     private var pageMode: SettingsManager.ReadingPageMode = SettingsManager.shared.readingPageMode
     private var fontFamily: SettingsManager.ReadingFont = SettingsManager.shared.readingFont
     private var fontWeight: SettingsManager.ReadingWeight = SettingsManager.shared.readingWeight
@@ -284,7 +284,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
             host.bounds = NSRect(origin: .zero, size: host.frame.size)
             return
         }
-        let scale = min(1, host.frame.width / (paper.width + 48), host.frame.height / (paper.height + 2 * pageVMargin))
+        let scale = min(1, host.frame.width / (paper.width + 48))
         guard scale > 0 else { return }
         host.bounds = NSRect(origin: .zero, size: NSSize(width: host.frame.width / scale, height: host.frame.height / scale))
     }
@@ -458,8 +458,13 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
     }
 
     func setFontScale(_ newScale: CGFloat) {
-        scale = min(max(newScale, 0.8), 2.0)
-        SettingsManager.shared.readingFontScale = scale
+        SettingsManager.shared.readingFontScale = newScale
+        refreshFontScale()
+    }
+
+    /// 실제 글자 크기나 화면 배율이 바뀌면 조판을 다시 입는다.
+    func refreshFontScale() {
+        scale = SettingsManager.shared.readingDisplayScale
         renderContent()
     }
 
@@ -615,11 +620,11 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         pageViews = []
     }
 
-    /// 페이지 한 장의 크기(치수자가 보여주는 폭 × 페이지 높이). 배치의 기준이다.
+    /// 페이지 한 장의 크기(치수자가 보여주는 폭 × 화면 높이). 배치의 기준이다.
+    /// 문서 크기는 가로만 정한다. 인쇄는 내보내서 하므로 세로는 화면에 맞춘다.
     private func pageBoxSize() -> NSSize {
         guard let host = pagedHost else { return .zero }
-        return NSSize(width: columnWidthForCurrentSettings(),
-                      height: widthMode == .book ? (DocumentPaperSize.selected.points?.height ?? max(1, host.bounds.height - 2 * pageVMargin)) : max(1, host.bounds.height - 2 * pageVMargin))
+        return NSSize(width: columnWidthForCurrentSettings(), height: max(1, host.bounds.height - 2 * pageVMargin))
     }
 
     /// 페이지 컨테이너 한 장의 크기 = 페이지에서 좌·우 여백을 뺀 글 영역.

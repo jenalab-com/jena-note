@@ -1,6 +1,7 @@
 import AppKit
 
 /// Portrait dimensions in millimeters; automatic preserves the existing reading layout.
+/// The reader uses the width only: page height follows the window, and printing goes through export.
 enum DocumentPaperSize: String, CaseIterable {
     case automatic, a3, a4, a5, a6, b3, b4, b5, b6, jisB4, jisB5, letter, legal
     static let changed = Notification.Name("JenaNoteDocumentPaperSizeChanged")
@@ -42,6 +43,6 @@ enum DocumentPaperSize: String, CaseIterable {
         case .legal: name = "Legal"
         default: name = rawValue.uppercased()
         }
-        return name + String(format: " · %g × %g mm", Double(size.width), Double(size.height))
+        return name + String(format: " · %g mm", Double(size.width))
     }
 }

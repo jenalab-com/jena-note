@@ -5,8 +5,9 @@ import AppKit
 final class DocxWriterTests: XCTestCase {
 
     // 헬퍼: docx 생성 → 임시파일 → unzip으로 특정 엔트리 내용 추출
-    private func docxEntry(_ blocks: [Block], entry: String) throws -> String {
-        let data = DocxWriter.write(blocks)
+    private func docxEntry(_ blocks: [Block], entry: String, bodySize: CGFloat = 15,
+                           letterSpacing: CGFloat = 0) throws -> String {
+        let data = DocxWriter.write(blocks, bodySize: bodySize, letterSpacing: letterSpacing)
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("docxtest-\(UUID().uuidString).docx")
         try data.write(to: tmp)
@@ -24,6 +25,48 @@ final class DocxWriterTests: XCTestCase {
         XCTAssertEqual(proc.terminationStatus, 0, "docx unzip 실패")
 
         return try String(contentsOf: outDir.appendingPathComponent(entry), encoding: .utf8)
+    }
+
+    // MARK: - 글자 크기
+
+    /// 앱에서 정한 실제 글자 크기가 문서에 그대로 나가고, 제목은 항상 본문보다 크다.
+    func testBodySizeReachesEveryRunAndHeadingsStayLarger() throws {
+        let xml = try docxEntry([
+            .heading(level: 2, inlines: [Inline(text: "제목")]),
+            .paragraph([Inline(text: "본문")]),
+            .listItem(ordered: false, index: 1, inlines: [Inline(text: "항목")]),
+            .blockquote([Inline(text: "인용")]),
+            .codeBlock("code")
+        ], entry: "word/document.xml", bodySize: 11)
+
+        XCTAssertTrue(xml.contains("<w:rPr><w:sz w:val=\"22\"/></w:rPr><w:t xml:space=\"preserve\">본문"), "11pt = 22 half-point")
+        XCTAssertTrue(xml.contains("<w:rPr><w:sz w:val=\"22\"/></w:rPr><w:t xml:space=\"preserve\">•"), "글머리도 본문 크기다")
+        XCTAssertTrue(xml.contains("<w:i/><w:sz w:val=\"22\"/>"), "인용도 본문 크기다")
+        XCTAssertTrue(xml.contains("<w:b/><w:sz w:val=\"32\"/>"), "H2는 앱과 같은 22:15 비율이다")
+        XCTAssertTrue(xml.contains("<w:sz w:val=\"19\"/>"), "코드는 앱과 같은 13:15 비율이다")
+    }
+
+    /// 자간은 글자 크기에 대한 %라서 크기마다 1/20 pt 값이 달라진다. 코드에는 넣지 않는다.
+    func testLetterSpacingBecomesTwipsPerSizeAndSkipsCode() throws {
+        let xml = try docxEntry([
+            .heading(level: 2, inlines: [Inline(text: "제목")]),
+            .paragraph([Inline(text: "본문"), Inline(text: "code", code: true)]),
+            .codeBlock("block")
+        ], entry: "word/document.xml", bodySize: 10, letterSpacing: 10)
+
+        XCTAssertTrue(xml.contains("<w:spacing w:val=\"20\"/><w:sz w:val=\"20\"/></w:rPr><w:t xml:space=\"preserve\">본문"), "10pt의 10% = 1pt = 20")
+        XCTAssertTrue(xml.contains("<w:b/><w:spacing w:val=\"29\"/>"), "제목은 제목 크기의 10%다")
+        XCTAssertEqual(xml.components(separatedBy: "<w:spacing w:val=").count - 1, 2, "코드에는 자간이 없다")
+    }
+
+    func testNoLetterSpacingWritesNoSpacingElement() throws {
+        let xml = try docxEntry([.paragraph([Inline(text: "본문")])], entry: "word/document.xml")
+        XCTAssertFalse(xml.contains("<w:spacing w:val="))
+    }
+
+    func testHalfPointSizesRoundToTheNearestHalf() throws {
+        let xml = try docxEntry([.paragraph([Inline(text: "본문")])], entry: "word/document.xml", bodySize: 10.5)
+        XCTAssertTrue(xml.contains("<w:sz w:val=\"21\"/>"))
     }
 
     // MARK: - 무결성

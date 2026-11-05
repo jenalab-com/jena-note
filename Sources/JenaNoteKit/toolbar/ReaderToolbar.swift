@@ -15,6 +15,11 @@ class ReaderToolbar: NSToolbar {
     private static let itemSource = NSToolbarItem.Identifier("markdownSource")
     private static let itemAppearance = NSToolbarItem.Identifier("appearance")
     private static let itemHeading = NSToolbarItem.Identifier("heading")
+    private static let itemFontSize = NSToolbarItem.Identifier("documentFontSize")
+    private static let itemFontDown = NSToolbarItem.Identifier("readerFontDown")
+    private static let itemFontUp   = NSToolbarItem.Identifier("readerFontUp")
+    private weak var fontSizeControl: NumberStepControl?
+    private weak var zoomLabel: NSTextField?
     private static let itemLists = NSToolbarItem.Identifier("lists")
     private static let itemInsert = NSToolbarItem.Identifier("insert")
     private static let itemProofreading = NSToolbarItem.Identifier("proofreadSelection")
@@ -44,6 +49,7 @@ class ReaderToolbar: NSToolbar {
             let allowed = [Self.itemSource, Self.itemAI, Self.itemFind].contains(item.itemIdentifier)
             (item.view as? NSControl)?.isEnabled = !active || allowed
         }
+        fontSizeControl?.isEnabled = !active
         pageModeControl?.setEnabled(!active, forSegment: 0)
         pageModeControl?.setEnabled(!active && !isAIActive, forSegment: 1)
         if active { formatItems.updateSelection(hasSelectedText: false) }
@@ -63,8 +69,6 @@ class ReaderToolbar: NSToolbar {
     private static let itemFontFamily = NSToolbarItem.Identifier("readerFontFamily")
     private static let itemFontWeight = NSToolbarItem.Identifier("readerFontWeight")
     private static let itemLineSpacing = NSToolbarItem.Identifier("readerLineSpacing")
-    private static let itemFontDown = NSToolbarItem.Identifier("readerFontDown")
-    private static let itemFontUp   = NSToolbarItem.Identifier("readerFontUp")
     private static let itemWidth = NSToolbarItem.Identifier("readerWidth")
     private static let itemBookmark = NSToolbarItem.Identifier("readerBookmark")
     private static let itemBookmarkList = NSToolbarItem.Identifier("readerBookmarkList")
@@ -101,6 +105,10 @@ class ReaderToolbar: NSToolbar {
         bookmarkButton?.image = NSImage(systemSymbolName: symbol,
                                         accessibilityDescription: L10n.tr("reader.bookmark.toggle"))?
             .withSymbolConfiguration(config)
+    }
+
+    func updateZoomLabel() {
+        zoomLabel?.stringValue = "\(Int((SettingsManager.shared.readingFontScale * 100).rounded()))%"
     }
 
     func focusFindField() { findField?.window?.makeFirstResponder(findField) }
@@ -187,7 +195,7 @@ extension ReaderToolbar: NSToolbarDelegate {
 
     func toolbarDefaultItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] {
         [ReaderToolbar.itemFind, ReaderToolbar.itemReplaceToggle, ReaderToolbar.itemMode, ReaderToolbar.itemAppearance, ReaderToolbar.itemSource, .space,
-         ReaderToolbar.itemHeading, .init("bold"), .init("italic"), .init("inlineCode"),
+         ReaderToolbar.itemHeading, ReaderToolbar.itemFontSize, .init("bold"), .init("italic"), .init("inlineCode"),
          ReaderToolbar.itemLists, ReaderToolbar.itemInsert, .init("textColor"),
          .flexibleSpace, ReaderToolbar.itemBookmark, ReaderToolbar.itemBookmarkList,
          ReaderToolbar.itemProofreading, ReaderToolbar.itemAI]
@@ -266,6 +274,23 @@ extension ReaderToolbar: NSToolbarDelegate {
             item.view = NSButton(title: item.label, target: self, action: #selector(showAppearance(_:)))
             item.toolTip = item.label
             return item
+        case ReaderToolbar.itemFontSize:
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.label = L10n.tr("reader.fontSize")
+            item.toolTip = item.label
+            let control = NumberStepControl(value: SettingsManager.shared.documentFontSize,
+                                            range: SettingsManager.documentFontSizeRange, unit: "pt")
+            control.isEnabled = !isSourceActive
+            control.onChange = { [weak self] in (self?.target as? EditorWindowController)?.setDocumentFontSize($0) }
+            fontSizeControl = control
+            item.view = control
+            return item
+        case ReaderToolbar.itemFontDown:
+            return iconItem(id, label: L10n.tr("reader.fontDown"), symbol: "textformat.size.smaller",
+                            action: #selector(EditorWindowController.decreaseReaderFont(_:)))
+        case ReaderToolbar.itemFontUp:
+            return iconItem(id, label: L10n.tr("reader.fontUp"), symbol: "textformat.size.larger",
+                            action: #selector(EditorWindowController.increaseReaderFont(_:)))
         case ReaderToolbar.itemHeading:
             let item = menuItem(id, label: L10n.tr("menu.format.body"), entries: [
                 (L10n.tr("menu.format.body"), #selector(EditorViewController.setBodyText)),
@@ -338,12 +363,6 @@ extension ReaderToolbar: NSToolbarDelegate {
                                labels: [L10n.tr("reader.lineTight"), L10n.tr("reader.lineNormal"), L10n.tr("reader.lineWide")],
                                selected: sel,
                                action: #selector(EditorWindowController.changeReaderLineSpacing(_:)))
-        case ReaderToolbar.itemFontDown:
-            return iconItem(id, label: L10n.tr("reader.fontDown"), symbol: "textformat.size.smaller",
-                            action: #selector(EditorWindowController.decreaseReaderFont(_:)))
-        case ReaderToolbar.itemFontUp:
-            return iconItem(id, label: L10n.tr("reader.fontUp"), symbol: "textformat.size.larger",
-                            action: #selector(EditorWindowController.increaseReaderFont(_:)))
         default:
             return formatItems.toolbar(formatItems, itemForItemIdentifier: id, willBeInsertedIntoToolbar: flag)
         }
@@ -394,19 +413,36 @@ extension ReaderToolbar: NSToolbarDelegate {
         paper.target = self
         paper.action = #selector(changePaperSize(_:))
         stack.insertArrangedSubview(NSStackView(views: [NSTextField(labelWithString: L10n.tr("paperSize.title")), paper]), at: 0)
+        let letterSpacing = NumberStepControl(value: SettingsManager.shared.documentLetterSpacing,
+                                              range: SettingsManager.documentLetterSpacingRange,
+                                              unit: "%", granularity: 1)
+        letterSpacing.onChange = { [weak self] in (self?.target as? EditorWindowController)?.setDocumentLetterSpacing($0) }
+        let letterSpacingLabel = NSTextField(labelWithString: L10n.tr("reader.letterSpacing"))
+        letterSpacingLabel.font = .systemFont(ofSize: 12)
+        let letterSpacingRow = NSStackView(views: [letterSpacingLabel, letterSpacing])
+        letterSpacingRow.spacing = 12
+        stack.addArrangedSubview(letterSpacingRow)
         let zoom = NSStackView()
         zoom.addArrangedSubview(NSTextField(labelWithString: L10n.tr("toolbar.zoom")))
+        let percent = NSTextField(labelWithString: "")
+        percent.alignment = .center
+        percent.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        percent.translatesAutoresizingMaskIntoConstraints = false
+        percent.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        zoomLabel = percent
+        updateZoomLabel()
         for id in [Self.itemFontDown, Self.itemFontUp] {
             if let control = toolbar(self, itemForItemIdentifier: id, willBeInsertedIntoToolbar: false)?.view {
                 zoom.addArrangedSubview(control)
             }
+            if id == Self.itemFontDown { zoom.addArrangedSubview(percent) }
         }
         stack.addArrangedSubview(zoom)
         let controller = NSViewController()
         controller.view = stack
         let popover = NSPopover()
         popover.contentViewController = controller
-        popover.contentSize = NSSize(width: 380, height: 285)
+        popover.contentSize = NSSize(width: 380, height: 325)
         popover.behavior = .transient
         appearancePopover = popover
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)

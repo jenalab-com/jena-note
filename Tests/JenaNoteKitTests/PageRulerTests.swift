@@ -61,6 +61,37 @@ final class PageRulerTests: XCTestCase {
         return (reader, window)
     }
 
+    /// 문서 크기는 가로만 정한다. 세로는 화면에 맞춰야 큰 화면에서 글이 중간에 끊겨 보이지 않는다.
+    func testPaperSizeSetsTheWidthAndPageHeightFollowsTheWindow() throws {
+        DocumentPaperSize.selected = .a4
+        defer { DocumentPaperSize.selected = .automatic }
+        let doc = MarkdownDocument()
+        doc.content = NSMutableAttributedString(attributedString: MarkdownSerializer.parse((1...200).map { "문단 \($0)" }.joined(separator: "\n\n")))
+        let controller = EditorWindowController()
+        doc.addWindowController(controller)
+        let window = try XCTUnwrap(controller.window)
+        window.isReleasedWhenClosed = false
+        defer { doc.updateChangeCount(.changeCleared); window.close(); doc.removeWindowController(controller) }
+        window.setContentSize(NSSize(width: 1800, height: 1300))
+        window.makeKeyAndOrderFront(nil)
+        window.layoutIfNeeded()
+        let reader = try XCTUnwrap(controller.readerVC)
+        reader.view.layoutSubtreeIfNeeded()
+        pump()
+        let tallHeight = try XCTUnwrap(reader.visiblePageTextViews.first).frame.height
+        let a4 = try XCTUnwrap(DocumentPaperSize.a4.points)
+        XCTAssertEqual(reader.currentPageWidth, a4.width, accuracy: 0.01, "가로는 A4 그대로다")
+        XCTAssertGreaterThan(tallHeight, a4.height, "세로는 A4 높이에 묶이지 않고 창을 채운다")
+
+        window.setContentSize(NSSize(width: 1800, height: 600))
+        window.layoutIfNeeded()
+        reader.view.layoutSubtreeIfNeeded()
+        pump()
+        XCTAssertEqual(reader.currentPageWidth, a4.width, accuracy: 0.01)
+        let shortHeight = try XCTUnwrap(reader.visiblePageTextViews.first).frame.height
+        XCTAssertLessThan(shortHeight, tallHeight, "창이 낮아지면 페이지도 낮아진다")
+    }
+
     func testPaperDimensionsAndFixedMarginsDoNotResizePaper() {
         DocumentPaperSize.selected = .a4
         XCTAssertEqual(ReaderMetrics.columnWidth(mode: .book), 210 * 72 / 25.4, accuracy: 0.01)

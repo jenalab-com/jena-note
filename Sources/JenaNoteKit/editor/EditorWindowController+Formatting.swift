@@ -106,7 +106,7 @@ extension EditorWindowController {
         if selected.length == 0 {
             let sample = NSAttributedString(string: " ", attributes: staging.typingAttributes)
             let settings = SettingsManager.shared
-            let styled = ReaderMetrics.styled(sample, scale: settings.readingFontScale, font: settings.readingFont,
+            let styled = ReaderMetrics.styled(sample, scale: settings.readingDisplayScale, font: settings.readingFont,
                                                lineHeightMultiple: settings.readingLineSpacing, weight: settings.readingWeight)
             let attributes = styled.attributes(at: 0, effectiveRange: nil)
             if let reader = readerVC { reader.setTypingAttributes(attributes) }

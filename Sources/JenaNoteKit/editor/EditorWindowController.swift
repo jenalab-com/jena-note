@@ -588,9 +588,21 @@ class EditorWindowController: NSWindowController {
     }
 
     private func setReadingFontScale(_ value: CGFloat) {
-        let clamped = min(max(value, 0.8), 2.0)
-        SettingsManager.shared.readingFontScale = clamped
-        readerVC?.setFontScale(clamped)
+        SettingsManager.shared.readingFontScale = value
+        readerVC?.refreshFontScale()
+        editorVC.refreshReadingLayout()
+        readerToolbar?.updateZoomLabel()
+    }
+
+    func setDocumentLetterSpacing(_ percent: CGFloat) {
+        SettingsManager.shared.documentLetterSpacing = percent
+        readerVC?.refreshFontScale()
+        editorVC.refreshReadingLayout()
+    }
+
+    func setDocumentFontSize(_ size: CGFloat) {
+        SettingsManager.shared.documentFontSize = size
+        readerVC?.refreshFontScale()
         editorVC.refreshReadingLayout()
     }
 
