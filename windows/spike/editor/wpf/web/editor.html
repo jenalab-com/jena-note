@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; height: 100%; font: 16px "Malgun Gothic", sans-serif; }
+  #editor { height: 100%; overflow: auto; padding: 24px 48px; box-sizing: border-box; outline: none; }
+  #editor p { margin: 0 0 16px; }
+  #editor table { border-collapse: collapse; margin-bottom: 16px; }
+  #editor td { border: 1px solid #888; padding: 4px 8px; }
+  ::highlight(proof) { text-decoration: underline wavy red; }
+  #pages { position: absolute; left: -100000px; top: 0; width: 698px; height: 1027px; column-width: 698px; column-gap: 96px; font: 16px "Malgun Gothic", sans-serif; }
+  #pages p { margin: 0 0 16px; }
+</style>
+</head>
+<body>
+<div id="editor" contenteditable="true" spellcheck="false"></div>
+<script>
+// Plain contenteditable: measures the browser engine, not a finished editor framework.
+const editor = document.getElementById('editor');
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+const median = v => [...v].sort((a, b) => a - b)[v.length >> 1];
+const fragmentOf = paragraphs => {
+  const fragment = document.createDocumentFragment();
+  for (const text of paragraphs) { const p = document.createElement('p'); p.textContent = text; fragment.append(p); }
+  return fragment;
+};
+const round = v => Math.round(v * 100) / 100;
+
+window.chrome.webview.addEventListener('message', async ({ data }) => {
+  const results = {};
+  try {
+    let t = performance.now();
+    editor.append(fragmentOf(data.paragraphs));
+    editor.getBoundingClientRect(); editor.scrollHeight;
+    await nextFrame();
+    results.open_ms = round(performance.now() - t);
+    if (data.mode === 'open') { editor.focus(); window.chrome.webview.postMessage(JSON.stringify(results)); return; }
+
+    const blocks = [...editor.querySelectorAll('p')];
+    t = performance.now();
+    const ranges = [];
+    for (let i = 0; i < 200; i++) {
+      const node = blocks[Math.floor(i * blocks.length / 200)].firstChild;
+      const range = new Range(); range.setStart(node, 0); range.setEnd(node, 6); ranges.push(range);
+    }
+    CSS.highlights.set('proof', new Highlight(...ranges));
+    await nextFrame();
+    results.underline_200_ms = round(performance.now() - t);
+    results.wavy_underline = 'CSS Custom Highlight';
+
+    const middle = blocks[blocks.length >> 1];
+    middle.scrollIntoView();
+    editor.focus();
+    const selection = getSelection();
+    selection.collapse(middle.firstChild, 0);
+    const edits = [];
+    for (let i = 0; i < 50; i++) {
+      t = performance.now();
+      document.execCommand('insertText', false, '가');
+      editor.scrollHeight;
+      edits.push(performance.now() - t);
+      await nextFrame();
+    }
+    results.edit_median_ms = round(median(edits));
+
+    t = performance.now();
+    const table = document.createElement('table');
+    table.innerHTML = '<tr><td>셀 1</td><td>셀 2</td></tr>';
+    blocks[0].after(table);
+    const image = document.createElement('img');
+    image.width = 64; image.height = 64;
+    image.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    blocks[1].after(image);
+    await nextFrame();
+    results.table_image_ms = round(performance.now() - t);
+
+    // CSS columns as pages: one column per A4 text box. Off-screen copy, as in the WPF test.
+    t = performance.now();
+    const pages = document.createElement('div');
+    pages.id = 'pages';
+    pages.append(fragmentOf(data.paragraphs));
+    document.body.append(pages);
+    const width = pages.scrollWidth;
+    results.paginate_ms = round(performance.now() - t);
+    results.page_count = Math.round((width + 96) / (698 + 96));
+    pages.remove();
+    editor.scrollTop = 0;
+  } catch (error) { results.fatal = String(error.stack || error); }
+  window.chrome.webview.postMessage(JSON.stringify(results));
+});
+</script>
+</body>
+</html>

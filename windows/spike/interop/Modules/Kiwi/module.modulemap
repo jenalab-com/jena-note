@@ -1,0 +1,5 @@
+module Kiwi {
+    header "capi.h"
+    link "kiwi"
+    export *
+}

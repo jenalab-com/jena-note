@@ -1,0 +1,11 @@
+.out/
+interop/.build/
+interop/Modules/Kiwi/*.h
+interop/Sources/JenaNoteKit/Imported/
+interop/Sources/JenaNoteKit/Resources/
+interop/Tests/JenaNoteKitTests/Imported/
+harness/bin/
+harness/obj/
+editor/*/bin/
+editor/*/obj/
+interop/Info.plist
