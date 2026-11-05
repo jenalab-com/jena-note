@@ -1,9 +1,12 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Threading;
 using Microsoft.Win32;
 
 namespace JenaNote;
@@ -18,13 +21,31 @@ sealed class EditorWindow : Window
     int savedRevision;
     bool closeConfirmed;
     bool saving;
+    bool closeInProgress;
+    bool editorStarted;
+    bool reportedBackupFailure;
+    (DateTime Modified, long Length)? diskStamp;
     Task? ready;
+    readonly string recoveryId;
+    readonly DispatcherTimer autosaveTimer = new();
+    readonly DispatcherTimer recoveryTimer = new();
+
+    /// <summary>In-place saving, on by default as on macOS. The settings window will control these.</summary>
+    public static bool AutosaveEnabled { get; set; } = true;
+    public static TimeSpan AutosaveDelay { get; set; } = TimeSpan.FromSeconds(60);
+    /// <summary>How soon an unsaved change gets a recovery copy.</summary>
+    public static TimeSpan RecoveryDelay { get; set; } = TimeSpan.FromSeconds(5);
+    /// <summary>The self test's answer to the overwrite question, since nobody can click it.</summary>
+    public static bool OverwriteAnswerForTest { get; set; }
 
     bool IsDirty => currentRevision != savedRevision;
     bool IsPristine => filePath == null && !IsDirty;
 
-    public EditorWindow(string? path = null, string? initialText = null)
+    public EditorWindow(string? path = null, string? initialText = null, string? recoveredId = null)
     {
+        recoveryId = recoveredId ?? Guid.NewGuid().ToString("N");
+        autosaveTimer.Tick += async (_, _) => await AutosaveTickAsync();
+        recoveryTimer.Tick += async (_, _) => await RecoveryTickAsync();
         Width = 1100;
         Height = 800;
         MinWidth = 480;
@@ -46,6 +67,7 @@ sealed class EditorWindow : Window
         {
             currentRevision = revision + revisionOffset;
             UpdateTitle();
+            StartTimers();
         };
         editor.CommandRequested += RunCommand;
         editor.DocumentPath = path;
@@ -53,9 +75,19 @@ sealed class EditorWindow : Window
         editor.AlertRequested += text => MessageBox.Show(this, text, "Jena Note", MessageBoxButton.OK, MessageBoxImage.Information);
         Action dictionaryChanged = editor.DictionaryChanged;
         DictionaryWindow.Changed += dictionaryChanged;
-        Closed += (_, _) => DictionaryWindow.Changed -= dictionaryChanged;
-        Loaded += (_, _) => ready = StartEditorAsync(initialText ?? "");
-        Activated += (_, _) => editor.Focus();
+        Closed += (_, _) =>
+        {
+            DictionaryWindow.Changed -= dictionaryChanged;
+            autosaveTimer.Stop();
+            recoveryTimer.Stop();
+            RecoveryStore.Delete(recoveryId);
+        };
+        Loaded += (_, _) => ready = StartEditorAsync(initialText ?? "", recoveredId != null);
+        Activated += (_, _) =>
+        {
+            editor.Focus();
+            CheckDiskChange();
+        };
     }
 
     /// <summary>The page restarts its count on load; this keeps window revisions increasing.</summary>
@@ -65,22 +97,25 @@ sealed class EditorWindow : Window
 
     public Task WhenReady() => ready ?? Task.CompletedTask;
 
-    async Task StartEditorAsync(string text)
+    async Task StartEditorAsync(string text, bool recovered)
     {
         await editor.InitializeAsync();
-        LoadIntoEditor(text);
+        editorStarted = true;
+        LoadIntoEditor(text, dirty: recovered);
     }
 
-    void LoadIntoEditor(string text)
+    void LoadIntoEditor(string text, bool dirty = false)
     {
         revisionOffset = currentRevision + 1;
         currentRevision = revisionOffset;
-        savedRevision = currentRevision;
+        savedRevision = dirty ? currentRevision - 1 : currentRevision;
+        diskStamp = filePath != null ? DocumentFile.Stamp(filePath) : null;
         if (plainText) editor.LoadPlainText(text);
         else editor.LoadMarkdown(text);
         // Focus inside the page is not enough. Keys go to the native control that holds focus.
         editor.Focus();
         UpdateTitle();
+        StartTimers();
     }
 
     void UpdateTitle()
@@ -117,6 +152,8 @@ sealed class EditorWindow : Window
             Top("menu.file.export",
                 Item("menu.file.export.docx", "", () => RunCommand("exportDocx")),
                 Item("menu.file.export.hwpx", "", () => RunCommand("exportHwpx"))),
+            new Separator(),
+            Item("backup.title", "", () => RunCommand("history")),
             new Separator(),
             Item("menu.file.close", "", Close)));
         menu.Items.Add(Top("menu.edit",
@@ -176,6 +213,12 @@ sealed class EditorWindow : Window
                 break;
             case "saveAs":
                 await SaveAsync(chooseLocation: true);
+                break;
+            case "history":
+                if (filePath == null)
+                    MessageBox.Show(this, NativeCore.Tr("backup.saveFirst"), "Jena Note", MessageBoxButton.OK, MessageBoxImage.Information);
+                else
+                    new HistoryWindow(this, filePath).Show();
                 break;
             case "exportDocx":
                 await ExportWithDialogAsync("docx");
@@ -254,13 +297,31 @@ sealed class EditorWindow : Window
             path = dialog.FileName;
         }
 
+        return await WriteAsync(path, automatic: false);
+    }
+
+    /// <summary>
+    /// Writes the document, keeping history around the write. Automatic saves never interrupt:
+    /// they stay quiet on failure and leave a file that another program changed alone.
+    /// </summary>
+    async Task<bool> WriteAsync(string path, bool automatic)
+    {
+        if (saving) return false;
         saving = true;
         try
         {
+            var sameFile = filePath != null && string.Equals(Path.GetFullPath(filePath), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase);
+            var changedOnDisk = sameFile && ChangedOnDisk(path);
+            if (changedOnDisk && (automatic || !ConfirmOverwrite(path))) return false;
+
             var saveAsPlain = DocumentFile.IsPlainText(path);
             var content = await editor.GetContentAsync(saveAsPlain ? "text" : "blocks");
             var text = TextToSave(content, saveAsPlain);
-            DocumentFile.Write(path, text);
+            var bytes = new UTF8Encoding(false).GetBytes(text);
+
+            KeepHistoryBeforeWrite(path, changedOnDisk);
+            DocumentFile.WriteBytes(path, bytes);
+            KeepHistoryAfterWrite(path, bytes, automatic);
 
             var pageRevision = content.GetProperty("revision").GetInt32();
             var modeChanged = saveAsPlain != plainText;
@@ -274,22 +335,154 @@ sealed class EditorWindow : Window
             }
             else
             {
+                diskStamp = DocumentFile.Stamp(path);
                 // Typing that arrived while saving stays unsaved, because its revision is newer.
                 savedRevision = pageRevision + revisionOffset;
                 UpdateTitle();
+                StartTimers();
+            }
+            if (!IsDirty)
+            {
+                recoveryTimer.Stop();
+                RecoveryStore.Delete(recoveryId);
             }
             return true;
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException or NotSupportedException)
         {
-            MessageBox.Show(this, NativeCore.Tr("doc.saveFailed").Replace("%@", error.Message), "Jena Note",
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            if (automatic || IsSelfTesting)
+                Trace.TraceWarning("Save failed: {0}", error.Message);
+            else
+                MessageBox.Show(this, NativeCore.Tr("doc.saveFailed").Replace("%@", error.Message), "Jena Note",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
         finally
         {
             saving = false;
         }
+    }
+
+    bool ChangedOnDisk(string path)
+    {
+        var stamp = DocumentFile.Stamp(path);
+        return stamp != null && stamp != diskStamp;
+    }
+
+    bool ConfirmOverwrite(string path)
+    {
+        if (IsSelfTesting) return OverwriteAnswerForTest;
+        return MessageBox.Show(this, NativeCore.Tr("doc.changedOnDisk").Replace("%@", Path.GetFileName(path)), "Jena Note",
+            MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+    }
+
+    /// <summary>The version about to be replaced goes into history first.</summary>
+    void KeepHistoryBeforeWrite(string path, bool changedOnDisk)
+    {
+        try
+        {
+            if (File.Exists(path) && (changedOnDisk || !NativeCore.BackupHasSnapshots(path)))
+                NativeCore.BackupRecord(path, File.ReadAllBytes(path));
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            ReportBackupFailure(error);
+        }
+    }
+
+    void KeepHistoryAfterWrite(string path, byte[] bytes, bool automatic)
+    {
+        try
+        {
+            NativeCore.BackupRecord(path, bytes, automatic);
+            reportedBackupFailure = false;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            ReportBackupFailure(error);
+        }
+    }
+
+    /// <summary>The document itself saved, so this warns once rather than on every autosave.</summary>
+    void ReportBackupFailure(Exception error)
+    {
+        Trace.TraceWarning("Backup failed: {0}", error.Message);
+        if (reportedBackupFailure || IsSelfTesting) return;
+        reportedBackupFailure = true;
+        MessageBox.Show(this, NativeCore.Tr("backup.failed"), "Jena Note", MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    // MARK: - Autosave and recovery
+
+    void StartTimers()
+    {
+        if (!IsDirty) return;
+        if (!recoveryTimer.IsEnabled)
+        {
+            recoveryTimer.Interval = RecoveryDelay;
+            recoveryTimer.Start();
+        }
+        if (AutosaveEnabled && filePath != null && !autosaveTimer.IsEnabled)
+        {
+            autosaveTimer.Interval = AutosaveDelay;
+            autosaveTimer.Start();
+        }
+    }
+
+    async Task AutosaveTickAsync()
+    {
+        autosaveTimer.Stop();
+        if (IsDirty && filePath != null && AutosaveEnabled) await WriteAsync(filePath, automatic: true);
+    }
+
+    async Task RecoveryTickAsync()
+    {
+        recoveryTimer.Stop();
+        if (!IsDirty || closeConfirmed) return;
+        try
+        {
+            RecoveryStore.Save(recoveryId, filePath, plainText, await CurrentTextAsync());
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Trace.TraceWarning("Recovery copy failed: {0}", error.Message);
+        }
+    }
+
+    /// <summary>A clean document follows its file. A changed one is settled when it next saves.</summary>
+    public void CheckDiskChange()
+    {
+        if (!editorStarted || filePath == null || IsDirty || saving || !ChangedOnDisk(filePath)) return;
+        try
+        {
+            LoadIntoEditor(DocumentFile.Read(filePath));
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or DocumentFile.NotUtf8Exception)
+        {
+            // A file still being written can fail here. The next activation tries again.
+            Trace.TraceWarning("Reload failed: {0}", error.Message);
+        }
+    }
+
+    // MARK: - History
+
+    public async Task<string> CurrentTextAsync() => TextToSave(await editor.GetContentAsync(plainText ? "text" : "blocks"), plainText);
+
+    public async Task CreateNamedVersionAsync(string name)
+    {
+        if (filePath == null) throw new InvalidOperationException(NativeCore.Tr("backup.saveFirst"));
+        NativeCore.BackupRecord(filePath, new UTF8Encoding(false).GetBytes(await CurrentTextAsync()), name: name);
+    }
+
+    /// <summary>Current text goes into history first, so a restore can always be taken back.</summary>
+    public async Task RestoreVersionAsync(string id)
+    {
+        if (filePath == null) throw new InvalidOperationException(NativeCore.Tr("backup.saveFirst"));
+        var text = NativeCore.BackupText(filePath, id);
+        var encoding = new UTF8Encoding(false);
+        NativeCore.BackupRecord(filePath, encoding.GetBytes(await CurrentTextAsync()));
+        NativeCore.BackupRecord(filePath, encoding.GetBytes(text), force: true);
+        LoadIntoEditor(DocumentFile.Normalize(text), dirty: true);
     }
 
     string TextToSave(JsonElement content, bool asPlain)
@@ -352,10 +545,47 @@ sealed class EditorWindow : Window
     protected override async void OnClosing(CancelEventArgs e)
     {
         base.OnClosing(e);
-        if (closeConfirmed || !IsDirty) return;
+        if (closeConfirmed) return;
+        if (closeInProgress)
+        {
+            e.Cancel = true;
+            return;
+        }
+        if (!IsDirty && !saving) return;
 
         // Closing waits for the answer and for the save, so it starts again afterwards.
         e.Cancel = true;
+        closeInProgress = true;
+        try
+        {
+            await FinishClosingAsync();
+        }
+        finally
+        {
+            closeInProgress = false;
+        }
+    }
+
+    /// <summary>For the self test, which cannot answer the question below.</summary>
+    public void DiscardAndClose()
+    {
+        closeConfirmed = true;
+        Close();
+    }
+
+    async Task FinishClosingAsync()
+    {
+        while (saving) await Task.Delay(20);
+
+        // A saved document with autosave on closes without asking, as on macOS.
+        if (IsDirty && AutosaveEnabled && filePath != null) await WriteAsync(filePath, automatic: true);
+        if (!IsDirty)
+        {
+            closeConfirmed = true;
+            Close();
+            return;
+        }
+
         var name = filePath != null ? Path.GetFileName(filePath) : NativeCore.Tr("doc.untitled");
         var answer = MessageBox.Show(this, NativeCore.Tr("doc.unsaved").Replace("%@", name), "Jena Note",
             MessageBoxButton.YesNoCancel, MessageBoxImage.Question);

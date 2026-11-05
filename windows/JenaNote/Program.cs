@@ -11,6 +11,15 @@ static class Program
         var app = new Application { ShutdownMode = ShutdownMode.OnLastWindowClose };
         NativeCore.ConfigureProofreading(Path.Combine(AppContext.BaseDirectory, "KiwiModel"));
 
+        // Automated tests run the real app without touching the author's history or dictionary.
+        var testData = Environment.GetEnvironmentVariable("JENANOTE_TEST_DATA");
+        if (!string.IsNullOrEmpty(testData))
+        {
+            NativeCore.UseBackupDirectory(Path.Combine(testData, "Backups"));
+            NativeCore.UseDictionaryFile(Path.Combine(testData, "dictionary.json"));
+            RecoveryStore.Folder = Path.Combine(testData, "Recovery");
+        }
+
         if (args.Length == 3 && args[0] == "--selftest")
         {
             app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -20,7 +29,7 @@ static class Program
 
         app.Startup += (_, _) =>
         {
-            var opened = false;
+            var opened = OfferRecovery();
             foreach (var path in args)
             {
                 if (EditorWindow.Open(path, target: null) != null) opened = true;
@@ -28,5 +37,27 @@ static class Program
             if (!opened) new EditorWindow().Show();
         };
         return app.Run();
+    }
+
+    /// <summary>Offers documents left behind when the app last ended without closing them.</summary>
+    static bool OfferRecovery()
+    {
+        var orphans = RecoveryStore.Orphans();
+        if (orphans.Count == 0) return false;
+        var answer = MessageBox.Show(NativeCore.Tr("doc.recover").Replace("%d", orphans.Count.ToString()), "Jena Note",
+            MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        if (answer == MessageBoxResult.No)
+        {
+            foreach (var orphan in orphans) RecoveryStore.Delete(orphan.Id);
+            return false;
+        }
+        if (answer != MessageBoxResult.Yes) return false;
+        foreach (var orphan in orphans)
+        {
+            // The window keeps this copy until the text is saved, in case of another failure.
+            RecoveryStore.Save(orphan.Id, orphan.Path, orphan.Plain, orphan.Text);
+            new EditorWindow(orphan.Path, orphan.Text, orphan.Id).Show();
+        }
+        return true;
     }
 }

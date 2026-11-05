@@ -10,6 +10,7 @@ Add-Type -Namespace JenaKeyboardTest -Name Native -MemberDefinition '[DllImport(
 $folder = Join-Path $env:TEMP ("jena-keyboard-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $folder | Out-Null
 $path = Join-Path $folder 'sample.md'
+$env:JENANOTE_TEST_DATA = Join-Path $folder 'data'
 [IO.File]::WriteAllText($path, "second`n", (New-Object Text.UTF8Encoding($false)))
 
 $process = Start-Process "$repo\windows\JenaNote\bin\Release\net9.0-windows\JenaNote.exe" -ArgumentList "`"$path`"" -PassThru
@@ -49,6 +50,25 @@ try {
     $saved = [IO.File]::ReadAllText($path)
     $expected = "first`n**bold**`nsecond`n"
     Check 'typed text reaches the file' ($saved -ceq $expected) ($saved -replace "`n", '\n')
+
+    # An abrupt end must not lose typing that was never saved.
+    Send 'lost{ENTER}'
+    Start-Sleep -Seconds 8
+    Stop-Process -Id $process.Id -Force
+    $process.WaitForExit()
+    Check 'the killed app did not touch the file' ([IO.File]::ReadAllText($path) -ceq $expected)
+
+    $process = Start-Process "$repo\windows\JenaNote\bin\Release\net9.0-windows\JenaNote.exe" -PassThru
+    Start-Sleep -Seconds 3
+    $process.Refresh()
+    Send 'y'
+    Start-Sleep -Seconds 4
+    $process.Refresh()
+    Check 'recovered text opens as unsaved' ((Title).StartsWith([string][char]0x25CF)) (Title)
+    Send '^s'
+    Start-Sleep -Milliseconds 600
+    $recovered = [IO.File]::ReadAllText($path)
+    Check 'recovered text saves' ($recovered -cmatch 'lost') ($recovered -replace "`n", '\n')
 }
 finally {
     if (-not $process.HasExited) { $process.CloseMainWindow() | Out-Null; Start-Sleep -Milliseconds 800 }

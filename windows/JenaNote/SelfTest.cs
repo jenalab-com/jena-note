@@ -28,6 +28,8 @@ static class SelfTest
         var dictionaryFolder = Directory.CreateTempSubdirectory("jena-selftest-dictionary-").FullName;
         NativeCore.UseDictionaryFile(Path.Combine(dictionaryFolder, "dictionary.json"));
         EditorWindow.IsSelfTesting = true;
+        NativeCore.UseBackupDirectory(Path.Combine(dictionaryFolder, "backups"));
+        RecoveryStore.Folder = Path.Combine(dictionaryFolder, "recovery");
 
         try
         {
@@ -82,6 +84,7 @@ static class SelfTest
 
             await RunProofreadingChecks(window, Check);
             await RunExportChecks(window, Check);
+            await RunPersistenceChecks(window, Check);
 
             var longDocument = results.GetProperty("longDocument");
             Check("a long document survives a round trip", longDocument.GetProperty("ok").GetBoolean());
@@ -159,6 +162,139 @@ static class SelfTest
         window.Editor.DictionaryChanged();
         Report(await ProofStep(window, "afterRemoval"));
         Report(await ProofStep(window, "selection"));
+    }
+
+    static async Task<bool> Eventually(Func<bool> condition, int milliseconds = 4000)
+    {
+        for (var waited = 0; waited < milliseconds; waited += 25)
+        {
+            if (condition()) return true;
+            await Task.Delay(25);
+        }
+        return condition();
+    }
+
+    static async Task RunPersistenceChecks(EditorWindow window, Action<string, bool, string> check)
+    {
+        var folder = Directory.CreateTempSubdirectory("jena-selftest-persist-").FullName;
+        EditorWindow.AutosaveDelay = TimeSpan.FromMilliseconds(100);
+        EditorWindow.RecoveryDelay = TimeSpan.FromMilliseconds(100);
+        const string dirtyMark = "\u25CF";
+        string Read(string path) => File.ReadAllText(path);
+        int Versions(string path)
+        {
+            using var list = JsonDocument.Parse(NativeCore.BackupList(path));
+            return list.RootElement.GetArrayLength();
+        }
+
+        // Autosave writes in place and keeps the earlier text in history.
+        var doc = WriteFixture(folder, "원고.md", "처음\n");
+        EditorWindow.Open(doc, window);
+        await Task.Delay(150);
+        await ProofStep(window, "typeAtStart");
+        check("autosave writes the file", await Eventually(() => Read(doc).StartsWith("쓴글처음")), Read(doc));
+        check("autosave clears the mark", await Eventually(() => !window.Title.StartsWith(dirtyMark)), window.Title);
+        check("first save keeps the original in history", Versions(doc) >= 1, Versions(doc).ToString());
+        var first = NativeCore.BackupList(doc);
+        check("history holds the original text", first.Contains("id") && HistoryContains(doc, "처음\n"), first);
+        check("a clean document leaves no recovery copy", await Eventually(() => !Directory.Exists(RecoveryStore.Folder) || Directory.GetFiles(RecoveryStore.Folder).Length == 0), "");
+
+        // A file another program changed is never overwritten without asking.
+        await Task.Delay(1100); // Keeps file timestamps apart on coarse file systems.
+        File.WriteAllText(doc, "밖에서 고침\n", new UTF8Encoding(false));
+        window.CheckDiskChange();
+        await Task.Delay(150);
+        check("a clean document follows its file", (await window.CurrentTextAsync()) == "밖에서 고침\n", await window.CurrentTextAsync());
+
+        await Task.Delay(1100);
+        await ProofStep(window, "typeAtStart");
+        File.WriteAllText(doc, "다시 밖에서\n", new UTF8Encoding(false));
+        await Task.Delay(500);
+        check("autosave leaves a changed file alone", Read(doc) == "다시 밖에서\n", Read(doc));
+        check("the document stays marked unsaved", window.Title.StartsWith(dirtyMark), window.Title);
+        window.CheckDiskChange();
+        check("unsaved text is not replaced by the file", (await window.CurrentTextAsync()).StartsWith("쓴글"), await window.CurrentTextAsync());
+        EditorWindow.OverwriteAnswerForTest = false;
+        check("declining the question keeps the file", !await window.SaveAsync(false) && Read(doc) == "다시 밖에서\n", Read(doc));
+        EditorWindow.OverwriteAnswerForTest = true;
+        check("overwriting after asking works", await window.SaveAsync(false) && Read(doc).StartsWith("쓴글"), Read(doc));
+        check("the overwritten text stays in history", HistoryContains(doc, "다시 밖에서\n"), NativeCore.BackupList(doc));
+
+        // Named versions and restore.
+        await window.CreateNamedVersionAsync("1차 완성");
+        check("a named version is listed", NativeCore.BackupList(doc).Contains("1차 완성"), NativeCore.BackupList(doc));
+        using (var list = JsonDocument.Parse(NativeCore.BackupList(doc)))
+        {
+            var original = list.RootElement.EnumerateArray().First(item => NativeCore.BackupText(doc, item.GetProperty("id").GetString()!) == "처음\n");
+            var beforeRestore = await window.CurrentTextAsync();
+            EditorWindow.AutosaveEnabled = false;
+            await window.RestoreVersionAsync(original.GetProperty("id").GetString()!);
+            await Task.Delay(150);
+            check("restore shows the old text", (await window.CurrentTextAsync()) == "처음\n", await window.CurrentTextAsync());
+            check("restore marks the document unsaved", window.Title.StartsWith(dirtyMark), window.Title);
+            check("restore leaves the file until saved", Read(doc) == beforeRestore, Read(doc));
+            check("restore keeps the replaced text", HistoryContains(doc, beforeRestore), "");
+            EditorWindow.AutosaveEnabled = true;
+            await window.SaveAsync(false);
+        }
+
+        // Comparison.
+        using (var rows = JsonDocument.Parse(NativeCore.HistoryRows("가\n나", "가\n다")))
+        {
+            check("comparison aligns lines", rows.RootElement.GetArrayLength() == 2
+                && rows.RootElement[1].GetProperty("kind").GetString() == "modified", rows.RootElement.ToString());
+        }
+        check("comparison refuses huge text", NativeCore.HistoryRows(new string('a', 1_100_000), new string('b', 1_100_000)) == "null", "");
+
+        // Recovery copies of an untitled document.
+        var untitled = new EditorWindow();
+        untitled.Show();
+        await Eventually(() => untitled.IsLoaded);
+        await untitled.WhenReady();
+        var prepared = new TaskCompletionSource();
+        Action<JsonElement> onPrepared = _ => prepared.TrySetResult();
+        untitled.Editor.SelfTestFinished += onPrepared;
+        untitled.Editor.StartSelfTest("null");
+        await prepared.Task.WaitAsync(TimeSpan.FromSeconds(20));
+        untitled.Editor.SelfTestFinished -= onPrepared;
+        await ProofStep(untitled, "typeAtStart");
+        check("an untitled document gets a recovery copy", await Eventually(() => Directory.Exists(RecoveryStore.Folder) && Directory.GetFiles(RecoveryStore.Folder).Length == 1), "");
+        check("a running window's copy is not an orphan", RecoveryStore.Orphans().Count == 0, RecoveryStore.Orphans().Count.ToString());
+        untitled.DiscardAndClose();
+        check("closing removes the copy", Directory.GetFiles(RecoveryStore.Folder).Length == 0, "");
+
+        // What a crash leaves behind: a copy whose process is gone.
+        Directory.CreateDirectory(RecoveryStore.Folder);
+        var left = Path.Combine(RecoveryStore.Folder, "left.json");
+        File.WriteAllText(left, JsonSerializer.Serialize(new { ProcessId = int.MaxValue - 1, Path = doc, Plain = false, Text = "복구할 글\n" }));
+        var orphans = RecoveryStore.Orphans();
+        check("a copy from a gone process is an orphan", orphans.Count == 1 && orphans[0].Text == "복구할 글\n" && orphans[0].Path == doc, orphans.Count.ToString());
+        File.WriteAllText(Path.Combine(RecoveryStore.Folder, "bad.json"), "not json");
+        check("an unreadable copy is skipped", RecoveryStore.Orphans().Count == 1, "");
+        // Autosave would save the recovered text during this short check, which is what it should do.
+        EditorWindow.AutosaveEnabled = false;
+        var restored = new EditorWindow(doc, orphans[0].Text, orphans[0].Id);
+        restored.Show();
+        await Eventually(() => restored.IsLoaded);
+        await restored.WhenReady();
+        await Task.Delay(150);
+        check("recovered text opens as unsaved", restored.Title.StartsWith(dirtyMark) && (await restored.CurrentTextAsync()) == "복구할 글\n", restored.Title);
+        EditorWindow.AutosaveEnabled = true;
+        restored.DiscardAndClose();
+        check("the copy goes away with its window", !File.Exists(left), "");
+        File.Delete(Path.Combine(RecoveryStore.Folder, "bad.json"));
+
+        EditorWindow.AutosaveDelay = TimeSpan.FromSeconds(60);
+        EditorWindow.RecoveryDelay = TimeSpan.FromSeconds(5);
+        EditorWindow.Open(WriteFixture(folder, "끝.md", "끝\n"), window);
+        await Task.Delay(150);
+        Directory.Delete(folder, recursive: true);
+    }
+
+    static bool HistoryContains(string path, string text)
+    {
+        using var list = JsonDocument.Parse(NativeCore.BackupList(path));
+        return list.RootElement.EnumerateArray().Any(item => NativeCore.BackupText(path, item.GetProperty("id").GetString()!) == text);
     }
 
     static async Task RunExportChecks(EditorWindow window, Action<string, bool, string> check)

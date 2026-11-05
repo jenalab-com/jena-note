@@ -122,6 +122,11 @@
   };
 
   const steps = {
+    async typeAtStart() {
+      placeCaret(root.firstElementChild, 0);
+      root.focus();
+      type('쓴글');
+    },
     async marks(check) {
       proofDocument([text(proofText)]);
       const markup = root.innerHTML;

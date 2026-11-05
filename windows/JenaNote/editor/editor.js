@@ -679,7 +679,8 @@ window.chrome.webview.addEventListener('message', event => {
     case 'selftest': {
       const script = document.createElement('script');
       script.src = 'selftest.js';
-      script.addEventListener('load', () => window.jenaRunSelfTest(message.cases));
+      // Without cases this only prepares the page for later self test steps.
+      script.addEventListener('load', () => (message.cases ? window.jenaRunSelfTest(message.cases) : post({ type: 'selftest' })));
       document.head.append(script);
       break;
     }

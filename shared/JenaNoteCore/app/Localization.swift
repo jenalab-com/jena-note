@@ -16,6 +16,9 @@ public enum L10n {
     ]
 
     private static let ko: [String: String] = [
+        "doc.backupHint": "이 PC의 원고 이력이에요. 이름 붙인 버전은 지워지지 않고, 나머지는 최근 100개까지 남아요.",
+        "doc.recover": "저장하지 못한 문서 %d개를 찾았어요.\n\n예: 복구\n아니요: 버리기\n취소: 다음에 다시 묻기",
+        "doc.changedOnDisk": "\"%@\" 파일이 다른 프로그램에서 바뀌었어요. 지금 내용으로 덮어쓸까요? 바뀐 내용은 버전 이력에 남겨요.",
         "doc.codeBlock": "코드 블록",
         "doc.untitled": "제목 없음",
         "doc.unsaved": "\"%@\"의 변경 내용을 저장할까요?",
@@ -583,6 +586,9 @@ public enum L10n {
     ]
 
     private static let en: [String: String] = [
+        "doc.backupHint": "The manuscript history on this PC. Named versions are never removed, and the latest 100 others are kept.",
+        "doc.recover": "Found %d unsaved document(s).\n\nYes: Recover\nNo: Discard\nCancel: Ask again next time",
+        "doc.changedOnDisk": "\"%@\" was changed by another program. Overwrite it with the current text? The changed version stays in the history.",
         "doc.codeBlock": "Code Block",
         "doc.untitled": "Untitled",
         "doc.unsaved": "Save changes to \"%@\"?",
@@ -1135,6 +1141,9 @@ public enum L10n {
     ]
 
     private static let zh: [String: String] = [
+        "doc.backupHint": "这是此电脑上的稿件历史。已命名的版本不会被删除，其余保留最近 100 个。",
+        "doc.recover": "发现 %d 个未保存的文档。\n\n是：恢复\n否：丢弃\n取消：下次再问",
+        "doc.changedOnDisk": "“%@”已被其他程序更改。要用当前内容覆盖吗？更改后的内容会保留在历史记录中。",
         "doc.codeBlock": "代码块",
         "doc.untitled": "未命名",
         "doc.unsaved": "要保存对“%@”的更改吗？",
@@ -1335,6 +1344,9 @@ public enum L10n {
     ]
 
     private static let ja: [String: String] = [
+        "doc.backupHint": "このPCの原稿履歴です。名前を付けた版は削除されず、それ以外は最新100件まで残ります。",
+        "doc.recover": "保存されていない文書が%d件見つかりました。\n\nはい: 復元\nいいえ: 破棄\nキャンセル: 次回また確認",
+        "doc.changedOnDisk": "「%@」は別のプログラムで変更されました。現在の内容で上書きしますか？変更された内容は履歴に残ります。",
         "doc.codeBlock": "コードブロック",
         "doc.untitled": "名称未設定",
         "doc.unsaved": "「%@」の変更を保存しますか？",
@@ -1535,6 +1547,9 @@ public enum L10n {
     ]
 
     private static let es: [String: String] = [
+        "doc.backupHint": "Historial del manuscrito en este PC. Las versiones con nombre no se eliminan y se conservan las 100 últimas del resto.",
+        "doc.recover": "Se encontraron %d documentos sin guardar.\n\nSí: Recuperar\nNo: Descartar\nCancelar: Preguntar la próxima vez",
+        "doc.changedOnDisk": "Otro programa cambió \"%@\". ¿Sobrescribir con el texto actual? La versión cambiada queda en el historial.",
         "doc.codeBlock": "Bloque de código",
         "doc.untitled": "Sin título",
         "doc.unsaved": "¿Guardar los cambios en \"%@\"?",
@@ -1735,6 +1750,9 @@ public enum L10n {
     ]
 
     private static let de: [String: String] = [
+        "doc.backupHint": "Der Manuskriptverlauf auf diesem PC. Benannte Versionen bleiben erhalten, von den übrigen die letzten 100.",
+        "doc.recover": "%d nicht gespeicherte Dokumente gefunden.\n\nJa: Wiederherstellen\nNein: Verwerfen\nAbbrechen: Beim nächsten Mal fragen",
+        "doc.changedOnDisk": "„%@“ wurde von einem anderen Programm geändert. Mit dem aktuellen Text überschreiben? Die geänderte Fassung bleibt im Verlauf.",
         "doc.codeBlock": "Codeblock",
         "doc.untitled": "Unbenannt",
         "doc.unsaved": "Änderungen an „%@“ speichern?",
@@ -1935,6 +1953,9 @@ public enum L10n {
     ]
 
     private static let fr: [String: String] = [
+        "doc.backupHint": "L’historique du manuscrit sur ce PC. Les versions nommées sont conservées, ainsi que les 100 dernières autres.",
+        "doc.recover": "%d documents non enregistrés trouvés.\n\nOui : Récupérer\nNon : Abandonner\nAnnuler : Redemander la prochaine fois",
+        "doc.changedOnDisk": "« %@ » a été modifié par un autre programme. Remplacer par le texte actuel ? La version modifiée reste dans l’historique.",
         "doc.codeBlock": "Bloc de code",
         "doc.untitled": "Sans titre",
         "doc.unsaved": "Enregistrer les modifications de « %@ » ?",

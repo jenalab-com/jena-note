@@ -28,8 +28,20 @@ static class DocumentFile
         {
             throw new NotUtf8Exception();
         }
-        if (text.Length > 0 && text[0] == '﻿') text = text[1..];
+        return Normalize(text);
+    }
+
+    public static string Normalize(string text)
+    {
+        if (text.Length > 0 && text[0] == '\uFEFF') text = text[1..];
         return text.Replace("\r\n", "\n").Replace('\r', '\n');
+    }
+
+    /// <summary>What identifies this exact content on disk, or null when the file is missing.</summary>
+    public static (DateTime Modified, long Length)? Stamp(string path)
+    {
+        var info = new FileInfo(path);
+        return info.Exists ? (info.LastWriteTimeUtc, info.Length) : null;
     }
 
     /// <summary>Writes to a temporary file first, so a failed write leaves the original intact.</summary>

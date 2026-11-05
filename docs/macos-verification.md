@@ -4,14 +4,14 @@
 
 ## 1. 준비
 
-```sh
+```
 git fetch origin
 git switch feature-windows
 git pull
 bash Vendor/Kiwi/scripts/fetch-kiwi-model.sh
 ```
 
-마지막 줄은 처음 한 번만 실행한다. Kiwi 모델 폴더를 `Sources/JenaNoteKit/Resources/`에서 `shared/JenaNoteCore/Resources/`로 옮기며, 다시 내려받지 않는다. 안 하면 `make test`가 모델이 없다는 오류로 멈춘다.
+마지막 줄은 처음 한 번만 실행한다. Kiwi 모델 폴더를 `Sources/JenaNoteKit/Resources/`에서 `shared/JenaNoteCore/Resources/`로 옮기며, 다시 내려 받지 않는다. 안 하면 `make test`가 모델이 없다는 오류로 멈춘다.
 
 ## 2. 빌드와 테스트
 
@@ -23,13 +23,14 @@ bash Vendor/Kiwi/scripts/fetch-kiwi-model.sh
 
 ### 오류가 나면
 
-| 증상 | 뜻 | 조치 |
-|---|---|---|
+| **증상** | **뜻** | **조치** |
+| --- | --- | --- |
 | `ambiguous use of 'Block'` 같은 이름 충돌 | 공유 라이브러리의 이름이 맥 SDK와 겹친다 | `JenaNoteCore.Block`처럼 모듈 이름을 붙인다 |
 | `MarkdownSerializer.swift` 끝부분의 컴파일 오류 | 공유 코드 연결부는 맥에서 컴파일된 적이 없다 | 오류 내용을 공유한다 |
-| `h2 drops bold marks`만 실패 | `.semibold` 글꼴에 bold 속성이 없다는 뜻이다 | `MarkdownWriter.headingBaseIsBold`를 `level == 1`로 바꾸고 말뭉치 기대값을 고친다 |
+| `h2 drops bold marks`만 실패 | `.semibold` 글꼴에 bold 속성이 없다는 뜻이다 | `MarkdownWriter.headingBaseIsBold`를 `level == 1`로 바꾸고 말뭉치 기대 값을 고친다 |
 | `MarkdownCoreParityTests`의 다른 항목 실패 | 공유 코드가 맥과 다르게 동작한다 | 항목 이름과 함께 공유한다 |
-| `testSharedExportMatchesTheCurrentBuilder` 실패 | 공유 내보내기 변환이 `DocumentModelBuilder`와 다르다 | 항목 이름과 함께 공유한다. Windows 내보내기에만 영향이 있다 |
+| `testSharedExportMatchesTheCurrentBuilder` 실패 | 공유 내 보내기 변환이 `DocumentModelBuilder`와 다르다 | 항목 이름과 함께 공유한다. Windows 내보내기에만 영향이 있다 |
+
 
 ## 3. 앱 동작
 
@@ -46,6 +47,7 @@ bash Vendor/Kiwi/scripts/fetch-kiwi-model.sh
 - [ ] 언어를 바꾸면 바로 적용되고, 다시 켜도 유지된다
 - [ ] 책갈피와 이어읽기가 유지된다
 - [ ] 파일 전체 검색이 동작한다
+- [ ] 버전 이력에서 비교, 이름 붙이기, 복원이 동작하고 예전 백업도 보인다 (`DocumentBackupStore`를 옮겼다)
 - [ ] AI 패널이 작품 문맥을 찾고, 작품 문맥 창을 열어 저장할 수 있다 (`AIWorkContext`를 옮겼다)
 
 ## 4. 저장 버그 재현

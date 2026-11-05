@@ -25,6 +25,12 @@ static class NativeCore
         out IntPtr data, out nint length, out int skipped, out IntPtr error);
     [DllImport(Library)] static extern void jena_free_bytes(IntPtr pointer);
     [DllImport(Library)] static extern double jena_default_body_size();
+    [DllImport(Library)] static extern void jena_backup_use_directory(byte[] path);
+    [DllImport(Library)] static extern int jena_backup_has_snapshots(byte[] path, out int has, out IntPtr error);
+    [DllImport(Library)] static extern int jena_backup_record(byte[] path, byte[] bytes, nint length, int automatic, byte[]? name, int force, out IntPtr error);
+    [DllImport(Library)] static extern int jena_backup_list(byte[] path, out IntPtr result, out IntPtr error);
+    [DllImport(Library)] static extern int jena_backup_text(byte[] path, byte[] id, out IntPtr result, out IntPtr error);
+    [DllImport(Library)] static extern IntPtr jena_history_rows(byte[] previous, byte[] current);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     delegate void ResultCallback(IntPtr result, IntPtr error, nuint context);
@@ -134,6 +140,40 @@ static class NativeCore
         jena_free_bytes(data);
         return (bytes, skipped);
     }
+
+    /// <summary>Keeps tests away from the author's real history.</summary>
+    public static void UseBackupDirectory(string path) => jena_backup_use_directory(Utf8(path));
+
+    public static bool BackupHasSnapshots(string path)
+    {
+        if (jena_backup_has_snapshots(Utf8(path), out var has, out var error) != 0)
+            throw new InvalidOperationException(Take(error));
+        return has != 0;
+    }
+
+    public static void BackupRecord(string path, byte[] bytes, bool automatic = false, string? name = null, bool force = false)
+    {
+        if (jena_backup_record(Utf8(path), bytes, bytes.Length, automatic ? 1 : 0, OptionalUtf8(name), force ? 1 : 0, out var error) != 0)
+            throw new InvalidOperationException(Take(error));
+    }
+
+    /// <summary>Versions, newest first, as `[{"id", "createdAt", "name"}]`.</summary>
+    public static string BackupList(string path)
+    {
+        if (jena_backup_list(Utf8(path), out var result, out var error) != 0)
+            throw new InvalidOperationException(Take(error));
+        return Take(result);
+    }
+
+    public static string BackupText(string path, string id)
+    {
+        if (jena_backup_text(Utf8(path), Utf8(id), out var result, out var error) != 0)
+            throw new InvalidOperationException(Take(error));
+        return Take(result);
+    }
+
+    /// <summary>Aligned comparison rows as JSON, or `null` when the texts are too large.</summary>
+    public static string HistoryRows(string previous, string current) => Take(jena_history_rows(Utf8(previous), Utf8(current)));
 
     /// <summary>Translated text. Unknown keys come back unchanged.</summary>
     public static string Tr(string key) => Take(jena_tr(Utf8(key)));

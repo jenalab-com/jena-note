@@ -1,21 +1,29 @@
 import Foundation
-import CryptoKit
 
-final class DocumentBackupStore {
-    struct Snapshot: Codable {
-        let id: UUID
-        let source: String
-        let createdAt: Date
-        let data: Data
-        var name: String? = nil
-        var parentID: UUID? = nil
+public final class DocumentBackupStore {
+    public struct Snapshot: Codable {
+        public let id: UUID
+        public let source: String
+        public let createdAt: Date
+        public let data: Data
+        public var name: String? = nil
+        public var parentID: UUID? = nil
+
+        public init(id: UUID, source: String, createdAt: Date, data: Data, name: String? = nil, parentID: UUID? = nil) {
+            self.id = id
+            self.source = source
+            self.createdAt = createdAt
+            self.data = data
+            self.name = name
+            self.parentID = parentID
+        }
     }
-    static let shared = DocumentBackupStore()
-    let directory: URL
+    public static let shared = DocumentBackupStore()
+    public let directory: URL
     private let lock = NSRecursiveLock()
     private let limit: Int
     private var latestBySource: [String: Snapshot] = [:]
-    init(directory: URL? = nil, limit: Int = 100) {
+    public init(directory: URL? = nil, limit: Int = 100) {
         self.directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("JenaNote/Backups", isDirectory: true)
         self.limit = max(1, limit)
@@ -33,7 +41,7 @@ final class DocumentBackupStore {
         let parentID: UUID?
     }
     private func digest(_ data: Data) -> String {
-        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        ContentDigest.sha256(data)
     }
     private func folder(for source: URL) throws -> URL {
         let catalog = directory.appendingPathComponent("documents.json")
@@ -42,9 +50,13 @@ final class DocumentBackupStore {
         let path = source.standardizedFileURL.path
         let match = identities.firstIndex { identity in
             if identity.path == path { return true }
+            #if canImport(Darwin)
             guard let bookmark = identity.bookmark else { return false }
             var stale = false
             return (try? URL(resolvingBookmarkData: bookmark, options: [.withoutUI, .withoutMounting], bookmarkDataIsStale: &stale))?.standardizedFileURL.path == path
+            #else
+            return false
+            #endif
         }
         let index: Int
         if let match { index = match }
@@ -53,9 +65,11 @@ final class DocumentBackupStore {
             index = identities.count - 1
         }
         identities[index].path = path
+        #if canImport(Darwin)
         if let bookmark = try? source.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil) {
             identities[index].bookmark = bookmark
         }
+        #endif
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try JSONEncoder().encode(identities).write(to: catalog, options: .atomic)
         let result = directory.appendingPathComponent(identities[index].id.uuidString, isDirectory: true)
@@ -65,7 +79,7 @@ final class DocumentBackupStore {
         }
         return result
     }
-    func snapshots(for source: URL) throws -> [Snapshot] {
+    public func snapshots(for source: URL) throws -> [Snapshot] {
         lock.lock(); defer { lock.unlock() }
         let folder = try folder(for: source)
         guard FileManager.default.fileExists(atPath: folder.path) else { return [] }
@@ -87,7 +101,7 @@ final class DocumentBackupStore {
                 return Snapshot(id: item.id, source: source.standardizedFileURL.path, createdAt: item.createdAt, data: body, name: item.name, parentID: item.parentID)
             }.sorted { $0.createdAt > $1.createdAt }
     }
-    func hasSnapshots(for source: URL) throws -> Bool {
+    public func hasSnapshots(for source: URL) throws -> Bool {
         lock.lock(); defer { lock.unlock() }
         if latestBySource[source.standardizedFileURL.path] != nil,
            FileManager.default.fileExists(atPath: try folder(for: source).path) { return true }
@@ -95,7 +109,7 @@ final class DocumentBackupStore {
         latestBySource[source.standardizedFileURL.path] = latest
         return latest != nil
     }
-    func record(_ data: Data, for source: URL, automatic: Bool = false, name: String? = nil, force: Bool = false, now: Date = Date()) throws {
+    public func record(_ data: Data, for source: URL, automatic: Bool = false, name: String? = nil, force: Bool = false, now: Date = Date()) throws {
         lock.lock(); defer { lock.unlock() }
         let key = source.standardizedFileURL.path
         if !FileManager.default.fileExists(atPath: try folder(for: source).path) { latestBySource[key] = nil }
