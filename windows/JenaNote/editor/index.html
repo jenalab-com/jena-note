@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src https://doc.jenanote.local data:; font-src 'self'">
+<link rel="stylesheet" href="editor.css">
+</head>
+<body>
+<div id="toolbar" role="toolbar"></div>
+<div id="scroller">
+  <div id="editor" contenteditable="true" spellcheck="false"></div>
+</div>
+<dialog id="link-dialog">
+  <form method="dialog">
+    <label><span id="link-label"></span><input id="link-url" type="text" autocomplete="off"></label>
+    <div class="dialog-buttons">
+      <button value="cancel" id="link-cancel" formnovalidate></button>
+      <button value="ok" id="link-ok"></button>
+    </div>
+  </form>
+</dialog>
+<input id="color-input" type="color" tabindex="-1">
+<div id="proof-popover" hidden>
+  <div class="proof-label" id="proof-original-label"></div>
+  <div class="proof-text" id="proof-original"></div>
+  <div class="proof-label" id="proof-suggestion-label"></div>
+  <div class="proof-text" id="proof-suggestion"></div>
+  <div class="dialog-buttons">
+    <button type="button" id="proof-add"></button>
+    <button type="button" id="proof-apply"></button>
+  </div>
+</div>
+<script src="editor.js"></script>
+<script src="proofreading.js"></script>
+</body>
+</html>

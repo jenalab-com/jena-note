@@ -9,6 +9,19 @@ final class MarkdownCoreTests: XCTestCase {
         }
     }
 
+    func testJSONKeepsTheWholeModel() throws {
+        for item in MarkdownCorpus.cases {
+            let blocks = MarkdownParser.parse(item.input)
+            XCTAssertEqual(try MarkdownJSON.decode(MarkdownJSON.encode(blocks)), blocks, item.name)
+        }
+    }
+
+    func testJSONRejectsWhatItCannotRead() {
+        XCTAssertThrowsError(try MarkdownJSON.decode("not json"))
+        XCTAssertThrowsError(try MarkdownJSON.decode("[{\"type\":\"nope\"}]"))
+        XCTAssertThrowsError(try MarkdownJSON.decode("[{\"type\":\"paragraph\",\"runs\":[{}]}]"))
+    }
+
     func testParsesBlocksIntoTheNeutralModel() {
         let blocks = MarkdownParser.parse("# 제목\n\n본문 **굵게**\n- 항목\n3. 번호\n> 인용\n---\n```\ncode\n```")
         XCTAssertEqual(blocks, [

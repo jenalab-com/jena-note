@@ -8,7 +8,7 @@ public enum MarkdownWriter {
 
     /// Levels whose base font already carries the bold trait on macOS. Marks would add nothing
     /// visible there, so `**` is not written.
-    private static func headingBaseIsBold(_ level: Int) -> Bool { level <= 2 }
+    static func headingBaseIsBold(_ level: Int) -> Bool { level <= 2 }
 
     public static func write(_ blocks: [MarkdownBlock]) -> String {
         guard !blocks.isEmpty else { return "" }

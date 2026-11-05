@@ -8,6 +8,11 @@ public struct DictionaryWorkContext: Equatable {
         self.root = root
         self.title = title
     }
+
+    public static func locate(documentURL: URL?) -> Self? {
+        guard let documentURL, let context = AIWorkContext.locate(from: documentURL) else { return nil }
+        return Self(root: context.rootURL.standardizedFileURL.resolvingSymlinksInPath(), title: context.config.title)
+    }
 }
 
 /// Main-thread owned personal exceptions; does not modify a work's context.json or Kiwi model.
@@ -64,7 +69,7 @@ public final class PersonalDictionaryStore {
     public static let changed = Notification.Name("JenaNotePersonalDictionaryChanged")
     private let fileURL: URL
     private var state = State()
-    private(set) var loadError: Error?
+    public private(set) var loadError: Error?
     public var entries: [Entry] { state.entries }
     public var works: [Work] { state.works }
 

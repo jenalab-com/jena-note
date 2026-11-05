@@ -1,5 +1,5 @@
 import XCTest
-@testable import JenaNoteKit
+@testable import JenaNoteCore
 
 final class AIWorkContextTests: XCTestCase {
     private var tmp: URL!
@@ -15,7 +15,15 @@ final class AIWorkContextTests: XCTestCase {
         try super.tearDownWithError()
     }
 
-    private func norm(_ url: URL) -> URL { url.standardizedFileURL.resolvingSymlinksInPath() }
+    private func norm(_ url: URL) -> URL {
+        let resolved = url.standardizedFileURL.resolvingSymlinksInPath()
+        #if os(Windows)
+        // Foundation on Windows keeps a trailing slash here, and it would fail URL equality.
+        return URL(fileURLWithPath: resolved.path.hasSuffix("/") ? String(resolved.path.dropLast()) : resolved.path, isDirectory: false)
+        #else
+        return resolved
+        #endif
+    }
 
     /// 달빛도시/설정/인물.md, 달빛도시/집필/01화.md
     @discardableResult

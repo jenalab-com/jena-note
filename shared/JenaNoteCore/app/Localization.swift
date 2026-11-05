@@ -16,6 +16,16 @@ public enum L10n {
     ]
 
     private static let ko: [String: String] = [
+        "doc.codeBlock": "코드 블록",
+        "doc.untitled": "제목 없음",
+        "doc.unsaved": "\"%@\"의 변경 내용을 저장할까요?",
+        "doc.openFailed": "파일을 열지 못했어요: %@",
+        "doc.saveFailed": "저장하지 못했어요: %@",
+        "doc.filter.markdown": "마크다운 문서",
+        "doc.filter.text": "텍스트 문서",
+        "doc.linkPrompt": "링크 주소",
+        "doc.ok": "확인",
+
         "dictionary.selectAll": "전체 선택",
         "dictionary.deleteSelected": "선택 삭제",
         "dictionary.deleteCount": "선택 삭제 (%d)",
@@ -573,6 +583,16 @@ public enum L10n {
     ]
 
     private static let en: [String: String] = [
+        "doc.codeBlock": "Code Block",
+        "doc.untitled": "Untitled",
+        "doc.unsaved": "Save changes to \"%@\"?",
+        "doc.openFailed": "Could not open the file: %@",
+        "doc.saveFailed": "Could not save: %@",
+        "doc.filter.markdown": "Markdown documents",
+        "doc.filter.text": "Text documents",
+        "doc.linkPrompt": "Link address",
+        "doc.ok": "OK",
+
         "dictionary.selectAll": "Select all",
         "dictionary.deleteSelected": "Delete selected",
         "dictionary.deleteCount": "Delete selected (%d)",
@@ -1115,6 +1135,16 @@ public enum L10n {
     ]
 
     private static let zh: [String: String] = [
+        "doc.codeBlock": "代码块",
+        "doc.untitled": "未命名",
+        "doc.unsaved": "要保存对“%@”的更改吗？",
+        "doc.openFailed": "无法打开文件：%@",
+        "doc.saveFailed": "无法保存：%@",
+        "doc.filter.markdown": "Markdown 文档",
+        "doc.filter.text": "文本文档",
+        "doc.linkPrompt": "链接地址",
+        "doc.ok": "确定",
+
         // View Menu (reader)
         "menu.view.readingMode":"阅读模式",
         // Reader toolbar
@@ -1305,6 +1335,16 @@ public enum L10n {
     ]
 
     private static let ja: [String: String] = [
+        "doc.codeBlock": "コードブロック",
+        "doc.untitled": "名称未設定",
+        "doc.unsaved": "「%@」の変更を保存しますか？",
+        "doc.openFailed": "ファイルを開けませんでした: %@",
+        "doc.saveFailed": "保存できませんでした: %@",
+        "doc.filter.markdown": "Markdown ドキュメント",
+        "doc.filter.text": "テキストドキュメント",
+        "doc.linkPrompt": "リンク先",
+        "doc.ok": "OK",
+
         // View Menu (reader)
         "menu.view.readingMode":"読書モード",
         // Reader toolbar
@@ -1495,6 +1535,16 @@ public enum L10n {
     ]
 
     private static let es: [String: String] = [
+        "doc.codeBlock": "Bloque de código",
+        "doc.untitled": "Sin título",
+        "doc.unsaved": "¿Guardar los cambios en \"%@\"?",
+        "doc.openFailed": "No se pudo abrir el archivo: %@",
+        "doc.saveFailed": "No se pudo guardar: %@",
+        "doc.filter.markdown": "Documentos Markdown",
+        "doc.filter.text": "Documentos de texto",
+        "doc.linkPrompt": "Dirección del enlace",
+        "doc.ok": "Aceptar",
+
         // View Menu (reader)
         "menu.view.readingMode":"Modo lectura",
         // Reader toolbar
@@ -1685,6 +1735,16 @@ public enum L10n {
     ]
 
     private static let de: [String: String] = [
+        "doc.codeBlock": "Codeblock",
+        "doc.untitled": "Unbenannt",
+        "doc.unsaved": "Änderungen an „%@“ speichern?",
+        "doc.openFailed": "Die Datei konnte nicht geöffnet werden: %@",
+        "doc.saveFailed": "Speichern fehlgeschlagen: %@",
+        "doc.filter.markdown": "Markdown-Dokumente",
+        "doc.filter.text": "Textdokumente",
+        "doc.linkPrompt": "Linkadresse",
+        "doc.ok": "OK",
+
         // View Menu (reader)
         "menu.view.readingMode":"Lesemodus",
         // Reader toolbar
@@ -1875,6 +1935,16 @@ public enum L10n {
     ]
 
     private static let fr: [String: String] = [
+        "doc.codeBlock": "Bloc de code",
+        "doc.untitled": "Sans titre",
+        "doc.unsaved": "Enregistrer les modifications de « %@ » ?",
+        "doc.openFailed": "Impossible d’ouvrir le fichier : %@",
+        "doc.saveFailed": "Impossible d’enregistrer : %@",
+        "doc.filter.markdown": "Documents Markdown",
+        "doc.filter.text": "Documents texte",
+        "doc.linkPrompt": "Adresse du lien",
+        "doc.ok": "OK",
+
         // View Menu (reader)
         "menu.view.readingMode":"Mode lecture",
         // Reader toolbar

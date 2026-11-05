@@ -9,9 +9,15 @@ import PackageDescription
 let kiwiLibraryDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path + "/windows/.out/kiwi/Release"
 let kiwiTarget: Target = .systemLibrary(name: "Kiwi", path: "windows/kiwi")
 let coreLinkerSettings: [LinkerSetting] = [.unsafeFlags(["-L", kiwiLibraryDirectory])]
-let appTargets: [Target] = []
-// The Windows app loads this as a DLL.
-let platformProducts: [Product] = [.library(name: "JenaNoteCore", type: .dynamic, targets: ["JenaNoteCore"])]
+let appTargets: [Target] = [
+    // The C ABI that the WPF app in windows/JenaNote loads as a DLL.
+    .target(name: "JenaNoteBridge", dependencies: ["JenaNoteCore"], path: "windows/bridge"),
+    .executableTarget(name: "corpus-dump", dependencies: ["JenaNoteCoreTestSupport"], path: "windows/tools/corpus-dump"),
+]
+let platformProducts: [Product] = [
+    .library(name: "JenaNoteBridge", type: .dynamic, targets: ["JenaNoteBridge"]),
+    .executable(name: "corpus-dump", targets: ["corpus-dump"]),
+]
 #else
 let kiwiTarget: Target = .binaryTarget(name: "Kiwi", path: "Vendor/Kiwi/Kiwi.xcframework")
 let coreLinkerSettings: [LinkerSetting] = [.linkedLibrary("c++")]

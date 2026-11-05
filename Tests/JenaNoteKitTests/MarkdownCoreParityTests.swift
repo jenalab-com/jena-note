@@ -45,6 +45,15 @@ final class MarkdownCoreParityTests: XCTestCase {
         }
     }
 
+    func testSharedExportMatchesTheCurrentBuilder() {
+        for item in MarkdownCorpus.cases {
+            let current = DocumentModelBuilder.build(MarkdownSerializer.parse(item.input), baseURL: nil)
+            let shared = MarkdownExport.blocks(from: MarkdownParser.parse(item.input), baseFolder: nil)
+            XCTAssertEqual(shared.blocks, current.blocks, item.name)
+            XCTAssertEqual(shared.imageLoadFailures, current.imageLoadFailures, item.name)
+        }
+    }
+
     /// Text typed or edited in the app does not come from the parser and may lack block types.
     func testAttributedTextThatDidNotComeFromTheParser() {
         let plain = NSAttributedString(string: "그냥 글\n둘째 줄")

@@ -1,19 +1,19 @@
 import Foundation
 
-struct AIWorkContextConfig: Codable, Equatable {
-    var version: Int = 1
-    var title: String
-    var settingsSources: [String]          // relative to the work root ("/" separators)
-    var excludedSettings: [String] = []
-    var summarizedSettings: [String] = []
-    var writingFolder: String              // relative to the work root
-    var includePreviousEpisode: Bool = true
-    var enabled: Bool = true
+public struct AIWorkContextConfig: Codable, Equatable {
+    public var version: Int = 1
+    public var title: String
+    public var settingsSources: [String]          // relative to the work root ("/" separators)
+    public var excludedSettings: [String] = []
+    public var summarizedSettings: [String] = []
+    public var writingFolder: String              // relative to the work root
+    public var includePreviousEpisode: Bool = true
+    public var enabled: Bool = true
     /// True when the user switched the context off by hand (as opposed to "off because there are
     /// no sources"); keeps `normalizeEnabled` from re-enabling it when a source is added.
-    var disabledByUser: Bool = false
+    public var disabledByUser: Bool = false
 
-    init(title: String, settingsSources: [String], excludedSettings: [String] = [],
+    public init(title: String, settingsSources: [String], excludedSettings: [String] = [],
          summarizedSettings: [String] = [], writingFolder: String, includePreviousEpisode: Bool = true,
          enabled: Bool = true, disabledByUser: Bool = false) {
         self.title = title
@@ -26,7 +26,7 @@ struct AIWorkContextConfig: Codable, Equatable {
         self.disabledByUser = disabledByUser
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
         title = try c.decode(String.self, forKey: .title)
@@ -40,39 +40,45 @@ struct AIWorkContextConfig: Codable, Equatable {
     }
 }
 
-enum AIWorkContextValidationError: Error, Equatable {
+public enum AIWorkContextValidationError: Error, Equatable {
     case noSettingsSources, settingsOutsideRoot(String), settingsIsRoot, writingFolderOutsideRoot
 }
 
-enum AIWorkContextError: Error { case corrupt, notFound }
+public enum AIWorkContextError: Error { case corrupt, notFound }
 
-struct AIWorkContext: Equatable {
-    static let folderName = ".jenanote"
-    static let fileName = "context.json"
+public struct AIWorkContext: Equatable {
+    public static let folderName = ".jenanote"
+    public static let fileName = "context.json"
     /// The file's own folder is level 0; the root may sit up to 6 folders above it.
     /// e.g. root/집필/a/b/c/d/e/07화.md is found (e is level 0, root is level 6);
     /// one folder deeper is not.
-    static let maxAncestorLevels = 6
+    public static let maxAncestorLevels = 6
 
-    let rootURL: URL
-    var config: AIWorkContextConfig
-    var invalidPaths: [String]
+    public let rootURL: URL
+    public var config: AIWorkContextConfig
+    public var invalidPaths: [String]
 
-    var configURL: URL {
+    public init(rootURL: URL, config: AIWorkContextConfig, invalidPaths: [String]) {
+        self.rootURL = rootURL
+        self.config = config
+        self.invalidPaths = invalidPaths
+    }
+
+    public var configURL: URL {
         rootURL.appendingPathComponent(Self.folderName).appendingPathComponent(Self.fileName)
     }
 
     /// The writing folder, the root itself for `""`/`"."` (flat layout), or nil when the entry is
     /// invalid (absolute, `..`, outside the root): an invalid entry is ignored (spec §6.6) and the
     /// work behaves as "settings only" — it is never silently widened to the whole root.
-    var writingFolderURL: URL? {
+    public var writingFolderURL: URL? {
         if Self.isRootPath(config.writingFolder) { return rootURL }
         guard Self.isSafeRelative(config.writingFolder) else { return nil }
         let url = Self.resolve(config.writingFolder, in: rootURL)
         return contains(url) ? url : nil
     }
 
-    var settingsSourceURLs: [URL] {
+    public var settingsSourceURLs: [URL] {
         config.settingsSources.compactMap { path in
             guard Self.isSafeRelative(path) else { return nil }
             let url = Self.resolve(path, in: rootURL)
@@ -122,21 +128,21 @@ struct AIWorkContext: Equatable {
 
     // MARK: Discovery
 
-    static func locate(from fileURL: URL) -> AIWorkContext? {
+    public static func locate(from fileURL: URL) -> AIWorkContext? {
         try? locateResult(from: fileURL).get()
     }
 
     /// Same search as `locate`, but surfaces a `context.json` that exists and fails to load
     /// (`AIWorkContextError.corrupt`) instead of treating it as "no work". `.success(nil)` means
     /// no `context.json` was found within range. Used by the AI panel's work context bar.
-    static func locateResult(from fileURL: URL) -> Result<AIWorkContext?, Error> {
+    public static func locateResult(from fileURL: URL) -> Result<AIWorkContext?, Error> {
         guard let root = locateRoot(from: fileURL) else { return .success(nil) }
         do { return .success(try load(rootURL: root)) } catch { return .failure(error) }
     }
 
     /// The nearest ancestor that has a `.jenanote/context.json` (whether or not it loads), within
     /// the same range as `locate`. Used to set a corrupt file aside before first setup.
-    static func locateRoot(from fileURL: URL) -> URL? {
+    public static func locateRoot(from fileURL: URL) -> URL? {
         let file = norm(fileURL)
         if file.pathComponents.contains(folderName) { return nil }
         var dir = file.deletingLastPathComponent()
@@ -151,7 +157,7 @@ struct AIWorkContext: Equatable {
 
     /// A `context.json` reached through a symlink (`.jenanote` or the file itself) or resolving outside
     /// the root is treated as missing (`notFound`); `locateResult` surfaces that as a failure.
-    static func load(rootURL: URL) throws -> AIWorkContext {
+    public static func load(rootURL: URL) throws -> AIWorkContext {
         let url = rootURL.appendingPathComponent(folderName).appendingPathComponent(fileName)
         guard FileManager.default.fileExists(atPath: url.path) else { throw AIWorkContextError.notFound }
         guard isSafeInsideRoot(url, root: rootURL) else { throw AIWorkContextError.notFound }
@@ -172,7 +178,7 @@ struct AIWorkContext: Equatable {
     }
 
     /// Refuses (throws) to write through a symlinked `.jenanote` / `context.json` or outside the root.
-    func save() throws {
+    public func save() throws {
         let dir = rootURL.appendingPathComponent(Self.folderName)
         try Self.ensureSafeInsideRoot(dir, root: rootURL)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -188,7 +194,7 @@ struct AIWorkContext: Equatable {
     /// leaf (e.g. `.jenanote`, `summaries`, sub-folders, the leaf itself) is a symbolic link.
     /// `url` must be built from `root` (same lexical prefix); anything else is rejected.
     /// Spec §3 / ADR-0014: reads stay under the root and never follow symlinks.
-    static func isSafeInsideRoot(_ url: URL, root: URL) -> Bool {
+    public static func isSafeInsideRoot(_ url: URL, root: URL) -> Bool {
         guard relativePath(of: url, to: root) != nil else { return false }
         let base = root.standardizedFileURL.pathComponents
         let target = url.standardizedFileURL.pathComponents
@@ -206,7 +212,7 @@ struct AIWorkContext: Equatable {
     }
 
     /// Throwing form of `isSafeInsideRoot` for writes.
-    static func ensureSafeInsideRoot(_ url: URL, root: URL) throws {
+    public static func ensureSafeInsideRoot(_ url: URL, root: URL) throws {
         guard isSafeInsideRoot(url, root: root) else {
             throw AIError(message: String(format: L10n.tr("ai.work.errorOutsideRoot"), url.path))
         }
@@ -214,11 +220,11 @@ struct AIWorkContext: Equatable {
 
     /// True when url resolves (symlinks followed) to a location under rootURL.
     /// A symlink inside the root that points outside therefore returns false.
-    func contains(_ url: URL) -> Bool {
+    public func contains(_ url: URL) -> Bool {
         Self.relativePath(of: url, to: rootURL) != nil
     }
 
-    static func relativePath(of url: URL, to root: URL) -> String? {
+    public static func relativePath(of url: URL, to root: URL) -> String? {
         // A raw ".." would be collapsed lexically before symlinks are resolved
         // (root/link/../x -> root/x) while the OS follows the link first. Reject.
         if url.pathComponents.contains("..") || root.pathComponents.contains("..") { return nil }
@@ -228,7 +234,7 @@ struct AIWorkContext: Equatable {
         return target.dropFirst(base.count).joined(separator: "/")
     }
 
-    static func validate(rootURL: URL, settingsSources: [URL], writingFolder: URL) -> [AIWorkContextValidationError] {
+    public static func validate(rootURL: URL, settingsSources: [URL], writingFolder: URL) -> [AIWorkContextValidationError] {
         var errors: [AIWorkContextValidationError] = []
         if settingsSources.isEmpty { errors.append(.noSettingsSources) }
         for source in settingsSources {
@@ -245,15 +251,22 @@ struct AIWorkContext: Equatable {
     }
 }
 
-struct AIWorkContextSuggestion: Equatable {
-    let rootURL: URL
-    let settingsSourceURL: URL?            // `설정`/`settings` child folder, nil if none
-    let writingFolderURL: URL              // the file's folder
-    let title: String
+public struct AIWorkContextSuggestion: Equatable {
+    public let rootURL: URL
+    public let settingsSourceURL: URL?            // `설정`/`settings` child folder, nil if none
+    public let writingFolderURL: URL              // the file's folder
+    public let title: String
+
+    public init(rootURL: URL, settingsSourceURL: URL?, writingFolderURL: URL, title: String) {
+        self.rootURL = rootURL
+        self.settingsSourceURL = settingsSourceURL
+        self.writingFolderURL = writingFolderURL
+        self.title = title
+    }
 
     private static let settingsNames: Set<String> = ["설정", "settings"]
 
-    static func make(for fileURL: URL) -> AIWorkContextSuggestion {
+    public static func make(for fileURL: URL) -> AIWorkContextSuggestion {
         let folder = AIWorkContext.norm(fileURL).deletingLastPathComponent()
         var dir = folder
         for _ in 0...AIWorkContext.maxAncestorLevels {
@@ -261,9 +274,9 @@ struct AIWorkContextSuggestion: Equatable {
             let children = (try? FileManager.default.contentsOfDirectory(
                 at: dir, includingPropertiesForKeys: [.isDirectoryKey], options: [])) ?? []
             let match = children.first { child in
-                let isDir = (try? child.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
                 let name = child.lastPathComponent.precomposedStringWithCanonicalMapping.lowercased()
-                return isDir && settingsNames.contains(name)
+                guard settingsNames.contains(name) else { return false }
+                return (try? child.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
             }
             if let match = match {
                 return AIWorkContextSuggestion(rootURL: dir, settingsSourceURL: match,

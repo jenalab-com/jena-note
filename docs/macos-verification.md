@@ -29,6 +29,7 @@ bash Vendor/Kiwi/scripts/fetch-kiwi-model.sh
 | `MarkdownSerializer.swift` 끝부분의 컴파일 오류 | 공유 코드 연결부는 맥에서 컴파일된 적이 없다 | 오류 내용을 공유한다 |
 | `h2 drops bold marks`만 실패 | `.semibold` 글꼴에 bold 속성이 없다는 뜻이다 | `MarkdownWriter.headingBaseIsBold`를 `level == 1`로 바꾸고 말뭉치 기대값을 고친다 |
 | `MarkdownCoreParityTests`의 다른 항목 실패 | 공유 코드가 맥과 다르게 동작한다 | 항목 이름과 함께 공유한다 |
+| `testSharedExportMatchesTheCurrentBuilder` 실패 | 공유 내보내기 변환이 `DocumentModelBuilder`와 다르다 | 항목 이름과 함께 공유한다. Windows 내보내기에만 영향이 있다 |
 
 ## 3. 앱 동작
 
@@ -45,6 +46,7 @@ bash Vendor/Kiwi/scripts/fetch-kiwi-model.sh
 - [ ] 언어를 바꾸면 바로 적용되고, 다시 켜도 유지된다
 - [ ] 책갈피와 이어읽기가 유지된다
 - [ ] 파일 전체 검색이 동작한다
+- [ ] AI 패널이 작품 문맥을 찾고, 작품 문맥 창을 열어 저장할 수 있다 (`AIWorkContext`를 옮겼다)
 
 ## 4. 저장 버그 재현
 
@@ -61,3 +63,9 @@ bash Vendor/Kiwi/scripts/fetch-kiwi-model.sh
 2. `MarkdownSerializer`의 기존 변환 코드를 지운다
 3. `markdown-known-issues.md`의 문제를 공유 코드에서 고친다
 4. `feature-windows`를 `main`에 합친다
+
+## 6. 다른 프로그램에서 열어 보기
+
+Windows 앱에서 내보낸 파일이다. Word는 Windows에서 확인했다. 한글이 있는 PC에서 아래를 확인한다.
+
+- [ ] HWPX 파일이 한글에서 열리고 제목, 본문, 표가 맞다

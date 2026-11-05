@@ -10,7 +10,7 @@ import Foundation
 // 순회·해석은 한 번만 하고, 포맷별 차이는 "XML을 어떻게 쓰느냐"로만 격리된다.
 
 /// 문서의 블록 단위 요소. (제목·문단·목록·인용·코드·표·구분선·이미지)
-public enum Block {
+public enum Block: Equatable {
     /// 제목. `level`은 1~3 (h1~h3).
     case heading(level: Int, inlines: [Inline])
     /// 본문 문단.
@@ -30,7 +30,7 @@ public enum Block {
 }
 
 /// 인라인 텍스트 조각 — 텍스트 + 서식 플래그.
-public struct Inline {
+public struct Inline: Equatable {
     public var text: String
     public var bold = false
     public var italic = false
@@ -52,7 +52,7 @@ public struct Inline {
 }
 
 /// 패키지에 임베드할 이미지 참조.
-public struct ImageRef {
+public struct ImageRef: Equatable {
     /// 원본 파일에서 로드한 바이너리.
     public var data: Data
     /// 패키지 내 파일명 (`image1.png` …).
