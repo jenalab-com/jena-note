@@ -107,7 +107,7 @@ cd jena-note
 
 make build     # .build/JenaNote.app 빌드
 make run       # 빌드 후 즉시 실행
-make install   # ~/Applications 에 설치
+make install   # /Applications 에 설치
 make dmg       # 배포용 .dmg 생성
 make test      # 테스트 실행
 make clean     # 빌드 산출물 삭제

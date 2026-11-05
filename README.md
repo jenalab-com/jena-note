@@ -107,7 +107,7 @@ cd jena-note
 
 make build     # build .build/JenaNote.app
 make run       # build and launch
-make install   # install to ~/Applications
+make install   # install to /Applications
 make dmg       # create a distributable .dmg
 make test      # run tests
 make clean     # remove build products

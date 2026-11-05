@@ -40,11 +40,11 @@ build: prepare-kiwi
 test: prepare-kiwi
 	swift test
 
-## ~/Applications 에 설치
+## /Applications 에 설치
 install: build
-	@rm -rf ~/Applications/$(APP_NAME).app
-	@cp -r $(BUNDLE) ~/Applications/$(APP_NAME).app
-	@echo "✓ 설치 완료: ~/Applications/$(APP_NAME).app"
+	@rm -rf /Applications/$(APP_NAME).app
+	@cp -r $(BUNDLE) /Applications/$(APP_NAME).app
+	@echo "✓ 설치 완료: /Applications/$(APP_NAME).app"
 
 ## .dmg 배포용 디스크 이미지 생성
 dmg: build
