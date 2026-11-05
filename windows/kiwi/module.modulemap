@@ -1,0 +1,6 @@
+// Windows side of the Kiwi module. macOS uses Vendor/Kiwi/Kiwi.xcframework instead.
+module Kiwi {
+    header "../../Vendor/Kiwi/source/include/kiwi/capi.h"
+    link "kiwi"
+    export *
+}

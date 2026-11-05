@@ -63,12 +63,12 @@ enum MarkdownColor {
 // MARK: - Typography
 
 enum MemoFont {
-    static let body       = NSFont.systemFont(ofSize: 15)
-    static let h1         = NSFont.systemFont(ofSize: 28, weight: .bold)
-    static let h2         = NSFont.systemFont(ofSize: 22, weight: .semibold)
-    static let h3         = NSFont.systemFont(ofSize: 18, weight: .medium)
-    static let code       = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
-    static let codeBlock  = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+    static let body       = NSFont.systemFont(ofSize: MemoFontSize.body)
+    static let h1         = NSFont.systemFont(ofSize: MemoFontSize.h1, weight: .bold)
+    static let h2         = NSFont.systemFont(ofSize: MemoFontSize.h2, weight: .semibold)
+    static let h3         = NSFont.systemFont(ofSize: MemoFontSize.h3, weight: .medium)
+    static let code       = NSFont.monospacedSystemFont(ofSize: MemoFontSize.code, weight: .regular)
+    static let codeBlock  = NSFont.monospacedSystemFont(ofSize: MemoFontSize.code, weight: .regular)
 
     static func bold(from base: NSFont) -> NSFont {
         let traits = base.fontDescriptor.symbolicTraits.union(.bold)

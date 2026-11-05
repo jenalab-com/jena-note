@@ -33,7 +33,7 @@ build: prepare-kiwi
 	@[ -f Resources/$(APP_NAME).icns ] && cp Resources/$(APP_NAME).icns $(BUNDLE)/Contents/Resources/$(APP_NAME).icns || true
 	@mkdir -p $(BUNDLE)/Contents/Resources/Fonts
 	@cp Resources/Fonts/*.ttf $(BUNDLE)/Contents/Resources/Fonts/
-	@cp -R Sources/JenaNoteKit/Resources/KiwiModel $(BUNDLE)/Contents/Resources/
+	@cp -R shared/JenaNoteCore/Resources/KiwiModel $(BUNDLE)/Contents/Resources/
 	@cp -R Sources/JenaNoteKit/Resources/ThirdParty $(BUNDLE)/Contents/Resources/
 	@echo "✓ 빌드 완료: $(BUNDLE)"
 

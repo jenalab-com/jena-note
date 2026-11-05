@@ -56,6 +56,8 @@ NSDocument가 다음을 모두 처리하므로 직접 구현하지 않는다:
 
 SPM 패키지 구조: `Sources/JenaNote`(진입점·main), `Sources/JenaNoteKit`(기능 모듈), `Tests/JenaNoteKitTests`(단위 테스트).
 
+**플랫폼 공유:** macOS와 Windows가 함께 쓰는 코드는 `shared/JenaNoteCore`(테스트는 `shared/Tests/JenaNoteCoreTests`)에 둔다. AppKit 없이 Windows에서도 빌드·테스트된다. `JenaNoteKit`은 `CoreExports.swift`로 이 모듈을 다시 내보내므로 파일마다 import할 필요가 없다. 아래 트리 중 맞춤법 엔진, 내보내기 기록기, 읽기 위치, 책갈피, 파일 검색, 번역은 이제 `shared/`에 있다. Windows 빌드는 [windows/README.md](../windows/README.md) 참고.
+
 ```
 Sources/
   JenaNote/

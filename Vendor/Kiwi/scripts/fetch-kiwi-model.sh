@@ -4,7 +4,13 @@ set -euo pipefail
 cd "$(dirname "$0")/../../.."
 version=0.24.1
 checksum=50d163e1af817444ef21f7ec5ea07ef69fb347282d57a6b49260f2039d4dc346
-destination=Sources/JenaNoteKit/Resources/KiwiModel
+destination=shared/JenaNoteCore/Resources/KiwiModel
+legacy=Sources/JenaNoteKit/Resources/KiwiModel
+# The model moved with the shared library. Keep a copy that was already downloaded.
+if [ ! -d "$destination" ] && [ -d "$legacy" ]; then
+    mkdir -p "$(dirname "$destination")"
+    mv "$legacy" "$destination"
+fi
 if [ -d "$destination" ]; then
     if [ "$(cat "$destination/VERSION" 2>/dev/null || true)" = "$version" ] && [ -s "$destination/cong.mdl" ] && [ -s "$destination/sj.morph" ]; then
         exit 0

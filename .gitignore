@@ -23,7 +23,10 @@ plan.md
 
 
 # Pinned Kiwi model, explicitly restored by Vendor/Kiwi/scripts/fetch-kiwi-model.sh
-Sources/JenaNoteKit/Resources/KiwiModel/
+shared/JenaNoteCore/Resources/KiwiModel/
 
 # Generated locally from the tracked Kiwi source snapshot
 Vendor/Kiwi/Kiwi.xcframework/
+
+# SwiftPM writes this next to the manifest when it bundles resources
+/Info.plist

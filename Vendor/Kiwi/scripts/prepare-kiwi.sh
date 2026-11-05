@@ -11,7 +11,7 @@ if [ "$(cat "$framework/SOURCE_SHA256")" != "$(bash Vendor/Kiwi/scripts/kiwi-sou
     echo "Kiwi source/build configuration changed. Run make rebuild-kiwi to apply it." >&2
     exit 1
 fi
-model=Sources/JenaNoteKit/Resources/KiwiModel
+model=shared/JenaNoteCore/Resources/KiwiModel
 if [ "$(cat "$model/VERSION" 2>/dev/null || true)" != "0.24.1" ]; then
     echo "Kiwi model is missing or incompatible. Run bash Vendor/Kiwi/scripts/fetch-kiwi-model.sh explicitly." >&2
     exit 1

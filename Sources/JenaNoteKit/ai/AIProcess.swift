@@ -1,11 +1,6 @@
 import Foundation
 import Darwin
 
-struct AIError: LocalizedError {
-    let message: String
-    var errorDescription: String? { message }
-}
-
 struct AIProcessOutput {
     let status: Int32
     let stdout: String

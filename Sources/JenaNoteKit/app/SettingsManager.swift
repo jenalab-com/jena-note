@@ -8,7 +8,6 @@ final class SettingsManager {
     private let defaults = UserDefaults.standard
 
     private enum Key {
-        static let language = "jn_language"
         static let appearance = "jn_appearance"
         static let readingPageMode = "jn_readingPageMode"
         static let readingFontScale = "jn_readingFontScale"
@@ -49,27 +48,7 @@ final class SettingsManager {
 
     // MARK: - Language
 
-    enum Language: String, CaseIterable {
-        case ko = "ko"
-        case en = "en"
-        case zh = "zh"
-        case ja = "ja"
-        case es = "es"
-        case de = "de"
-        case fr = "fr"
-
-        var displayName: String {
-            switch self {
-            case .ko: return "한국어"
-            case .en: return "English"
-            case .zh: return "中文"
-            case .ja: return "日本語"
-            case .es: return "Español"
-            case .de: return "Deutsch"
-            case .fr: return "Français"
-            }
-        }
-    }
+    typealias Language = AppLanguage
 
     // MARK: - Reading Mode
 
@@ -160,13 +139,9 @@ final class SettingsManager {
     }
 
     var language: Language {
-        get {
-            guard let raw = defaults.string(forKey: Key.language),
-                  let lang = Language(rawValue: raw) else { return .ko }
-            return lang
-        }
+        get { AppLanguage.current }
         set {
-            defaults.set(newValue.rawValue, forKey: Key.language)
+            AppLanguage.current = newValue
             NotificationCenter.default.post(name: .settingsLanguageChanged, object: nil)
         }
     }
