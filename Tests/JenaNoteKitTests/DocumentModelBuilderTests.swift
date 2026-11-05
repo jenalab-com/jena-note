@@ -10,6 +10,34 @@ final class DocumentModelBuilderTests: XCTestCase {
         return DocumentModelBuilder.build(attributed, baseURL: baseURL).blocks
     }
 
+    // MARK: - 빈 줄
+
+    private func shape(_ bs: [Block]) -> [String] {
+        bs.map {
+            switch $0 {
+            case let .paragraph(inlines): return inlines.isEmpty ? "blank" : inlines.map(\.text).joined()
+            case .heading: return "heading"
+            case .horizontalRule: return "rule"
+            default: return "other"
+            }
+        }
+    }
+
+    /// 작가가 띄운 빈 줄은 개수 그대로 내보낸다. 연달은 문단 사이에는 빈 줄이 생기지 않는다.
+    func testBlankLinesBetweenParagraphsAreKept() {
+        XCTAssertEqual(shape(blocks("앞\n뒤")), ["앞", "뒤"])
+        XCTAssertEqual(shape(blocks("앞\n\n뒤")), ["앞", "blank", "뒤"])
+        XCTAssertEqual(shape(blocks("앞\n\n\n뒤")), ["앞", "blank", "blank", "뒤"])
+    }
+
+    func testBlankLinesAtTheEndAreDropped() {
+        XCTAssertEqual(shape(blocks("앞\n\n\n")), ["앞"])
+    }
+
+    func testRuleIsNotMistakenForABlankLine() {
+        XCTAssertEqual(shape(blocks("앞\n---\n뒤")), ["앞", "rule", "뒤"])
+    }
+
     // MARK: - 제목
 
     func testHeadingLevels() {

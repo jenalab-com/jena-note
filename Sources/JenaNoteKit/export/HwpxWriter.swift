@@ -98,7 +98,11 @@ enum HwpxWriter {
                     let height = hundredths(typography.heading(level))
                     emitPara(paraPr: 0, runs: runsXML(inlines, base: BlockStyle(bold: true, height: height, spacing: bodySpacing)))
                 case let .paragraph(inlines):
-                    emitPara(paraPr: 0, runs: runsXML(inlines, base: BlockStyle(height: bodyHeight, spacing: bodySpacing)))
+                    // 빈 문단도 런이 있어야 본문 크기의 줄 높이를 갖는다.
+                    let runs = inlines.isEmpty
+                        ? runXML(text: "", style: CharStyle(height: bodyHeight, spacing: bodySpacing))
+                        : runsXML(inlines, base: BlockStyle(height: bodyHeight, spacing: bodySpacing))
+                    emitPara(paraPr: 0, runs: runs)
                 case let .listItem(ordered, index, inlines):
                     let marker = ordered ? "\(index). " : "• "
                     let runs = runXML(text: marker, style: CharStyle(height: bodyHeight, spacing: bodySpacing))

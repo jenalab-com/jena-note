@@ -74,6 +74,16 @@ final class HwpxWriterTests: XCTestCase {
         XCTAssertFalse(header.contains("height=\"1000\""), "예전 10pt 고정이 남으면 안 된다")
     }
 
+    func testBlankLineBecomesAParagraphWithAnEmptyRun() throws {
+        let dir = try unzip(HwpxWriter.write([
+            .paragraph([Inline(text: "앞")]), .paragraph([]), .paragraph([Inline(text: "뒤")])
+        ], bodySize: 11))
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let sec = try String(contentsOf: dir.appendingPathComponent("Contents/section0.xml"), encoding: .utf8)
+        XCTAssertEqual(sec.components(separatedBy: "<hp:p ").count - 1, 3, "빈 줄도 문단이다")
+        XCTAssertTrue(sec.contains("<hp:run charPrIDRef=\"0\"/></hp:p>"), "빈 문단에도 본문 크기의 런이 있다")
+    }
+
     func testLetterSpacingReachesCharPrAndSkipsCode() throws {
         let dir = try unzip(HwpxWriter.write([
             .paragraph([Inline(text: "본문")]),

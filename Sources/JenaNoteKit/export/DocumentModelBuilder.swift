@@ -53,12 +53,14 @@ enum DocumentModelBuilder {
                 while paraEnd < length && full.character(at: paraEnd) != 10 { paraEnd += 1 }
                 let paraRange = NSRange(location: pos, length: paraEnd - pos)
 
-                // 빈 단락: hr이면 구분선, 아니면 무시(문단 간 간격은 Writer가 처리).
+                // 빈 단락: hr이면 구분선, 아니면 작가가 띄운 빈 줄이다 — 빈 문단으로 그대로 내보낸다.
                 if paraRange.length == 0 {
                     if paraEnd < length {
                         let nlAttrs = attributed.attributes(at: paraEnd, effectiveRange: nil)
                         if (nlAttrs[.mdBlockType] as? String) == "hr" {
                             blocks.append(.horizontalRule)
+                        } else {
+                            blocks.append(.paragraph([]))
                         }
                     }
                     pos = paraEnd + 1
@@ -117,6 +119,8 @@ enum DocumentModelBuilder {
 
                 pos = paraEnd + 1
             }
+            // 문서 끝의 빈 줄은 내보낸 문서에 빈 자리만 남긴다.
+            while case .paragraph(let inlines)? = blocks.last, inlines.isEmpty { blocks.removeLast() }
         }
 
         // MARK: 블록 타입 / 접두사

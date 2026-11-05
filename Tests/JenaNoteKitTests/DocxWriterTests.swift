@@ -64,6 +64,14 @@ final class DocxWriterTests: XCTestCase {
         XCTAssertFalse(xml.contains("<w:spacing w:val="))
     }
 
+    /// 빈 줄은 본문 크기의 줄 높이를 가진 빈 문단이다.
+    func testBlankLineBecomesAnEmptyParagraphAtBodySize() throws {
+        let xml = try docxEntry([
+            .paragraph([Inline(text: "앞")]), .paragraph([]), .paragraph([Inline(text: "뒤")])
+        ], entry: "word/document.xml", bodySize: 11)
+        XCTAssertTrue(xml.contains("<w:p><w:pPr><w:rPr><w:sz w:val=\"22\"/></w:rPr></w:pPr></w:p>"))
+    }
+
     func testHalfPointSizesRoundToTheNearestHalf() throws {
         let xml = try docxEntry([.paragraph([Inline(text: "본문")])], entry: "word/document.xml", bodySize: 10.5)
         XCTAssertTrue(xml.contains("<w:sz w:val=\"21\"/>"))

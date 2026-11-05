@@ -232,8 +232,10 @@ enum DocxWriter {
             Int((points * 2).rounded())
         }
 
+        /// 빈 문단은 문단 기호의 크기가 줄 높이를 정한다. 본문 크기를 줘야 빈 줄 높이가 맞는다.
         private func paragraph(_ runs: String) -> String {
-            runs.isEmpty ? "<w:p/>" : "<w:p>\(runs)</w:p>"
+            guard runs.isEmpty else { return "<w:p>\(runs)</w:p>" }
+            return "<w:p><w:pPr><w:rPr><w:sz w:val=\"\(halfPoints(typography.body))\"/></w:rPr></w:pPr></w:p>"
         }
 
         // MARK: XML 조립
