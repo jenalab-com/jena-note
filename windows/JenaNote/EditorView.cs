@@ -81,8 +81,22 @@ sealed class EditorView : WebView2
         web.Navigate($"https://{AppHost}/index.html");
         await pageReady.Task;
 
-        var strings = ToolbarKeys.ToDictionary(key => key, NativeCore.Tr);
-        Send(new { type = "strings", strings });
+        ApplySettings();
+    }
+
+    /// <summary>Sends the current text sizes, colors and interface language to the page.</summary>
+    public void ApplySettings()
+    {
+        if (CoreWebView2 == null) return;
+        var settings = AppSettings.Current;
+        CoreWebView2.Profile.PreferredColorScheme = settings.ColorMode switch
+        {
+            "light" => CoreWebView2PreferredColorScheme.Light,
+            "dark" => CoreWebView2PreferredColorScheme.Dark,
+            _ => CoreWebView2PreferredColorScheme.Auto,
+        };
+        Send(new { type = "strings", strings = ToolbarKeys.ToDictionary(key => key, NativeCore.Tr) });
+        Send(new { type = "settings", bodySize = settings.BodySize, letterSpacing = settings.LetterSpacing, paper = settings.PaperColor });
     }
 
     void Send(object message) => CoreWebView2.PostWebMessageAsString(JsonSerializer.Serialize(message));

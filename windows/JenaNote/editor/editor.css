@@ -58,7 +58,7 @@ body { display: flex; flex-direction: column; }
 #toolbar .separator { width: 1px; margin: 4px 4px; background: var(--line); }
 body.plain #toolbar { display: none; }
 
-#scroller { flex: 1; overflow: auto; }
+#scroller { flex: 1; overflow: auto; background: var(--paper, var(--surface)); }
 
 #editor {
   box-sizing: border-box;
@@ -67,6 +67,8 @@ body.plain #toolbar { display: none; }
   margin: 0 auto;
   padding: 32px 48px 120px;
   outline: none;
+  font-size: var(--body-size, 15pt);
+  letter-spacing: var(--letter-spacing, 0);
   line-height: 1.55;
   /* Keeps typed spaces as ordinary spaces instead of no-break spaces. */
   white-space: pre-wrap;
@@ -74,9 +76,9 @@ body.plain #toolbar { display: none; }
 }
 
 #editor p { margin: 4px 0; }
-#editor h1 { margin: 12px 0 6px; font-size: 28px; font-weight: 700; }
-#editor h2 { margin: 12px 0 6px; font-size: 22px; font-weight: 600; }
-#editor h3 { margin: 12px 0 6px; font-size: 18px; font-weight: 500; }
+#editor h1 { margin: 12px 0 6px; font-size: 1.8667em; font-weight: 700; }
+#editor h2 { margin: 12px 0 6px; font-size: 1.4667em; font-weight: 600; }
+#editor h3 { margin: 12px 0 6px; font-size: 1.2em; font-weight: 500; }
 #editor blockquote {
   margin: 4px 0;
   padding-left: 16px;
@@ -100,14 +102,16 @@ body.plain #toolbar { display: none; }
   border: 1px solid var(--line);
   border-radius: 4px;
   background: var(--code);
-  font: 13px Consolas, "Malgun Gothic", monospace;
+  font: 0.8667em Consolas, "Malgun Gothic", monospace;
+  letter-spacing: 0;
   white-space: pre-wrap;
 }
 #editor code {
   padding: 1px 4px;
   border-radius: 3px;
   background: var(--code);
-  font: 13px Consolas, "Malgun Gothic", monospace;
+  font: 0.8667em Consolas, "Malgun Gothic", monospace;
+  letter-spacing: 0;
 }
 #editor a { color: var(--link); text-decoration: underline; }
 #editor hr { margin: 8px 0; border: 0; border-top: 1px solid var(--line); }

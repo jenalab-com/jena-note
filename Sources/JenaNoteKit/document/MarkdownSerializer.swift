@@ -30,6 +30,14 @@ extension NSAttributedString.Key {
     /// 읽기 굵기를 '굵게'로 둔 채 새로 친 글자가 저장 시 통째로 볼드 마크업이 된다.
     /// 조판을 벗길 때(ReaderMetrics.unstyled) 이 구간의 볼드는 사용자 의도에서 제외한다.
     static let mdReaderBold = NSAttributedString.Key("MDReaderBold")
+    /// 코드 블록 펜스의 언어(```swift). 공유 코드 경로에서만 쓴다.
+    static let mdCodeLanguage = NSAttributedString.Key("MDCodeLanguage")
+    /// 내용이 없는 코드 블록 표시 — 빈 줄 하나짜리 블록과 구분한다.
+    static let mdCodeEmptyFence = NSAttributedString.Key("MDCodeEmptyFence")
+    /// `<img>` 태그의 원문. 앱이 쓰지 않는 속성까지 저장할 때 되살린다.
+    static let mdImageRawTag = NSAttributedString.Key("MDImageRawTag")
+    /// 표 구분선 칸의 원문(:--). 열 정렬을 저장할 때 되살린다.
+    static let mdTableSeparators = NSAttributedString.Key("MDTableSeparators")
 }
 
 // MARK: - Color ↔ Hex Helpers
@@ -969,8 +977,12 @@ extension MarkdownSerializer {
                 result.append(newline)
             case .horizontalRule:
                 result.append(makeHorizontalRule())
-            case .codeBlock(let lines):
-                result.append(makeCodeBlock(lines.joined(separator: "\n") + "\n"))
+            case .codeBlock(let lines, let language):
+                let code = NSMutableAttributedString(attributedString: makeCodeBlock(lines.joined(separator: "\n") + "\n"))
+                let range = NSRange(location: 0, length: code.length)
+                if let language { code.addAttribute(.mdCodeLanguage, value: language, range: range) }
+                if lines.isEmpty { code.addAttribute(.mdCodeEmptyFence, value: true, range: range) }
+                result.append(code)
             case .table(let table):
                 result.append(renderTable(table))
             case .noteDefinition(let id, let runs):
@@ -1042,6 +1054,9 @@ extension MarkdownSerializer {
                 piece = NSMutableAttributedString(attributedString: DocumentEndnotes.reference(id, font: baseFont))
             case .image(let path, let alt, let width):
                 piece = NSMutableAttributedString(attributedString: makeImageAttachment(relPath: path, alt: alt, width: width, baseURL: baseURL))
+                if let tag = run.rawTag {
+                    piece.addAttribute(.mdImageRawTag, value: tag, range: NSRange(location: 0, length: piece.length))
+                }
             case .text(let text):
                 var attrs: [NSAttributedString.Key: Any] = [.foregroundColor: NSColor.labelColor]
                 if run.code {
@@ -1098,26 +1113,19 @@ extension MarkdownSerializer {
                 let paragraph = NSMutableParagraphStyle()
                 paragraph.textBlocks = [block]
 
+                // Runs keep their own formatting. The header's weight comes from the base font.
                 let font = isHeader ? MemoFont.bold(from: MemoFont.body) : MemoFont.body
-                var attrs: [NSAttributedString.Key: Any] = [
-                    .font: font,
-                    .foregroundColor: NSColor.labelColor,
-                    .paragraphStyle: paragraph,
-                    .mdBlockType: "table-cell"
-                ]
-                if isHeader { attrs[.mdTableHeader] = true }
+                var structure: [NSAttributedString.Key: Any] = [.paragraphStyle: paragraph, .mdBlockType: "table-cell"]
+                if isHeader { structure[.mdTableHeader] = true }
+                if let separators = model.separators { structure[.mdTableSeparators] = separators }
+                var attrs = structure
+                attrs[.font] = font
+                attrs[.foregroundColor] = NSColor.labelColor
 
                 let cellRuns = column < row.count ? row[column] : []
-                for run in cellRuns {
-                    let piece = NSMutableAttributedString(attributedString: renderRuns([run], baseFont: font, baseURL: nil))
-                    let range = NSRange(location: 0, length: piece.length)
-                    piece.addAttributes(attrs, range: range)
-                    // The table's attributes must not erase a color the author chose.
-                    if let hex = run.color, let color = MarkdownColor.fromHex(hex) {
-                        piece.addAttribute(.foregroundColor, value: color, range: range)
-                    }
-                    result.append(piece)
-                }
+                let content = NSMutableAttributedString(attributedString: renderRuns(cellRuns, baseFont: font, baseURL: nil))
+                content.addAttributes(structure, range: NSRange(location: 0, length: content.length))
+                result.append(content)
                 result.append(NSAttributedString(string: "\n", attributes: attrs))
             }
         }
@@ -1132,11 +1140,16 @@ extension MarkdownSerializer {
         let length = attributed.length
         var pos = 0
 
-        func appendCodeLine(_ line: String) {
-            if case .codeBlock(let lines)? = blocks.last {
-                blocks[blocks.count - 1] = .codeBlock(lines: lines + [line])
+        // Each code block has its own NSTextBlock, which keeps neighboring blocks apart.
+        var codeBox: NSTextBlock?
+        func appendCodeLine(_ line: String, _ attrs: [NSAttributedString.Key: Any]) {
+            let box = (attrs[.paragraphStyle] as? NSParagraphStyle)?.textBlocks.first
+            if case .codeBlock(let lines, let language)? = blocks.last, box === codeBox {
+                blocks[blocks.count - 1] = .codeBlock(lines: lines + [line], language: language)
             } else {
-                blocks.append(.codeBlock(lines: [line]))
+                let isEmpty = attrs[.mdCodeEmptyFence] as? Bool == true
+                blocks.append(.codeBlock(lines: isEmpty ? [] : [line], language: attrs[.mdCodeLanguage] as? String))
+                codeBox = box
             }
         }
 
@@ -1145,13 +1158,25 @@ extension MarkdownSerializer {
             while paraEnd < length && full.character(at: paraEnd) != 10 { paraEnd += 1 }
             let paraRange = NSRange(location: pos, length: paraEnd - pos)
 
+            // A table may start with an empty cell, so look for it before empty lines.
+            let startAttrs = attributed.attributes(at: pos, effectiveRange: nil)
+            if startAttrs[.mdBlockType] as? String == "table-cell",
+               let style = startAttrs[.paragraphStyle] as? NSParagraphStyle,
+               let block = style.textBlocks.first as? NSTextTableBlock {
+                let (table, next) = readTable(attributed, startPos: pos, table: block.table)
+                if let table { blocks.append(.table(table)) }
+                pos = next
+                continue
+            }
+
             if paraRange.length == 0 {
                 if paraEnd < length {
-                    let type = attributed.attributes(at: paraEnd, effectiveRange: nil)[.mdBlockType] as? String
+                    let nlAttrs = attributed.attributes(at: paraEnd, effectiveRange: nil)
+                    let type = nlAttrs[.mdBlockType] as? String
                     if type == "hr" {
                         blocks.append(.horizontalRule)
                     } else if type == "codeblock" {
-                        appendCodeLine("")
+                        appendCodeLine("", nlAttrs)
                     } else {
                         blocks.append(.blank)
                     }
@@ -1162,7 +1187,8 @@ extension MarkdownSerializer {
 
             let paraAttrs = attributed.attributes(at: pos, effectiveRange: nil)
             let blockType: String = {
-                if let type = paraAttrs[.mdBlockType] as? String { return type }
+                // An image marks itself as body text, so it says nothing about its line.
+                if paraAttrs[.attachment] == nil, let type = paraAttrs[.mdBlockType] as? String { return type }
                 if paraEnd < length {
                     return (attributed.attributes(at: paraEnd, effectiveRange: nil)[.mdBlockType] as? String) ?? "body"
                 }
@@ -1175,15 +1201,6 @@ extension MarkdownSerializer {
                 let bodyRange = NSRange(location: pos + prefixLength, length: paraRange.length - prefixLength)
                 blocks.append(.noteDefinition(id: id, runs: runs(in: attributed, range: bodyRange, baseFont: MemoFont.body)))
                 pos = paraEnd + 1
-                continue
-            }
-
-            if blockType == "table-cell",
-               let style = paraAttrs[.paragraphStyle] as? NSParagraphStyle,
-               let block = style.textBlocks.first as? NSTextTableBlock {
-                let (table, next) = readTable(attributed, startPos: pos, table: block.table)
-                if let table { blocks.append(.table(table)) }
-                pos = next
                 continue
             }
 
@@ -1214,7 +1231,7 @@ extension MarkdownSerializer {
             case "hr":
                 blocks.append(.horizontalRule)
             case "codeblock":
-                appendCodeLine(paraText)
+                appendCodeLine(paraText, paraAttrs)
             default:
                 blocks.append(.paragraph(runs(in: attributed, range: paraRange, baseFont: MemoFont.body)))
             }
@@ -1239,9 +1256,10 @@ extension MarkdownSerializer {
             guard let style = attrs[.paragraphStyle] as? NSParagraphStyle,
                   let block = style.textBlocks.first as? NSTextTableBlock,
                   block.table === table else { break }
+            let isHeader = attrs[.mdTableHeader] as? Bool == true
             cells.append((block.startingRow, block.startingColumn,
-                          runs(in: attributed, range: paraRange, baseFont: MemoFont.body),
-                          attrs[.mdTableHeader] as? Bool == true))
+                          runs(in: attributed, range: paraRange, baseFont: isHeader ? MemoFont.bold(from: MemoFont.body) : MemoFont.body),
+                          isHeader))
             pos = paraEnd + 1
         }
         guard !cells.isEmpty else { return (nil, pos) }
@@ -1254,7 +1272,8 @@ extension MarkdownSerializer {
             rows[cell.row][cell.column] = cell.runs
             if cell.isHeader { headerRow = cell.row }
         }
-        return (MarkdownTable(rows: rows, headerRow: headerRow), pos)
+        let separators = attributed.attributes(at: startPos, effectiveRange: nil)[.mdTableSeparators] as? [String]
+        return (MarkdownTable(rows: rows, headerRow: headerRow, separators: separators), pos)
     }
 
     private static func runs(in attributed: NSAttributedString, range: NSRange, baseFont: NSFont) -> [MarkdownRun] {
@@ -1284,7 +1303,8 @@ extension MarkdownSerializer {
             if attrs[.attachment] != nil {
                 if let path = attrs[.mdImageRelPath] as? String {
                     result.append(MarkdownRun(.image(path: path, alt: attrs[.mdImageAlt] as? String ?? "",
-                                                     width: attrs[.mdImageWidth] as? Int)))
+                                                     width: attrs[.mdImageWidth] as? Int),
+                                              rawTag: attrs[.mdImageRawTag] as? String))
                 }
                 i = effectiveRange.location + effectiveRange.length
                 continue

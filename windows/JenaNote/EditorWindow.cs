@@ -15,6 +15,7 @@ namespace JenaNote;
 sealed class EditorWindow : Window
 {
     readonly EditorView editor = new();
+    readonly Menu menu = new();
     string? filePath;
     bool plainText;
     int currentRevision;
@@ -35,6 +36,8 @@ sealed class EditorWindow : Window
     public static TimeSpan AutosaveDelay { get; set; } = TimeSpan.FromSeconds(60);
     /// <summary>How soon an unsaved change gets a recovery copy.</summary>
     public static TimeSpan RecoveryDelay { get; set; } = TimeSpan.FromSeconds(5);
+    /// <summary>The self test's answer to the save question on closing.</summary>
+    public static MessageBoxResult CloseAnswerForTest { get; set; } = MessageBoxResult.Cancel;
     /// <summary>The self test's answer to the overwrite question, since nobody can click it.</summary>
     public static bool OverwriteAnswerForTest { get; set; }
 
@@ -52,7 +55,8 @@ sealed class EditorWindow : Window
         MinHeight = 320;
 
         var layout = new DockPanel();
-        var menu = BuildMenu();
+        FillMenu();
+        AddShortcuts();
         DockPanel.SetDock(menu, Dock.Top);
         layout.Children.Add(menu);
         layout.Children.Add(editor);
@@ -75,12 +79,19 @@ sealed class EditorWindow : Window
         editor.AlertRequested += text => MessageBox.Show(this, text, "Jena Note", MessageBoxButton.OK, MessageBoxImage.Information);
         Action dictionaryChanged = editor.DictionaryChanged;
         DictionaryWindow.Changed += dictionaryChanged;
+        Action settingsChanged = ApplySettings;
+        AppSettings.Changed += settingsChanged;
         Closed += (_, _) =>
         {
+            AppSettings.Changed -= settingsChanged;
             DictionaryWindow.Changed -= dictionaryChanged;
             autosaveTimer.Stop();
             recoveryTimer.Stop();
             RecoveryStore.Delete(recoveryId);
+            // Tool windows must not keep the app alive once the last document is gone.
+            var application = Application.Current;
+            if (!IsSelfTesting && application != null && !application.Windows.OfType<EditorWindow>().Any(window => window != this))
+                application.Shutdown();
         };
         Loaded += (_, _) => ready = StartEditorAsync(initialText ?? "", recoveredId != null);
         Activated += (_, _) =>
@@ -94,6 +105,7 @@ sealed class EditorWindow : Window
     int revisionOffset;
 
     public EditorView Editor => editor;
+    public string FirstMenuHeader => (menu.Items[0] as MenuItem)?.Header as string ?? "";
 
     public Task WhenReady() => ready ?? Task.CompletedTask;
 
@@ -126,8 +138,9 @@ sealed class EditorWindow : Window
 
     // MARK: - Menu
 
-    Menu BuildMenu()
+    void FillMenu()
     {
+        menu.Items.Clear();
         static MenuItem Top(string key, params object[] items)
         {
             var item = new MenuItem { Header = NativeCore.Tr(key) };
@@ -141,7 +154,6 @@ sealed class EditorWindow : Window
             return item;
         }
 
-        var menu = new Menu();
         menu.Items.Add(Top("menu.file",
             Item("menu.file.new", "Ctrl+N", () => RunCommand("new")),
             Item("menu.file.open", "Ctrl+O", () => RunCommand("open")),
@@ -154,6 +166,8 @@ sealed class EditorWindow : Window
                 Item("menu.file.export.hwpx", "", () => RunCommand("exportHwpx"))),
             new Separator(),
             Item("backup.title", "", () => RunCommand("history")),
+            new Separator(),
+            Item("menu.app.settings", "Ctrl+,", () => RunCommand("settings")),
             new Separator(),
             Item("menu.file.close", "", Close)));
         menu.Items.Add(Top("menu.edit",
@@ -182,13 +196,15 @@ sealed class EditorWindow : Window
             new Separator(),
             Item("proof.button", "", () => editor.Run("proofSelection")),
             Item("dictionary.title", "", () => DictionaryWindow.Present(this, filePath, ""))));
+    }
 
+    void AddShortcuts()
+    {
         // Shortcuts when the focus is on the menu rather than in the page.
         InputBindings.Add(new KeyBinding(new RelayCommand(() => RunCommand("save")), Key.S, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(new RelayCommand(() => RunCommand("saveAs")), Key.S, ModifierKeys.Control | ModifierKeys.Shift));
         InputBindings.Add(new KeyBinding(new RelayCommand(() => RunCommand("open")), Key.O, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(new RelayCommand(() => RunCommand("new")), Key.N, ModifierKeys.Control));
-        return menu;
     }
 
     sealed class RelayCommand(Action action) : ICommand
@@ -213,6 +229,9 @@ sealed class EditorWindow : Window
                 break;
             case "saveAs":
                 await SaveAsync(chooseLocation: true);
+                break;
+            case "settings":
+                SettingsWindow.Present(this);
                 break;
             case "history":
                 if (filePath == null)
@@ -412,6 +431,25 @@ sealed class EditorWindow : Window
         MessageBox.Show(this, NativeCore.Tr("backup.failed"), "Jena Note", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
+    // MARK: - Settings
+
+    void ApplySettings()
+    {
+        FillMenu();
+        UpdateTitle();
+        editor.ApplySettings();
+        if (AutosaveEnabled)
+        {
+            // A new interval starts counting from now, and turning this on must catch up.
+            autosaveTimer.Stop();
+            StartTimers();
+        }
+        else
+        {
+            autosaveTimer.Stop();
+        }
+    }
+
     // MARK: - Autosave and recovery
 
     void StartTimers()
@@ -517,7 +555,9 @@ sealed class EditorWindow : Window
         try
         {
             var content = await editor.GetContentAsync("export");
-            var (data, skipped) = NativeCore.Export(content.GetProperty("blocks").GetRawText(), format, editor.DocumentFolder);
+            var settings = AppSettings.Current;
+            var (data, skipped) = NativeCore.Export(content.GetProperty("blocks").GetRawText(), format, editor.DocumentFolder,
+                settings.BodySize, settings.LetterSpacing);
             DocumentFile.WriteBytes(path, data);
             if (skipped > 0 && !IsSelfTesting)
             {
@@ -575,6 +615,8 @@ sealed class EditorWindow : Window
 
     async Task FinishClosingAsync()
     {
+        // WPF refuses Close() while the Closing event is still running, so leave it first.
+        await Dispatcher.Yield(DispatcherPriority.Background);
         while (saving) await Task.Delay(20);
 
         // A saved document with autosave on closes without asking, as on macOS.
@@ -587,7 +629,7 @@ sealed class EditorWindow : Window
         }
 
         var name = filePath != null ? Path.GetFileName(filePath) : NativeCore.Tr("doc.untitled");
-        var answer = MessageBox.Show(this, NativeCore.Tr("doc.unsaved").Replace("%@", name), "Jena Note",
+        var answer = IsSelfTesting ? CloseAnswerForTest : MessageBox.Show(this, NativeCore.Tr("doc.unsaved").Replace("%@", name), "Jena Note",
             MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
         if (answer == MessageBoxResult.Cancel) return;
         if (answer == MessageBoxResult.Yes && !await SaveAsync(chooseLocation: false)) return;

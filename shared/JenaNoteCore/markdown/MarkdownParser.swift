@@ -2,8 +2,8 @@ import Foundation
 
 /// Markdown text to `MarkdownBlock`s.
 ///
-/// Follows `MarkdownSerializer.parse` on macOS line for line, oddities included, so both
-/// platforms read a file the same way. `MarkdownCoreParityTests` compares the two on a Mac.
+/// Built from `MarkdownSerializer.parse` on macOS, with the save defects in
+/// docs/markdown-known-issues.md fixed. `MarkdownCoreParityTests` compares the two on a Mac.
 public enum MarkdownParser {
 
     public static func parse(_ markdown: String) -> [MarkdownBlock] {
@@ -14,15 +14,21 @@ public enum MarkdownParser {
         while i < lines.count {
             let line = lines[i]
 
-            if line.hasPrefix("```") {
+            if let fence = openingFence(line) {
                 var codeLines: [String] = []
+                var closed = false
                 i += 1
-                while i < lines.count && !lines[i].hasPrefix("```") {
+                while i < lines.count {
+                    if isClosingFence(lines[i], length: fence.length) {
+                        closed = true
+                        break
+                    }
                     codeLines.append(lines[i])
                     i += 1
                 }
-                // An empty fence still occupies one line, and neighbors form a single block.
-                appendCode(codeLines.isEmpty ? [""] : codeLines, to: &blocks)
+                // In a fence left open, the empty piece after the file's last newline is not a line.
+                if !closed, codeLines.last == "" { codeLines.removeLast() }
+                blocks.append(.codeBlock(lines: codeLines, language: fence.language))
                 i += 1
                 continue
             }
@@ -74,12 +80,18 @@ public enum MarkdownParser {
         return blocks
     }
 
-    private static func appendCode(_ lines: [String], to blocks: inout [MarkdownBlock]) {
-        if case .codeBlock(let previous)? = blocks.last {
-            blocks[blocks.count - 1] = .codeBlock(lines: previous + lines)
-        } else {
-            blocks.append(.codeBlock(lines: lines))
-        }
+    /// Backticks in the rest of the line mean inline code such as ```a```, not a fence.
+    private static func openingFence(_ line: String) -> (length: Int, language: String?)? {
+        guard line.hasPrefix("```") else { return nil }
+        let length = line.prefix(while: { $0 == "`" }).count
+        let language = line.dropFirst(length).trimmingCharacters(in: .whitespaces)
+        guard !language.contains("`") else { return nil }
+        return (length, language.isEmpty ? nil : language)
+    }
+
+    private static func isClosingFence(_ line: String, length: Int) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return trimmed.count >= length && trimmed.allSatisfy { $0 == "`" }
     }
 
     // MARK: - Tables
@@ -92,27 +104,16 @@ public enum MarkdownParser {
         let columnCount = cells.map(\.count).max() ?? 1
 
         var rows: [[[MarkdownRun]]] = []
-        for (rowIndex, row) in cells.enumerated() {
+        for row in cells {
             var cellRuns: [[MarkdownRun]] = []
             for column in 0..<columnCount {
-                let text = column < row.count ? row[column] : ""
-                cellRuns.append(tableCellRuns(text, isHeader: rowIndex == 0))
+                cellRuns.append(parseInline(column < row.count ? row[column] : ""))
             }
             rows.append(cellRuns)
         }
-        return MarkdownTable(rows: rows)
-    }
-
-    /// A cell's weight comes from the table: header cells are bold and body cells are not,
-    /// and inline bold or italic marks do not survive inside a cell.
-    private static func tableCellRuns(_ text: String, isHeader: Bool) -> [MarkdownRun] {
-        var result: [MarkdownRun] = []
-        for var run in parseInline(text) {
-            run.bold = isHeader
-            run.italic = false
-            append(run, to: &result)
-        }
-        return result
+        // The caller found a separator as the second line.
+        let separators = lines.count > 1 ? parseTableCells(lines[1]) : nil
+        return MarkdownTable(rows: rows, separators: separators)
     }
 
     private static func isTableDataLine(_ line: String) -> Bool {
@@ -125,17 +126,37 @@ public enum MarkdownParser {
         guard trimmed.contains("|") else { return false }
         let inner = trimmed.hasPrefix("|") ? String(trimmed.dropFirst()) : trimmed
         let parts = inner.components(separatedBy: "|")
-        return parts.filter { !$0.isEmpty }.allSatisfy { cell in
+        let cells = parts.filter { !$0.isEmpty }
+        return !cells.isEmpty && cells.allSatisfy { cell in
             let s = cell.trimmingCharacters(in: .whitespaces)
             return !s.isEmpty && s.allSatisfy { $0 == "-" || $0 == ":" }
         }
     }
 
+    /// `\|` is a pipe inside a cell, not a cell boundary.
     private static func parseTableCells(_ line: String) -> [String] {
         var s = line.trimmingCharacters(in: .whitespaces)
         if s.hasPrefix("|") { s = String(s.dropFirst()) }
-        if s.hasSuffix("|") { s = String(s.dropLast()) }
-        return s.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
+        if s.hasSuffix("|"), !s.hasSuffix("\\|") { s = String(s.dropLast()) }
+        var cells: [String] = []
+        var cell = ""
+        var previous: Character?
+        for character in s {
+            if character == "|" {
+                if previous == "\\" {
+                    cell.removeLast()
+                    cell.append(character)
+                } else {
+                    cells.append(cell)
+                    cell = ""
+                }
+            } else {
+                cell.append(character)
+            }
+            previous = character
+        }
+        cells.append(cell)
+        return cells.map { $0.trimmingCharacters(in: .whitespaces) }
     }
 
     // MARK: - Line kinds
@@ -193,30 +214,36 @@ public enum MarkdownParser {
                 remaining = remaining[urlEnd.upperBound...]
                 continue
             }
-            if remaining.hasPrefix("***"), let end = remaining.dropFirst(3).range(of: "***") {
+            if remaining.hasPrefix("***"), let end = remaining.dropFirst(3).range(of: "***"),
+               end.lowerBound > remaining.index(remaining.startIndex, offsetBy: 3) {
                 let content = String(remaining[remaining.index(remaining.startIndex, offsetBy: 3)..<end.lowerBound])
                 append(MarkdownRun(text: content, bold: true, italic: true), to: &result)
                 remaining = remaining[end.upperBound...]
-            } else if remaining.hasPrefix("**"), let end = remaining.dropFirst(2).range(of: "**") {
+            } else if remaining.hasPrefix("**"), let end = remaining.dropFirst(2).range(of: "**"),
+                      end.lowerBound > remaining.index(remaining.startIndex, offsetBy: 2) {
                 let content = String(remaining[remaining.index(remaining.startIndex, offsetBy: 2)..<end.lowerBound])
                 append(MarkdownRun(text: content, bold: true), to: &result)
                 remaining = remaining[end.upperBound...]
-            } else if remaining.hasPrefix("__"), let end = remaining.dropFirst(2).range(of: "__") {
+            } else if remaining.hasPrefix("__"), !followsWord(remaining, in: text),
+                      let end = underscoreEnd(in: remaining.dropFirst(2), marker: "__"),
+                      end.lowerBound > remaining.index(remaining.startIndex, offsetBy: 2) {
                 let content = String(remaining[remaining.index(remaining.startIndex, offsetBy: 2)..<end.lowerBound])
                 append(MarkdownRun(text: content, bold: true), to: &result)
                 remaining = remaining[end.upperBound...]
-            } else if remaining.hasPrefix("*"), !remaining.hasPrefix("**"), let end = findItalicEnd(in: remaining.dropFirst(1), marker: "*") {
+            } else if remaining.hasPrefix("*"), !remaining.hasPrefix("**"), let end = findItalicEnd(in: remaining.dropFirst(1), marker: "*"),
+                      end.lowerBound > remaining.index(after: remaining.startIndex) {
                 let content = String(remaining[remaining.index(after: remaining.startIndex)..<end.lowerBound])
                 append(MarkdownRun(text: content, italic: true), to: &result)
                 remaining = remaining[end.upperBound...]
-            } else if remaining.hasPrefix("_"), !remaining.hasPrefix("__"), let end = findItalicEnd(in: remaining.dropFirst(1), marker: "_") {
+            } else if remaining.hasPrefix("_"), !remaining.hasPrefix("__"), !followsWord(remaining, in: text),
+                      let end = underscoreEnd(in: remaining.dropFirst(1), marker: "_"),
+                      end.lowerBound > remaining.index(after: remaining.startIndex) {
                 let content = String(remaining[remaining.index(after: remaining.startIndex)..<end.lowerBound])
                 append(MarkdownRun(text: content, italic: true), to: &result)
                 remaining = remaining[end.upperBound...]
-            } else if remaining.hasPrefix("`"), let end = remaining.dropFirst(1).range(of: "`") {
-                let content = String(remaining[remaining.index(after: remaining.startIndex)..<end.lowerBound])
-                append(MarkdownRun(text: content, code: true), to: &result)
-                remaining = remaining[end.upperBound...]
+            } else if remaining.hasPrefix("`"), let span = inlineCode(in: remaining) {
+                append(MarkdownRun(text: span.content, code: true), to: &result)
+                remaining = span.remaining
             } else if remaining.hasPrefix("["),
                       let textEnd = remaining.range(of: "]("),
                       let urlEnd = remaining[textEnd.upperBound...].range(of: ")") {
@@ -230,6 +257,46 @@ public enum MarkdownParser {
         }
 
         return result
+    }
+
+    /// Code between runs of the same number of backticks, so code can hold shorter runs.
+    private static func inlineCode(in text: Substring) -> (content: String, remaining: Substring)? {
+        let length = text.prefix(while: { $0 == "`" }).count
+        var index = text.index(text.startIndex, offsetBy: length)
+        let start = index
+        while index < text.endIndex {
+            guard text[index] == "`" else {
+                index = text.index(after: index)
+                continue
+            }
+            let run = text[index...].prefix(while: { $0 == "`" })
+            if run.count == length, index > start { return (String(text[start..<index]), text[run.endIndex...]) }
+            index = run.endIndex
+        }
+        return nil
+    }
+
+    private static func isWord(_ character: Character) -> Bool {
+        character.isLetter || character.isNumber
+    }
+
+    /// Underscores inside a word, as in snake_case, are ordinary characters.
+    private static func followsWord(_ remaining: Substring, in text: String) -> Bool {
+        guard remaining.startIndex > text.startIndex else { return false }
+        return isWord(text[text.index(before: remaining.startIndex)])
+    }
+
+    private static func underscoreEnd(in text: Substring, marker: String) -> Range<Substring.Index>? {
+        var index = text.startIndex
+        while index < text.endIndex {
+            if text[index...].hasPrefix(marker) {
+                let end = text.index(index, offsetBy: marker.count)
+                let doubled = marker == "_" && end < text.endIndex && text[end] == "_"
+                if !doubled, end == text.endIndex || !isWord(text[end]) { return index..<end }
+            }
+            index = text.index(after: index)
+        }
+        return nil
     }
 
     /// Neighbors with identical formatting are one run, as in an attributed string.
@@ -292,7 +359,7 @@ public enum MarkdownParser {
         guard let src = htmlAttribute("src", in: tag) else { return nil }
         let alt = htmlAttribute("alt", in: tag) ?? ""
         let width = htmlAttribute("width", in: tag).flatMap { Int($0) }
-        return (MarkdownRun(.image(path: src, alt: alt, width: width)), text[closeRange.upperBound...])
+        return (MarkdownRun(.image(path: src, alt: alt, width: width), rawTag: tag), text[closeRange.upperBound...])
     }
 
     private static func htmlAttribute(_ name: String, in tag: String) -> String? {

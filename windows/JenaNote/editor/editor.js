@@ -35,6 +35,7 @@ function renderRun(run) {
     node.alt = run.image.alt ?? '';
     node.dataset.path = run.image.path;
     node.dataset.alt = run.image.alt ?? '';
+    if (run.raw) node.dataset.raw = run.raw;
     if (run.image.width != null) {
       node.dataset.width = String(run.image.width);
       if (run.image.width > 0) node.width = run.image.width;
@@ -73,6 +74,7 @@ function fill(element, runs) {
 
 function renderTable(block) {
   const table = document.createElement('table');
+  if (block.separators) table.dataset.separators = JSON.stringify(block.separators);
   const body = document.createElement('tbody');
   block.rows.forEach((row, rowIndex) => {
     const line = document.createElement('tr');
@@ -99,7 +101,9 @@ function renderBlock(block) {
     case 'codeBlock': {
       // One final newline keeps an empty last line visible; reading removes it again.
       const pre = document.createElement('pre');
-      pre.textContent = block.lines.join('\n') + '\n';
+      pre.textContent = block.lines.length > 0 ? block.lines.join('\n') + '\n' : '';
+      pre.dataset.block = 'true';
+      if (block.language) pre.dataset.language = block.language;
       return pre;
     }
     case 'noteDefinition': {
@@ -211,7 +215,9 @@ function readLines(node, style, lines) {
     } else if (child.tagName === 'IMG') {
       const image = { path: child.dataset.path ?? '', alt: child.dataset.alt ?? '' };
       if (child.dataset.width !== undefined) image.width = Number(child.dataset.width);
-      appendRun(lines.at(-1), { image }, style);
+      const run = { image };
+      if (child.dataset.raw) run.raw = child.dataset.raw;
+      appendRun(lines.at(-1), run, style);
     } else if (child.classList.contains('note-ref')) {
       appendRun(lines.at(-1), { note: child.dataset.note }, style);
     } else if (child.classList.contains('note-label')) {
@@ -234,21 +240,18 @@ function linesOf(element) {
   return lines;
 }
 
-function cellRuns(cell, isHeader) {
-  // Cells hold one line and take their weight from the row, like the parser.
+function cellRuns(cell) {
+  // A cell holds one line, so anything that split it joins back with a space.
   const line = [];
   linesOf(cell).forEach((runs, index) => {
     if (runs.rule) return;
     if (index > 0 && line.length > 0) appendRun(line, { text: ' ' }, {});
     for (const run of runs) {
-      delete run.italic;
-      if (isHeader) run.bold = true;
-      else delete run.bold;
-      if (run.text !== undefined) {
+      if (run.text === undefined) {
+        line.push(run);
+      } else {
         const { text, ...rest } = run;
         appendRun(line, { text }, rest);
-      } else {
-        line.push(run);
       }
     }
   });
@@ -263,11 +266,13 @@ function readTable(table) {
     if (cells[0]?.tagName === 'TH') headerRow = rows.length;
     rows.push(cells.map(cell => cell));
   }
-  return {
+  const block = {
     type: 'table',
     headerRow,
-    rows: rows.map((cells, index) => cells.map(cell => cellRuns(cell, index === headerRow))),
+    rows: rows.map(cells => cells.map(cellRuns)),
   };
+  if (table.dataset.separators) block.separators = JSON.parse(table.dataset.separators);
+  return block;
 }
 
 function codeLines(pre) {
@@ -280,6 +285,7 @@ function codeLines(pre) {
     }
   };
   walk(pre);
+  if (text === '') return [];
   if (text.endsWith('\n')) text = text.slice(0, -1);
   return text.split('\n');
 }
@@ -324,10 +330,17 @@ function readBlocks() {
         break;
       }
       case 'PRE': {
+        // Turning several lines into code makes one element each. Those are one block; a block
+        // that came from the file keeps its own fences.
         const lines = codeLines(node);
         const previous = blocks.at(-1);
-        if (previous?.type === 'codeBlock') previous.lines.push(...lines);
-        else blocks.push({ type: 'codeBlock', lines });
+        if (previous?.type === 'codeBlock' && !node.dataset.block) {
+          previous.lines.push(...lines);
+        } else {
+          const block = { type: 'codeBlock', lines };
+          if (node.dataset.language) block.language = node.dataset.language;
+          blocks.push(block);
+        }
         break;
       }
       case 'TABLE':
@@ -542,6 +555,7 @@ const SHORTCUTS = {
   s: event => post({ type: 'command', name: event.shiftKey ? 'saveAs' : 'save' }),
   o: () => post({ type: 'command', name: 'open' }),
   n: () => post({ type: 'command', name: 'new' }),
+  ',': () => post({ type: 'command', name: 'settings' }),
 };
 
 document.addEventListener('keydown', event => {
@@ -659,6 +673,14 @@ window.chrome.webview.addEventListener('message', event => {
       strings = message.strings;
       buildToolbar();
       break;
+    case 'settings': {
+      const style = document.documentElement.style;
+      style.setProperty('--body-size', `${message.bodySize}pt`);
+      style.setProperty('--letter-spacing', `${message.letterSpacing / 100}em`);
+      if (message.paper) style.setProperty('--paper', message.paper);
+      else style.removeProperty('--paper');
+      break;
+    }
     case 'load':
       loadDocument(message);
       post({ type: 'loaded' });

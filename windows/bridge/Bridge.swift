@@ -43,6 +43,20 @@ public func jena_json_to_markdown(_ json: UnsafePointer<CChar>,
     }
 }
 
+/// `[{"code", "name"}]`, each language named in itself.
+@_cdecl("jena_languages")
+public func jena_languages() -> UnsafeMutablePointer<CChar> {
+    let items = AppLanguage.allCases.map { ["code": $0.rawValue, "name": $0.displayName] }
+    let data = (try? JSONEncoder().encode(items)) ?? Data("[]".utf8)
+    return duplicate(String(decoding: data, as: UTF8.self))
+}
+
+/// The Windows app keeps the choice in its settings file and passes it in at each start.
+@_cdecl("jena_set_language")
+public func jena_set_language(_ code: UnsafePointer<CChar>) {
+    if let language = AppLanguage(rawValue: String(cString: code)) { AppLanguage.current = language }
+}
+
 /// Text for a translation key in the current language. Unknown keys come back as the key.
 @_cdecl("jena_tr")
 public func jena_tr(_ key: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar> {

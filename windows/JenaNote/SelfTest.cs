@@ -30,6 +30,8 @@ static class SelfTest
         EditorWindow.IsSelfTesting = true;
         NativeCore.UseBackupDirectory(Path.Combine(dictionaryFolder, "backups"));
         RecoveryStore.Folder = Path.Combine(dictionaryFolder, "recovery");
+        AppSettings.Folder = dictionaryFolder;
+        AppSettings.Load();
 
         try
         {
@@ -85,6 +87,8 @@ static class SelfTest
             await RunProofreadingChecks(window, Check);
             await RunExportChecks(window, Check);
             await RunPersistenceChecks(window, Check);
+            await RunSettingsChecks(window, Check);
+            await RunClosingChecks(Check);
 
             var longDocument = results.GetProperty("longDocument");
             Check("a long document survives a round trip", longDocument.GetProperty("ok").GetBoolean());
@@ -286,6 +290,162 @@ static class SelfTest
 
         EditorWindow.AutosaveDelay = TimeSpan.FromSeconds(60);
         EditorWindow.RecoveryDelay = TimeSpan.FromSeconds(5);
+        EditorWindow.Open(WriteFixture(folder, "끝.md", "끝\n"), window);
+        await Task.Delay(150);
+        Directory.Delete(folder, recursive: true);
+    }
+
+    /// <summary>Every way a window with changes can close. The window must really go away.</summary>
+    static async Task RunClosingChecks(Action<string, bool, string> check)
+    {
+        var folder = Directory.CreateTempSubdirectory("jena-selftest-closing-").FullName;
+
+        static async Task<EditorWindow> Typed(string? path, string? text)
+        {
+            var window = new EditorWindow(path, text);
+            window.Show();
+            await Eventually(() => window.IsLoaded);
+            await window.WhenReady();
+            var prepared = new TaskCompletionSource();
+            Action<JsonElement> onPrepared = _ => prepared.TrySetResult();
+            window.Editor.SelfTestFinished += onPrepared;
+            window.Editor.StartSelfTest("null");
+            await prepared.Task.WaitAsync(TimeSpan.FromSeconds(20));
+            window.Editor.SelfTestFinished -= onPrepared;
+            await ProofStep(window, "typeAtStart");
+            await Eventually(() => window.Title.StartsWith('\u25CF'));
+            return window;
+        }
+
+        static async Task<bool> ClosesAfterClose(EditorWindow window)
+        {
+            var closed = false;
+            window.Closed += (_, _) => closed = true;
+            window.Close();
+            await Eventually(() => closed, 5000);
+            if (!closed) window.DiscardAndClose();
+            return closed;
+        }
+
+        var saved = WriteFixture(folder, "저장.md", "글\n");
+        var autosaved = await Typed(saved, "글\n");
+        check("closing saves a saved document and closes", await ClosesAfterClose(autosaved), "");
+        check("closing wrote the changes", File.ReadAllText(saved).StartsWith("쓴글"), File.ReadAllText(saved));
+
+        EditorWindow.CloseAnswerForTest = MessageBoxResult.No;
+        check("declining to save closes", await ClosesAfterClose(await Typed(null, "")), "");
+
+        var declined = WriteFixture(folder, "끄기.md", "글\n");
+        EditorWindow.AutosaveEnabled = false;
+        check("with autosave off, declining closes", await ClosesAfterClose(await Typed(declined, "글\n")), "");
+        check("declining leaves the file", File.ReadAllText(declined) == "글\n", File.ReadAllText(declined));
+        EditorWindow.AutosaveEnabled = true;
+
+        EditorWindow.CloseAnswerForTest = MessageBoxResult.Cancel;
+        var kept = await Typed(null, "");
+        kept.Close();
+        await Task.Delay(300);
+        check("cancelling keeps the window", kept.IsVisible, "");
+        check("cancelling keeps the text", (await kept.CurrentTextAsync()).StartsWith("쓴글"), "");
+        kept.DiscardAndClose();
+
+        Directory.Delete(folder, recursive: true);
+    }
+
+    static async Task RunSettingsChecks(EditorWindow window, Action<string, bool, string> check)
+    {
+        var folder = Directory.CreateTempSubdirectory("jena-selftest-settings-").FullName;
+        void Report(JsonElement steps)
+        {
+            foreach (var step in steps.GetProperty("checks").EnumerateArray())
+                check("settings: " + step.GetProperty("name").GetString(), step.GetProperty("ok").GetBoolean(), step.GetProperty("detail").ToString());
+        }
+
+        // Stored values stay within what the app can use.
+        var path = Path.Combine(folder, "settings.json");
+        File.WriteAllText(path, "not json");
+        check("a damaged settings file gives defaults", AppSettings.Read(path).AutosaveSeconds == 60, "");
+        File.WriteAllText(path, "{\"Language\":\"xx\",\"AutosaveSeconds\":7,\"ColorMode\":\"neon\",\"PaperColor\":\"red\",\"BodySize\":999,\"LetterSpacing\":-3.6}");
+        var odd = AppSettings.Read(path);
+        check("odd stored values are corrected", odd.Language == "ko" && odd.AutosaveSeconds == 60 && odd.ColorMode == "system"
+            && odd.PaperColor == null && odd.BodySize == 30 && odd.LetterSpacing == -4,
+            $"{odd.Language} {odd.AutosaveSeconds} {odd.ColorMode} {odd.PaperColor} {odd.BodySize} {odd.LetterSpacing}");
+        check("the stepper reads numbers", SettingsWindow.ParseStep(" 12.5 ", 15, 8, 30) == 12.5, "");
+        check("the stepper keeps its range", SettingsWindow.ParseStep("99", 15, 8, 30) == 30, "");
+        check("the stepper ignores other text", SettingsWindow.ParseStep("abc", 15, 8, 30) == 15 && SettingsWindow.ParseStep("NaN", 15, 8, 30) == 15, "");
+
+        // Text sizes reach the open document at once.
+        AppSettings.Update(settings =>
+        {
+            settings.BodySize = 11;
+            settings.LetterSpacing = 10;
+            settings.PaperColor = "#102030";
+        });
+        await Task.Delay(100);
+        Report(await ProofStep(window, "styleApplied"));
+
+        // ...and the exported file.
+        var docx = Path.Combine(folder, "a.docx");
+        var hwpx = Path.Combine(folder, "a.hwpx");
+        var document = WriteFixture(folder, "a.md", "본문\n");
+        EditorWindow.Open(document, window);
+        await Task.Delay(150);
+        await window.ExportAsync("docx", docx);
+        await window.ExportAsync("hwpx", hwpx);
+        static string Entry(string file, string name)
+        {
+            using var zip = ZipFile.OpenRead(file);
+            using var reader = new StreamReader(zip.GetEntry(name)!.Open(), Encoding.UTF8);
+            return reader.ReadToEnd();
+        }
+        var word = Entry(docx, "word/document.xml");
+        check("docx uses the body size", word.Contains("w:sz w:val=\"22\""), word.Length.ToString());
+        check("docx uses the letter spacing", word.Contains("w:spacing w:val=\"22\""), word.Length.ToString());
+        var hangul = Entry(hwpx, "Contents/header.xml");
+        check("hwpx uses the body size", hangul.Contains("height=\"1100\""), hangul.Length.ToString());
+
+        // Autosave follows the setting without reopening anything.
+        AppSettings.Update(settings =>
+        {
+            settings.AutosaveEnabled = false;
+            settings.AutosaveSeconds = 30;
+        });
+        check("autosave off reaches the windows", !EditorWindow.AutosaveEnabled && EditorWindow.AutosaveDelay == TimeSpan.FromSeconds(30), "");
+        var settingsFile = AppSettings.Read(Path.Combine(AppSettings.Folder, "settings.json"));
+        check("changes are saved", !settingsFile.AutosaveEnabled && settingsFile.AutosaveSeconds == 30 && settingsFile.BodySize == 11, "");
+
+        // Language follows at once, in the menu and the page.
+        AppSettings.Update(settings => settings.Language = "en");
+        check("language reaches the translations", NativeCore.Tr("menu.file") == "File", NativeCore.Tr("menu.file"));
+        check("language reaches the menu", window.FirstMenuHeader == "File", window.FirstMenuHeader);
+        await Task.Delay(100);
+        Report(await ProofStep(window, "toolbarEnglish"));
+        AppSettings.Update(settings => settings.Language = "ko");
+        check("language returns", window.FirstMenuHeader == NativeCore.Tr("menu.file") && NativeCore.Tr("menu.file") != "File", window.FirstMenuHeader);
+
+        // Dark mode reaches the page.
+        AppSettings.Update(settings => settings.ColorMode = "dark");
+        await Task.Delay(150);
+        Report(await ProofStep(window, "dark"));
+        AppSettings.Update(settings => settings.ColorMode = "light");
+        await Task.Delay(150);
+        Report(await ProofStep(window, "light"));
+
+        // The window itself builds in every language without failing.
+        var settingsWindow = SettingsWindow.Present(window);
+        check("the settings window opens", settingsWindow.IsVisible, "");
+        check("opening it twice reuses it", ReferenceEquals(SettingsWindow.Present(window), settingsWindow), "");
+        settingsWindow.Close();
+
+        AppSettings.Update(settings =>
+        {
+            settings.AutosaveEnabled = true;
+            settings.AutosaveSeconds = 60;
+            settings.BodySize = NativeCore.DefaultBodySize;
+            settings.LetterSpacing = 0;
+            settings.PaperColor = null;
+            settings.ColorMode = "system";
+        });
         EditorWindow.Open(WriteFixture(folder, "끝.md", "끝\n"), window);
         await Task.Delay(150);
         Directory.Delete(folder, recursive: true);

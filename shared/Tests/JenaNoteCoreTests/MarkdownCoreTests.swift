@@ -3,9 +3,23 @@ import JenaNoteCoreTestSupport
 @testable import JenaNoteCore
 
 final class MarkdownCoreTests: XCTestCase {
-    func testCorpusMatchesWhatMacOSSaves() {
+    func testCorpusSavesAsExpected() {
         for item in MarkdownCorpus.cases {
             XCTAssertEqual(MarkdownWriter.write(MarkdownParser.parse(item.input)), item.expected, item.name)
+        }
+    }
+
+    /// Autosave runs again and again, so a saved file must not change on the next save.
+    func testSavingAgainChangesNothing() {
+        for item in MarkdownCorpus.cases {
+            let once = MarkdownWriter.write(MarkdownParser.parse(item.input))
+            var current = once
+            for _ in 0..<3 {
+                let next = MarkdownWriter.write(MarkdownParser.parse(current))
+                // A line left blank by an empty heading or quote settles to an empty file.
+                if once != "\n" { XCTAssertEqual(next, once, item.name) }
+                current = next
+            }
         }
     }
 
@@ -32,7 +46,7 @@ final class MarkdownCoreTests: XCTestCase {
             .listItem(ordered: true, index: 3, runs: [MarkdownRun(text: "번호")]),
             .blockquote([MarkdownRun(text: "인용")]),
             .horizontalRule,
-            .codeBlock(lines: ["code"]),
+            .codeBlock(lines: ["code"], language: nil),
         ])
     }
 
@@ -41,7 +55,7 @@ final class MarkdownCoreTests: XCTestCase {
             MarkdownRun(text: "x", link: "u"),
             MarkdownRun(.noteReference("1")),
             MarkdownRun(.image(path: "b.png", alt: "a", width: nil)),
-            MarkdownRun(.image(path: "c.png", alt: "", width: 9)),
+            MarkdownRun(.image(path: "c.png", alt: "", width: 9), rawTag: "<img src=\"c.png\" width=\"9\">"),
             MarkdownRun(text: "d", code: true),
         ])
     }
@@ -53,22 +67,35 @@ final class MarkdownCoreTests: XCTestCase {
         ])
     }
 
-    func testTableCellsTakeWeightFromTheirRow() throws {
-        let blocks = MarkdownParser.parse("| *a* | c |\n|---|---|\n| **b** |")
+    func testTableCellsKeepTheirFormattingAndSeparator() throws {
+        let blocks = MarkdownParser.parse("| *a* | c |\n|:--|--:|\n| **b** |")
         guard case .table(let table)? = blocks.first else { return XCTFail("expected a table") }
         XCTAssertEqual(table.rows, [
-            [[MarkdownRun(text: "a", bold: true)], [MarkdownRun(text: "c", bold: true)]],
-            [[MarkdownRun(text: "b")], []],
+            [[MarkdownRun(text: "a", italic: true)], [MarkdownRun(text: "c")]],
+            [[MarkdownRun(text: "b", bold: true)], []],
         ])
         XCTAssertEqual(table.headerRow, 0)
+        XCTAssertEqual(table.separators, [":--", "--:"])
     }
 
-    /// Colors in cells are where this code differs from AppKit, which overwrites them with the
-    /// label color and then saves that as if the author had chosen it.
+    func testFenceKeepsItsLanguageAndNeighborsStaySeparate() {
+        XCTAssertEqual(MarkdownParser.parse("```swift\nx\n```\n```\ny\n```"), [
+            .codeBlock(lines: ["x"], language: "swift"),
+            .codeBlock(lines: ["y"], language: nil),
+        ])
+    }
+
+    func testCellPipesAreEscapedBothWays() throws {
+        guard case .table(let table)? = MarkdownParser.parse("| a\\|b |\n|---|").first else { return XCTFail("expected a table") }
+        XCTAssertEqual(table.rows, [[[MarkdownRun(text: "a|b")]]])
+        XCTAssertEqual(MarkdownWriter.write([.table(table)]), "| a\\|b |\n| --- |\n")
+    }
+
+    /// AppKit overwrites a cell's color with the label color and saves that as the author's choice.
     func testColorInATableCellIsKept() {
         let input = "| A |\n|---|\n| <span style=\"color: #FF0000\">x</span> |"
         XCTAssertEqual(MarkdownWriter.write(MarkdownParser.parse(input)),
-                       "| **A** |\n| --- |\n| <span style=\"color: #FF0000\">x</span> |\n")
+                       "| A |\n| --- |\n| <span style=\"color: #FF0000\">x</span> |\n")
     }
 
     func testRejectsInvalidColors() {

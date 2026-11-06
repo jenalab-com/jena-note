@@ -2,8 +2,8 @@ import Foundation
 
 /// `MarkdownBlock`s to Markdown text.
 ///
-/// Produces what `MarkdownSerializer.serialize` writes on macOS, byte for byte. Known defects
-/// are kept on purpose so the move changes no saved file; see docs/markdown-known-issues.md.
+/// Saving what was read must keep what the author wrote and stay the same on every later save.
+/// The macOS serializer does not yet; see docs/markdown-known-issues.md.
 public enum MarkdownWriter {
 
     /// Levels whose base font already carries the bold trait on macOS. Marks would add nothing
@@ -23,9 +23,6 @@ public enum MarkdownWriter {
             case .heading(let level, let runs):
                 if runs.isEmpty {
                     output += "\n"
-                } else if case .image = runs[0].content {
-                    // A leading image makes the line read as body text.
-                    output += inline(runs) + "\n"
                 } else {
                     output += String(repeating: "#", count: level) + " "
                         + inline(runs, suppressBold: headingBaseIsBold(level)) + "\n"
@@ -38,8 +35,8 @@ public enum MarkdownWriter {
                 output += (ordered ? "\(index). " : "- ") + inline(runs) + "\n"
             case .noteDefinition(let id, let runs):
                 output += "[^\(id)]: " + inline(runs) + "\n"
-            case .codeBlock(let lines):
-                output += code(lines)
+            case .codeBlock(let lines, let language):
+                output += code(lines, language: language)
             case .table(let table):
                 output += self.table(table)
             }
@@ -48,35 +45,39 @@ public enum MarkdownWriter {
         return output.trimmingCharacters(in: .newlines) + "\n"
     }
 
-    /// Fences attach to non-empty lines only, so an empty first or last line loses its fence.
-    private static func code(_ lines: [String]) -> String {
+    /// The fence grows past any line inside that would otherwise end the block.
+    private static func code(_ lines: [String], language: String?) -> String {
+        let longest = lines.map { line -> Int in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return trimmed.allSatisfy { $0 == "`" } ? trimmed.count : 0
+        }.max() ?? 0
+        let fence = String(repeating: "`", count: max(3, longest + 1))
+        return fence + (language ?? "") + "\n" + lines.map { $0 + "\n" }.joined() + fence + "\n"
+    }
+
+    private static func table(_ table: MarkdownTable) -> String {
         var output = ""
-        for (index, line) in lines.enumerated() {
-            if line.isEmpty {
-                output += "\n"
-                continue
+        for (rowIndex, row) in table.rows.enumerated() {
+            // A header row is bold already, so marks in it add nothing, as in a large heading.
+            let cells = row.map { inline($0, suppressBold: rowIndex == table.headerRow).replacingOccurrences(of: "|", with: "\\|") }
+            output += "| " + cells.joined(separator: " | ") + " |\n"
+            if rowIndex == table.headerRow {
+                let separators = table.separators?.count == row.count ? table.separators! : row.map { _ in "---" }
+                output += "| " + separators.joined(separator: " | ") + " |\n"
             }
-            if index == 0 { output += "```\n" }
-            output += line + "\n"
-            if index == lines.count - 1 { output += "```\n" }
         }
         return output
     }
 
-    private static func table(_ table: MarkdownTable) -> String {
-        // Empty cells before the first filled one are written as blank lines above the table.
-        let cells = table.rows.flatMap { $0 }
-        let leadingEmpty = cells.prefix(while: { $0.isEmpty }).count
-        var output = String(repeating: "\n", count: leadingEmpty)
-        guard leadingEmpty < cells.count else { return output }
-
-        for (rowIndex, row) in table.rows.enumerated() {
-            output += "| " + row.map { inline($0) }.joined(separator: " | ") + " |\n"
-            if rowIndex == table.headerRow {
-                output += "| " + row.map { _ in "---" }.joined(separator: " | ") + " |\n"
-            }
+    /// The fence is one backtick longer than any run inside, so the code cannot end early.
+    private static func inlineCode(_ text: String) -> String {
+        var longest = 0, current = 0
+        for character in text {
+            current = character == "`" ? current + 1 : 0
+            longest = max(longest, current)
         }
-        return output + "\n"
+        let fence = String(repeating: "`", count: longest + 1)
+        return fence + text + fence
     }
 
     public static func inline(_ runs: [MarkdownRun], suppressBold: Bool = false) -> String {
@@ -86,7 +87,9 @@ public enum MarkdownWriter {
             case .noteReference(let id):
                 result += "[^\(id)]"
             case .image(let path, let alt, let width):
-                if let width, width > 0 {
+                if let tag = run.rawTag {
+                    result += tag
+                } else if let width, width > 0 {
                     let altAttribute = alt.isEmpty ? "" : " alt=\"\(alt)\""
                     result += "<img src=\"\(path)\"\(altAttribute) width=\"\(width)\">"
                 } else {
@@ -95,7 +98,7 @@ public enum MarkdownWriter {
             case .text(let text):
                 var output: String
                 if run.code {
-                    output = "`\(text)`"
+                    output = inlineCode(text)
                 } else {
                     output = text
                     let bold = run.bold && !suppressBold

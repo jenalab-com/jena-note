@@ -35,6 +35,25 @@ final class KiwiProofreadingTests: XCTestCase {
         }
     }
 
+    func testStemSplitsOnlyReportSpacesInsideADictionaryStem() {
+        let stems: Set<String> = ["내보내"]
+        XCTAssertEqual(KiwiProofreadingEngine.stemSplits(source: "공유 내보내기", candidate: "공유 내 보내기") { stems.contains($0) }, [3])
+        XCTAssertEqual(KiwiProofreadingEngine.stemSplits(source: "책상위에", candidate: "책상 위에") { stems.contains($0) }, [])
+        XCTAssertEqual(KiwiProofreadingEngine.stemSplits(source: "가", candidate: "가") { stems.contains($0) }, [])
+    }
+
+    /// One verb stem must not be cut apart by the spacing model. Real sentences that once got
+    /// `내 보내기` and `내려 받지` as suggestions.
+    func testSpacingDoesNotSplitAVerbStem() async throws {
+        let engine = KiwiProofreadingEngine.shared
+        for source in ["공유 내보내기 변환이 다르다.", "다시 내려받지 않는다."] {
+            let result = try await engine.check(source)
+            XCTAssertEqual(result, source, source)
+        }
+        let separated = try await engine.check("오늘학교에갔다.")
+        XCTAssertEqual(separated, "오늘 학교에 갔다.", "Spacing between words still works")
+    }
+
     /// 한글 맞춤법 제47항(보조 용언 붙여 씀 허용)과 한자어 접미 명사는 띄우라고 제안하지 않는다.
     func testPermittedJoinedSpellingIsNotSplit() async throws {
         let engine = KiwiProofreadingEngine.shared

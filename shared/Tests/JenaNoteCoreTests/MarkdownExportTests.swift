@@ -40,9 +40,18 @@ final class MarkdownExportTests: XCTestCase {
         ])
     }
 
-    func testEmptyLeadingCellsAndCodeLinesBecomeBlankParagraphs() {
-        XCTAssertEqual(export("|  | B |\n|---|---|\n| 1 | 2 |").blocks.first, .paragraph([]))
-        XCTAssertEqual(export("```\n\nabc\n```\n끝").blocks, [.paragraph([]), .codeBlock("abc"), .paragraph([Inline(text: "끝")])])
+    func testEmptyCellsAndCodeLinesStayInPlace() {
+        XCTAssertEqual(export("|  | B |\n|---|---|\n| 1 | 2 |").blocks, [
+            .table(rows: [[[], [Inline(text: "B", bold: true)]], [[Inline(text: "1")], [Inline(text: "2")]]], headerRow: 0),
+        ])
+        XCTAssertEqual(export("```\n\nabc\n```\n끝").blocks, [.codeBlock("\nabc"), .paragraph([Inline(text: "끝")])])
+    }
+
+    func testCellsKeepInlineFormatting() {
+        XCTAssertEqual(export("| A |\n|---|\n| *b* **c** |").blocks, [
+            .table(rows: [[[Inline(text: "A", bold: true)]],
+                          [[Inline(text: "b", italic: true), Inline(text: " "), Inline(text: "c", bold: true)]]], headerRow: 0),
+        ])
     }
 
     func testImagesSplitTextAndLoadRelativeToTheDocument() throws {

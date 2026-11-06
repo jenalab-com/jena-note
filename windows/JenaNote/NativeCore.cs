@@ -25,6 +25,8 @@ static class NativeCore
         out IntPtr data, out nint length, out int skipped, out IntPtr error);
     [DllImport(Library)] static extern void jena_free_bytes(IntPtr pointer);
     [DllImport(Library)] static extern double jena_default_body_size();
+    [DllImport(Library)] static extern IntPtr jena_languages();
+    [DllImport(Library)] static extern void jena_set_language(byte[] code);
     [DllImport(Library)] static extern void jena_backup_use_directory(byte[] path);
     [DllImport(Library)] static extern int jena_backup_has_snapshots(byte[] path, out int has, out IntPtr error);
     [DllImport(Library)] static extern int jena_backup_record(byte[] path, byte[] bytes, nint length, int automatic, byte[]? name, int force, out IntPtr error);
@@ -130,9 +132,9 @@ static class NativeCore
     }
 
     /// <summary>Builds a docx or hwpx file. `Skipped` counts images left out of it.</summary>
-    public static (byte[] Data, int Skipped) Export(string blocksJson, string format, string? baseFolder)
+    public static (byte[] Data, int Skipped) Export(string blocksJson, string format, string? baseFolder, double bodySize, double letterSpacing)
     {
-        if (jena_export(Utf8(blocksJson), Utf8(format), OptionalUtf8(baseFolder), jena_default_body_size(), 0,
+        if (jena_export(Utf8(blocksJson), Utf8(format), OptionalUtf8(baseFolder), bodySize, letterSpacing,
                 out var data, out var length, out var skipped, out var error) != 0)
             throw new InvalidOperationException(Take(error));
         var bytes = new byte[(int)length];
@@ -140,6 +142,19 @@ static class NativeCore
         jena_free_bytes(data);
         return (bytes, skipped);
     }
+
+    public static double DefaultBodySize => jena_default_body_size();
+
+    /// <summary>`[{"code", "name"}]`.</summary>
+    public static string Languages() => Take(jena_languages());
+
+    public static IReadOnlyList<string> LanguageCodes()
+    {
+        using var list = JsonDocument.Parse(Languages());
+        return list.RootElement.EnumerateArray().Select(item => item.GetProperty("code").GetString()!).ToList();
+    }
+
+    public static void SetLanguage(string code) => jena_set_language(Utf8(code));
 
     /// <summary>Keeps tests away from the author's real history.</summary>
     public static void UseBackupDirectory(string path) => jena_backup_use_directory(Utf8(path));

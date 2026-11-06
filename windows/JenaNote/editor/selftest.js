@@ -80,11 +80,47 @@
       render([{ type: 'paragraph', runs: [{ text: 'a', bold: true }, text(' b')] }]);
       caretAtEnd(root.firstElementChild); type('c');
     }],
-    ['enter in a table cell adds no line', '| **Ax** |\n| --- |\n| 1 |\n', () => {
+    ['several lines become one code block', '```\na\nb\n```\n', () => {
+      render([{ type: 'paragraph', runs: [text('a')] }, { type: 'paragraph', runs: [text('b')] }]);
+      const selection = getSelection();
+      const range = document.createRange();
+      range.setStart(root.firstElementChild.firstChild, 0);
+      range.setEnd(root.lastElementChild.firstChild, 1);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      run('codeblock');
+    }],
+    ['typing in a code block keeps its language', '```swift\nxy\n```\n', () => {
+      render([{ type: 'codeBlock', lines: ['x'], language: 'swift' }]);
+      placeCaret(root.firstElementChild.firstChild, 1);
+      type('y');
+    }],
+    ['neighboring code blocks stay apart while editing', '```\nax\n```\n```\nb\n```\n', () => {
+      render([{ type: 'codeBlock', lines: ['a'], language: null }, { type: 'codeBlock', lines: ['b'], language: null }]);
+      placeCaret(root.firstElementChild.firstChild, 1);
+      type('x');
+    }],
+    ['a pipe typed in a cell stays in the cell', '| A |\n| --- |\n| a\\|b |\n', () => {
+      render([{ type: 'table', headerRow: 0, rows: [[[text('A')]], [[]]] }]);
+      placeCaret(root.querySelector('td'), 0);
+      type('a|b');
+    }],
+    ['formatting in a cell survives editing', '| A |\n| --- |\n| *b*c |\n', () => {
+      render([{ type: 'table', headerRow: 0, rows: [[[text('A')]], [[{ text: 'b', italic: true }]]] }]);
+      caretAtEnd(root.querySelector('td'));
+      exec('italic');
+      type('c');
+    }],
+    ['column alignment survives editing', '| A |\n| :-: |\n| 1x |\n', () => {
+      render([{ type: 'table', headerRow: 0, separators: [':-:'], rows: [[[text('A')]], [[text('1')]]] }]);
+      caretAtEnd(root.querySelector('td'));
+      type('x');
+    }],
+    ['enter in a table cell adds no line', '| Ax |\n| --- |\n| 1 |\n', () => {
       render([{ type: 'table', headerRow: 0, rows: [[[{ text: 'A', bold: true }]], [[text('1')]]] }]);
       caretAtEnd(root.querySelector('th')); enter(); type('x');
     }],
-    ['tab moves between cells', '| **A** |\n| --- |\n| x1 |\n', () => {
+    ['tab moves between cells', '| A |\n| --- |\n| x1 |\n', () => {
       render([{ type: 'table', headerRow: 0, rows: [[[{ text: 'A', bold: true }]], [[text('1')]]] }]);
       caretAtEnd(root.querySelector('th')); press('Tab'); type('x');
     }],
@@ -122,6 +158,33 @@
   };
 
   const steps = {
+    async styleApplied(check) {
+      render([
+        { type: 'heading', level: 1, runs: [text('제목')] },
+        { type: 'paragraph', runs: [text('본문 '), { text: 'c', code: true }] },
+      ]);
+      const near = (actual, expected) => Math.abs(parseFloat(actual) - expected) < 0.05;
+      const body = getComputedStyle(root);
+      check('body size is in points', near(body.fontSize, 11 * 96 / 72), body.fontSize);
+      check('letter spacing is a percent of the size', near(body.letterSpacing, 11 * 96 / 72 * 0.1), body.letterSpacing);
+      const heading = getComputedStyle(root.querySelector('h1'));
+      check('headings keep their proportion', near(heading.fontSize, 11 * 96 / 72 * 28 / 15), heading.fontSize);
+      const code = getComputedStyle(root.querySelector('code'));
+      check('code has no letter spacing', code.letterSpacing === 'normal' || parseFloat(code.letterSpacing) === 0, code.letterSpacing);
+      const paper = getComputedStyle(document.getElementById('scroller')).backgroundColor;
+      check('paper color reaches the page', paper === 'rgb(16, 32, 48)', paper);
+    },
+    async toolbarEnglish(check) {
+      const first = document.querySelector('#toolbar button')?.textContent;
+      check('toolbar follows the language', first === 'Bold', first);
+      check('popover follows the language', document.getElementById('proof-apply').textContent !== '적용', document.getElementById('proof-apply').textContent);
+    },
+    async dark(check) {
+      check('dark mode reaches the page', matchMedia('(prefers-color-scheme: dark)').matches);
+    },
+    async light(check) {
+      check('light mode reaches the page', !matchMedia('(prefers-color-scheme: dark)').matches);
+    },
     async typeAtStart() {
       placeCaret(root.firstElementChild, 0);
       root.focus();

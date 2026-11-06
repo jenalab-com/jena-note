@@ -234,9 +234,39 @@ public final class KiwiProofreadingEngine: @unchecked Sendable {
         }
         guard let spaced = kiwi_space(handle, input, 1) else { throw AIError(message: L10n.tr("proof.engineFailed")) }
         defer { kiwi_free_string(spaced) }
-        retainedSpaces.subtract(rules.joins)
+        var joins = rules.joins
+        joins.formUnion(Self.stemSplits(source: input, candidate: String(cString: spaced)) { stem in
+            has(stem, "VV") || has(stem, "VA")
+        })
+        retainedSpaces.subtract(joins)
         return Self.preserveProtectedSpacing(source: input, candidate: String(cString: spaced), protected: protectedRanges,
-                                             preservingSpacesAt: retainedSpaces, keepingJoinedAt: rules.joins, splittingAt: rules.splits)
+                                             preservingSpacesAt: retainedSpaces, keepingJoinedAt: joins, splittingAt: rules.splits)
+    }
+
+    /// Spaces the model wants inside a word the author wrote as one, where the letters around that
+    /// space form a verb or adjective in the dictionary, as in `내보내기` or `내려받지`. Kiwi's spacing
+    /// model can cut these apart, which turns correct text into an error. When in doubt this keeps the
+    /// author's spelling: a missed suggestion costs less than a wrong one.
+    static func stemSplits(source: String, candidate: String, isStem: (String) -> Bool) -> Set<Int> {
+        let letters = Array(source.filter { $0 != " " })
+        var proposed = Set<Int>(), letterIndex = 0
+        for character in candidate {
+            if character == " " { proposed.insert(letterIndex) } else { letterIndex += 1 }
+        }
+        var result = Set<Int>(), start = 0
+        for word in source.split(separator: " ") {
+            let count = word.count
+            for split in 1..<max(1, count) where proposed.contains(start + split) {
+                let found = (max(0, split - 5)..<split).contains { from in
+                    ((split + 1)...min(count, split + 5)).contains { to in
+                        isStem(String(letters[(start + from)..<(start + to)]))
+                    }
+                }
+                if found { result.insert(start + split) }
+            }
+            start += count
+        }
+        return result
     }
 
     /// 한글 맞춤법 제51항: an adverb ending is `-이` after a ㅅ final, a repeated noun, an adverb or a

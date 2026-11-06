@@ -69,6 +69,10 @@ try {
     Start-Sleep -Milliseconds 600
     $recovered = [IO.File]::ReadAllText($path)
     Check 'recovered text saves' ($recovered -cmatch 'lost') ($recovered -replace "`n", '\n')
+
+    # Forcing the process closed below would hide an app that never exits.
+    [void]$process.CloseMainWindow()
+    Check 'closing the window ends the app' ($process.WaitForExit(15000))
 }
 finally {
     if (-not $process.HasExited) { $process.CloseMainWindow() | Out-Null; Start-Sleep -Milliseconds 800 }

@@ -15,15 +15,19 @@ public struct MarkdownRun: Equatable {
     public var link: String?
     /// "#RRGGBB", set only when the author chose a color.
     public var color: String?
+    /// An image's `<img>` tag as written. It may hold attributes the app does not use, so saving
+    /// writes it back unchanged.
+    public var rawTag: String?
 
     public init(_ content: Content, bold: Bool = false, italic: Bool = false, code: Bool = false,
-                link: String? = nil, color: String? = nil) {
+                link: String? = nil, color: String? = nil, rawTag: String? = nil) {
         self.content = content
         self.bold = bold
         self.italic = italic
         self.code = code
         self.link = link
         self.color = color
+        self.rawTag = rawTag
     }
 
     public init(text: String, bold: Bool = false, italic: Bool = false, code: Bool = false,
@@ -36,10 +40,13 @@ public struct MarkdownTable: Equatable {
     /// `rows[row][column]` holds the cell's runs.
     public var rows: [[[MarkdownRun]]]
     public var headerRow: Int
+    /// The separator row's cells as written, such as ":--", which hold column alignment.
+    public var separators: [String]?
 
-    public init(rows: [[[MarkdownRun]]], headerRow: Int = 0) {
+    public init(rows: [[[MarkdownRun]]], headerRow: Int = 0, separators: [String]? = nil) {
         self.rows = rows
         self.headerRow = headerRow
+        self.separators = separators
     }
 }
 
@@ -50,7 +57,7 @@ public enum MarkdownBlock: Equatable {
     case paragraph([MarkdownRun])
     case blockquote([MarkdownRun])
     case listItem(ordered: Bool, index: Int, runs: [MarkdownRun])
-    case codeBlock(lines: [String])
+    case codeBlock(lines: [String], language: String?)
     case table(MarkdownTable)
     case horizontalRule
     case noteDefinition(id: String, runs: [MarkdownRun])

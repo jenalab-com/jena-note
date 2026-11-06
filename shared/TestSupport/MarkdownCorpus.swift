@@ -1,16 +1,18 @@
-/// Markdown inputs and the exact text macOS saves for them.
+/// Markdown inputs and the exact text saved for them.
 ///
-/// Both platforms test against this list: the shared library on every platform, and the
-/// AppKit serializer on macOS. An entry describes current behavior, not ideal behavior.
+/// `macLegacy` records what the AppKit serializer still saves where it has a defect, so the
+/// macOS tests keep describing it until the app switches to the shared code. Remove it then.
 public struct MarkdownCorpusCase {
     public let name: String
     public let input: String
     public let expected: String
+    public let macLegacy: String?
 
-    public init(_ name: String, _ input: String, _ expected: String) {
+    public init(_ name: String, _ input: String, _ expected: String, macLegacy: String? = nil) {
         self.name = name
         self.input = input
         self.expected = expected
+        self.macLegacy = macLegacy
     }
 }
 
@@ -61,24 +63,28 @@ public enum MarkdownCorpus {
         .init("h3 keeps bold marks", "### **a** b", "### **a** b\n"),
         .init("heading keeps italic", "# *a*", "# *a*\n"),
         .init("h1 bold italic keeps italic only", "# ***a***", "# *a*\n"),
-        .init("heading starting with an image becomes body", "# ![a](b.png) 제목", "![a](b.png) 제목\n"),
+        .init("heading starting with an image stays a heading", "# ![a](b.png) 제목", "# ![a](b.png) 제목\n", macLegacy: "![a](b.png) 제목\n"),
         .init("heading with a later image", "# 제목 ![a](b.png)", "# 제목 ![a](b.png)\n"),
 
         // Inline
         .init("all inline marks", "**a** *b* ***c*** __d__ _e_ `f`", "**a** *b* ***c*** **d** *e* `f`\n"),
         .init("neighboring bold merges", "**a****b**", "**ab**\n"),
         .init("unclosed bold is literal", "**a", "**a\n"),
-        .init("underscores inside a word are italic", "a_b_c", "a*b*c\n"),
+        .init("underscores inside a word stay", "a_b_c snake__case__x", "a_b_c snake__case__x\n", macLegacy: "a*b*c snake**case**x\n"),
+        .init("underscores at word edges are italic", "_a_b_ c", "*a_b* c\n", macLegacy: "*a*b_ c\n"),
         .init("marks inside bold are literal", "**a *b* c**", "**a *b* c**\n"),
         .init("link", "[x](http://a.b)", "[x](http://a.b)\n"),
         .init("marks inside a link are literal", "[*x*](u)", "[*x*](u)\n"),
-        .init("empty marks vanish", "a****b", "ab\n"),
+        .init("empty marks stay", "a****b", "a****b\n", macLegacy: "ab\n"),
 
         // Images
         .init("markdown image", "![alt](p.png)", "![alt](p.png)\n"),
         .init("image tag with width", "<img src=\"p.png\" width=\"100\">", "<img src=\"p.png\" width=\"100\">\n"),
-        .init("image tag quotes normalize", "<img src='p.png' alt=\"a\" width='100'>", "<img src=\"p.png\" alt=\"a\" width=\"100\">\n"),
-        .init("zero width is no width", "<img src=\"p.png\" width=\"0\">", "![](p.png)\n"),
+        .init("image tag stays as written", "<img src='p.png' alt=\"a\" width='100'>", "<img src='p.png' alt=\"a\" width='100'>\n",
+              macLegacy: "<img src=\"p.png\" alt=\"a\" width=\"100\">\n"),
+        .init("image tag keeps other attributes", "<img src=\"p.png\" height=\"9\" style=\"x\" />", "<img src=\"p.png\" height=\"9\" style=\"x\" />\n",
+              macLegacy: "![](p.png)\n"),
+        .init("zero width stays", "<img src=\"p.png\" width=\"0\">", "<img src=\"p.png\" width=\"0\">\n", macLegacy: "![](p.png)\n"),
         .init("image tag without src is literal", "<img width=\"1\">", "<img width=\"1\">\n"),
 
         // Color
@@ -104,26 +110,44 @@ public enum MarkdownCorpus {
         // Rules
         .init("rule forms normalize", "---\n***\n___\n-----", "---\n---\n---\n---\n"),
 
-        // Code. Several of these record known defects.
+        // Code
         .init("code keeps blank inner lines", "```\nlet a = 1\n\nlet b\n```\n끝", "```\nlet a = 1\n\nlet b\n```\n끝\n"),
         .init("code keeps marks literal", "```\n**a**\n```", "```\n**a**\n```\n"),
-        .init("fence language is lost", "```swift\nx\n```", "```\nx\n```\n"),
+        .init("fence keeps its language", "```swift\nx\n```", "```swift\nx\n```\n", macLegacy: "```\nx\n```\n"),
         .init("unterminated fence closes", "```\na", "```\na\n```\n"),
-        .init("neighboring fences merge", "```\na\n```\n```\nb\n```", "```\na\nb\n```\n"),
-        .init("empty fence is lost", "```\n```", "\n"),
-        .init("empty first code line loses the opening fence", "```\n\nabc\n```", "abc\n```\n"),
-        .init("empty last code line loses the closing fence", "```\nabc\n\n```\n끝", "```\nabc\n\n끝\n"),
+        .init("final newline in an open fence is no line", "```\na\n", "```\na\n```\n", macLegacy: "```\na\n"),
+        .init("neighboring fences stay apart", "```\na\n```\n```\nb\n```", "```\na\n```\n```\nb\n```\n", macLegacy: "```\na\nb\n```\n"),
+        .init("empty fence stays", "```\n```", "```\n```\n", macLegacy: "\n"),
+        .init("empty first code line stays", "```\n\nabc\n```", "```\n\nabc\n```\n", macLegacy: "abc\n```\n"),
+        .init("empty last code line stays", "```\nabc\n\n```\n끝", "```\nabc\n\n```\n끝\n", macLegacy: "```\nabc\n\n끝\n"),
+        .init("inline code on one line is no fence", "```a``` b", "`a` b\n", macLegacy: "\n"),
+        .init("inline code can hold backticks", "`` a`b `` c", "`` a`b `` c\n", macLegacy: "` a`b  c\n"),
+        .init("lone backticks stay", "`` a", "`` a\n", macLegacy: " a\n"),
+        .init("a longer fence holds a shorter one", "````\n```\nx\n```\n````", "````\n```\nx\n```\n````\n", macLegacy: "x\n"),
 
-        // Tables. Several of these record known defects.
-        .init("table header turns bold", "| A | B |\n|---|---|\n| 1 | 2 |", "| **A** | **B** |\n| --- | --- |\n| 1 | 2 |\n"),
-        .init("saved table is stable", "| **A** | **B** |\n| --- | --- |\n| 1 | 2 |", "| **A** | **B** |\n| --- | --- |\n| 1 | 2 |\n"),
-        .init("blank line after a table grows", "| A |\n|---|\n| 1 |\n\n끝", "| **A** |\n| --- |\n| 1 |\n\n\n끝\n"),
-        .init("text right after a table gains a blank line", "| A |\n|---|\n| 1 |\n끝", "| **A** |\n| --- |\n| 1 |\n\n끝\n"),
-        .init("italic in a cell is lost", "| *a* |\n|---|\n| *b* `c` |", "| **a** |\n| --- |\n| b `c` |\n"),
-        .init("short rows are padded", "| A | B |\n|---|---|\n| 1 |", "| **A** | **B** |\n| --- | --- |\n| 1 |  |\n"),
-        .init("empty first cell adds a blank line", "가\n|  | B |\n|---|---|\n| 1 | 2 |", "가\n\n|  | **B** |\n| --- | --- |\n| 1 | 2 |\n"),
-        .init("all empty table becomes blank", "|  |\n|---|", "\n"),
-        .init("link and code in cells", "| A |\n|---|\n| [x](u) `c` |", "| **A** |\n| --- |\n| [x](u) `c` |\n"),
+        // Tables
+        .init("table is kept as written", "| A | B |\n|---|---|\n| 1 | 2 |", "| A | B |\n| --- | --- |\n| 1 | 2 |\n",
+              macLegacy: "| **A** | **B** |\n| --- | --- |\n| 1 | 2 |\n"),
+        .init("bold marks an old save left in a header go away", "| **A** | **B** |\n| --- | --- |\n| 1 | 2 |", "| A | B |\n| --- | --- |\n| 1 | 2 |\n",
+              macLegacy: "| **A** | **B** |\n| --- | --- |\n| 1 | 2 |\n"),
+        .init("blank line after a table stays one line", "| A |\n|---|\n| 1 |\n\n끝", "| A |\n| --- |\n| 1 |\n\n끝\n",
+              macLegacy: "| **A** |\n| --- |\n| 1 |\n\n\n끝\n"),
+        .init("text right after a table stays right after", "| A |\n|---|\n| 1 |\n끝", "| A |\n| --- |\n| 1 |\n끝\n",
+              macLegacy: "| **A** |\n| --- |\n| 1 |\n\n끝\n"),
+        .init("formatting in a cell stays", "| *a* |\n|---|\n| *b* **c** `d` |", "| *a* |\n| --- |\n| *b* **c** `d` |\n",
+              macLegacy: "| **a** |\n| --- |\n| b c `d` |\n"),
+        .init("column alignment stays", "| A | B |\n|:--|--:|\n| 1 | 2 |", "| A | B |\n| :-- | --: |\n| 1 | 2 |\n",
+              macLegacy: "| **A** | **B** |\n| --- | --- |\n| 1 | 2 |\n"),
+        .init("an escaped pipe stays in its cell", "| a\\|b |\n|---|\n| c |", "| a\\|b |\n| --- |\n| c |\n",
+              macLegacy: "| **a\\** | **b** |\n| --- | --- |\n| c |  |\n"),
+        .init("a lone pipe line is text", "a|b\n|", "a|b\n|\n", macLegacy: "| **a** | **b** |\n| --- | --- |\n"),
+        .init("short rows are padded", "| A | B |\n|---|---|\n| 1 |", "| A | B |\n| --- | --- |\n| 1 |  |\n",
+              macLegacy: "| **A** | **B** |\n| --- | --- |\n| 1 |  |\n"),
+        .init("empty first cell stays in the table", "가\n|  | B |\n|---|---|\n| 1 | 2 |", "가\n|  | B |\n| --- | --- |\n| 1 | 2 |\n",
+              macLegacy: "가\n\n|  | **B** |\n| --- | --- |\n| 1 | 2 |\n"),
+        .init("all empty table stays", "|  |\n|---|", "|  |\n| --- |\n", macLegacy: "\n"),
+        .init("link and code in cells", "| A |\n|---|\n| [x](u) `c` |", "| A |\n| --- |\n| [x](u) `c` |\n",
+              macLegacy: "| **A** |\n| --- |\n| [x](u) `c` |\n"),
         .init("pipe without a separator is a paragraph", "a | b", "a | b\n"),
 
         // A whole document

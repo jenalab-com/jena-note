@@ -1,10 +1,27 @@
+using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 
 namespace JenaNote;
 
 static class Program
 {
+    [DllImport("kernel32.dll")] static extern bool TerminateProcess(IntPtr process, uint exitCode);
+
+    /// <summary>
+    /// Everything is on disk by now. Native libraries still hold worker threads and a large model,
+    /// and a normal exit waits for their cleanup. One such process was seen staying alive with no
+    /// windows, so the app ends here instead of depending on it.
+    /// </summary>
+    static int EndProcess(int exitCode)
+    {
+        Trace.Flush();
+        using var current = Process.GetCurrentProcess();
+        TerminateProcess(current.Handle, (uint)exitCode);
+        return exitCode;
+    }
+
     [STAThread]
     static int Main(string[] args)
     {
@@ -18,13 +35,15 @@ static class Program
             NativeCore.UseBackupDirectory(Path.Combine(testData, "Backups"));
             NativeCore.UseDictionaryFile(Path.Combine(testData, "dictionary.json"));
             RecoveryStore.Folder = Path.Combine(testData, "Recovery");
+            AppSettings.Folder = testData;
         }
+        if (args.FirstOrDefault() != "--selftest") AppSettings.Load();
 
         if (args.Length == 3 && args[0] == "--selftest")
         {
             app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             app.Startup += (_, _) => SelfTest.Run(app, args[1], args[2]);
-            return app.Run();
+            return EndProcess(app.Run());
         }
 
         app.Startup += (_, _) =>
@@ -36,7 +55,7 @@ static class Program
             }
             if (!opened) new EditorWindow().Show();
         };
-        return app.Run();
+        return EndProcess(app.Run());
     }
 
     /// <summary>Offers documents left behind when the app last ended without closing them.</summary>
