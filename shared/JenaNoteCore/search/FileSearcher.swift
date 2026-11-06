@@ -38,6 +38,8 @@ public final class FileSearchToken {
         return cancelled
     }
 
+    public init() {}
+
     public func cancel() {
         lock.lock(); cancelled = true; lock.unlock()
     }
@@ -113,8 +115,13 @@ public final class FileSearcher {
             guard let enumerator = fm.enumerator(at: folder,
                                                  includingPropertiesForKeys: [.isDirectoryKey],
                                                  options: [.skipsHiddenFiles]) else { continue }
-            for case let url as URL in enumerator where url.pathExtension.lowercased() == "md" {
-                files.append(url)
+            for case let url as URL in enumerator {
+                // Windows does not treat a leading dot as hidden, and folders like .git hold documents too.
+                if url.lastPathComponent.hasPrefix(".") {
+                    enumerator.skipDescendants()
+                } else if url.pathExtension.lowercased() == "md" {
+                    files.append(url)
+                }
             }
         }
         return files.sorted { $0.path < $1.path }

@@ -16,6 +16,12 @@ public enum L10n {
     ]
 
     private static let ko: [String: String] = [
+        "reader.font.batang": "바탕",
+        "reader.font.malgunGothic": "맑은 고딕",
+        "doc.revealExplorer": "탐색기에서 보기",
+        "doc.invalidName": "이름이 비어 있거나 Windows에서 쓸 수 없어요. \\ / : * ? \" < > | 와 맨 앞의 점, CON 같은 예약어는 쓸 수 없어요.",
+        "doc.recycle": "휴지통으로 이동",
+        "doc.recycleInfo": "폴더는 안의 항목도 함께 휴지통으로 이동해요.",
         "doc.autosaveHint": "변경 후 주기적으로 저장하는 간격이에요. 창을 닫을 때도 저장해요. 끄면 닫을 때 저장할지 물어봐요.",
         "doc.paperChoose": "색 선택…",
         "doc.backupHint": "이 PC의 원고 이력이에요. 이름 붙인 버전은 지워지지 않고, 나머지는 최근 100개까지 남아요.",
@@ -588,6 +594,12 @@ public enum L10n {
     ]
 
     private static let en: [String: String] = [
+        "reader.font.batang": "Batang",
+        "reader.font.malgunGothic": "Malgun Gothic",
+        "doc.revealExplorer": "Show in Explorer",
+        "doc.invalidName": "The name is empty or cannot be used on Windows. \\ / : * ? \" < > |, a leading dot and reserved names like CON are not allowed.",
+        "doc.recycle": "Move to Recycle Bin",
+        "doc.recycleInfo": "A folder moves to the Recycle Bin with everything in it.",
         "doc.autosaveHint": "How often changes are saved. Closing a window also saves. When off, closing asks whether to save.",
         "doc.paperChoose": "Choose Color…",
         "doc.backupHint": "The manuscript history on this PC. Named versions are never removed, and the latest 100 others are kept.",
@@ -1145,6 +1157,12 @@ public enum L10n {
     ]
 
     private static let zh: [String: String] = [
+        "reader.font.batang": "Batang",
+        "reader.font.malgunGothic": "Malgun Gothic",
+        "doc.revealExplorer": "在资源管理器中显示",
+        "doc.invalidName": "名称为空或无法在 Windows 中使用。不能使用 \\ / : * ? \" < > |、开头的点以及 CON 等保留名称。",
+        "doc.recycle": "移到回收站",
+        "doc.recycleInfo": "文件夹及其中的所有内容都会移到回收站。",
         "doc.autosaveHint": "更改后定期保存的间隔。关闭窗口时也会保存。关闭此功能后，关闭窗口时会询问是否保存。",
         "doc.paperChoose": "选择颜色…",
         "doc.backupHint": "这是此电脑上的稿件历史。已命名的版本不会被删除，其余保留最近 100 个。",
@@ -1350,6 +1368,12 @@ public enum L10n {
     ]
 
     private static let ja: [String: String] = [
+        "reader.font.batang": "Batang",
+        "reader.font.malgunGothic": "Malgun Gothic",
+        "doc.revealExplorer": "エクスプローラーで表示",
+        "doc.invalidName": "名前が空か、Windowsで使用できません。\\ / : * ? \" < > |、先頭のドット、CONなどの予約語は使えません。",
+        "doc.recycle": "ごみ箱に移動",
+        "doc.recycleInfo": "フォルダは中の項目ごとごみ箱に移動します。",
         "doc.autosaveHint": "変更後に定期的に保存する間隔です。ウィンドウを閉じるときも保存します。オフにすると閉じるときに確認します。",
         "doc.paperChoose": "色を選択…",
         "doc.backupHint": "このPCの原稿履歴です。名前を付けた版は削除されず、それ以外は最新100件まで残ります。",
@@ -1555,6 +1579,12 @@ public enum L10n {
     ]
 
     private static let es: [String: String] = [
+        "reader.font.batang": "Batang",
+        "reader.font.malgunGothic": "Malgun Gothic",
+        "doc.revealExplorer": "Mostrar en el Explorador",
+        "doc.invalidName": "El nombre está vacío o no se puede usar en Windows. No se permiten \\ / : * ? \" < > |, un punto inicial ni nombres reservados como CON.",
+        "doc.recycle": "Mover a la papelera",
+        "doc.recycleInfo": "Una carpeta se mueve a la papelera con todo su contenido.",
         "doc.autosaveHint": "Cada cuánto se guardan los cambios. También se guarda al cerrar la ventana. Si está desactivado, se pregunta al cerrar.",
         "doc.paperChoose": "Elegir color…",
         "doc.backupHint": "Historial del manuscrito en este PC. Las versiones con nombre no se eliminan y se conservan las 100 últimas del resto.",
@@ -1760,6 +1790,12 @@ public enum L10n {
     ]
 
     private static let de: [String: String] = [
+        "reader.font.batang": "Batang",
+        "reader.font.malgunGothic": "Malgun Gothic",
+        "doc.revealExplorer": "Im Explorer anzeigen",
+        "doc.invalidName": "Der Name ist leer oder unter Windows nicht verwendbar. \\ / : * ? \" < > |, ein Punkt am Anfang und reservierte Namen wie CON sind nicht erlaubt.",
+        "doc.recycle": "In den Papierkorb",
+        "doc.recycleInfo": "Ein Ordner wird mit seinem gesamten Inhalt in den Papierkorb verschoben.",
         "doc.autosaveHint": "Wie oft Änderungen gespeichert werden. Beim Schließen eines Fensters wird ebenfalls gespeichert. Wenn aus, wird beim Schließen gefragt.",
         "doc.paperChoose": "Farbe wählen…",
         "doc.backupHint": "Der Manuskriptverlauf auf diesem PC. Benannte Versionen bleiben erhalten, von den übrigen die letzten 100.",
@@ -1965,6 +2001,12 @@ public enum L10n {
     ]
 
     private static let fr: [String: String] = [
+        "reader.font.batang": "Batang",
+        "reader.font.malgunGothic": "Malgun Gothic",
+        "doc.revealExplorer": "Afficher dans l’Explorateur",
+        "doc.invalidName": "Le nom est vide ou inutilisable sous Windows. \\ / : * ? \" < > |, un point initial et les noms réservés comme CON sont interdits.",
+        "doc.recycle": "Mettre à la corbeille",
+        "doc.recycleInfo": "Un dossier est mis à la corbeille avec tout son contenu.",
         "doc.autosaveHint": "Fréquence d’enregistrement des modifications. La fermeture d’une fenêtre enregistre aussi. Si désactivé, une question s’affiche à la fermeture.",
         "doc.paperChoose": "Choisir une couleur…",
         "doc.backupHint": "L’historique du manuscrit sur ce PC. Les versions nommées sont conservées, ainsi que les 100 dernières autres.",

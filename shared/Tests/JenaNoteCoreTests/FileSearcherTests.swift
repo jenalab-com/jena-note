@@ -2,6 +2,17 @@ import XCTest
 @testable import JenaNoteCore
 
 final class FileSearcherTests: XCTestCase {
+    func testDotFoldersAreSkippedOnEveryPlatform() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("search-" + UUID().uuidString)
+        let hidden = root.appendingPathComponent(".git/docs")
+        try FileManager.default.createDirectory(at: hidden, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data("x".utf8).write(to: hidden.appendingPathComponent("a.md"))
+        try Data("x".utf8).write(to: root.appendingPathComponent(".b.md"))
+        try Data("x".utf8).write(to: root.appendingPathComponent("c.md"))
+        XCTAssertEqual(FileSearcher.markdownFiles(in: [root]).map(\.lastPathComponent), ["c.md"])
+    }
+
 
     private var tempDir: URL!
 

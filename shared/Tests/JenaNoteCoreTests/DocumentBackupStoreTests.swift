@@ -24,6 +24,28 @@ final class DocumentBackupStoreTests: XCTestCase {
         XCTAssertNotEqual(try reopened.snapshots(for: source).first?.id, entries.first?.id)
     }
 
+    func testHistoryFollowsWhatTheAppMoved() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = DocumentBackupStore(directory: root.appendingPathComponent("history"))
+        let folder = root.appendingPathComponent("work", isDirectory: true)
+        let inside = folder.appendingPathComponent("a.md")
+        let similar = root.appendingPathComponent("work2/a.md")
+        try store.record(Data("inside".utf8), for: inside, name: "Saved")
+        try store.record(Data("similar".utf8), for: similar, name: "Saved")
+        let original = try XCTUnwrap(store.snapshots(for: inside).first)
+
+        let renamed = root.appendingPathComponent("book", isDirectory: true)
+        try store.documentsMoved(from: folder, to: renamed)
+        XCTAssertEqual(try store.snapshots(for: renamed.appendingPathComponent("a.md")).first?.id, original.id)
+        XCTAssertEqual(try store.snapshots(for: inside).count, 0)
+        XCTAssertEqual(try store.snapshots(for: similar).count, 1)
+
+        let file = renamed.appendingPathComponent("b.md")
+        try store.documentsMoved(from: renamed.appendingPathComponent("a.md"), to: file)
+        XCTAssertEqual(try store.snapshots(for: file).first?.id, original.id)
+    }
+
     func testHistoryFollowsRenamedFile() throws {
         #if !canImport(Darwin)
         try XCTSkipIf(true, "Windows Foundation has no URL bookmarks")

@@ -79,6 +79,26 @@ public final class DocumentBackupStore {
         }
         return result
     }
+    /// For platforms without bookmarks: history stays with documents that moved inside the app.
+    /// `source` may be a file or a folder.
+    public func documentsMoved(from source: URL, to destination: URL) throws {
+        lock.lock(); defer { lock.unlock() }
+        let catalog = directory.appendingPathComponent("documents.json")
+        guard FileManager.default.fileExists(atPath: catalog.path) else { return }
+        var identities = try JSONDecoder().decode([Identity].self, from: Data(contentsOf: catalog))
+        let from = source.standardizedFileURL.path
+        let to = destination.standardizedFileURL.path
+        for index in identities.indices {
+            let path = identities[index].path
+            if path == from {
+                identities[index].path = to
+            } else if path.hasPrefix(from + "/") {
+                identities[index].path = to + path.dropFirst(from.count)
+            }
+        }
+        latestBySource = latestBySource.filter { $0.key != from && !$0.key.hasPrefix(from + "/") }
+        try JSONEncoder().encode(identities).write(to: catalog, options: .atomic)
+    }
     public func snapshots(for source: URL) throws -> [Snapshot] {
         lock.lock(); defer { lock.unlock() }
         let folder = try folder(for: source)
