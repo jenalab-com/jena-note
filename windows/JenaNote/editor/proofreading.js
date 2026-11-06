@@ -75,19 +75,8 @@ function proofOffset(map, node, offset) {
 // MARK: - Choosing what to check
 
 function proofTargets() {
-  const scroller = document.getElementById('scroller').getBoundingClientRect();
-  const blocks = root.children;
-  let low = 0;
-  let high = blocks.length;
-  while (low < high) {
-    const middle = (low + high) >> 1;
-    if (blocks[middle].getBoundingClientRect().bottom <= scroller.top) low = middle + 1;
-    else high = middle;
-  }
   const targets = [];
-  for (let index = low; index < blocks.length; index++) {
-    const block = blocks[index];
-    if (block.getBoundingClientRect().top >= scroller.bottom) break;
+  for (const block of blocksInView()) {
     if (block.tagName === 'TABLE') targets.push(...block.querySelectorAll('th, td'));
     else if (block.tagName !== 'PRE' && block.tagName !== 'HR') targets.push(block);
   }
@@ -97,9 +86,9 @@ function proofTargets() {
 /// Keeps context around the visible part when one paragraph holds a very long text.
 function proofWindow(element, map) {
   if (map.text.length <= PROOF_MAX_TEXT) return { offset: 0, text: map.text };
-  const scroller = document.getElementById('scroller').getBoundingClientRect();
+  const view = (isPaged() ? pageClip : scroller).getBoundingClientRect();
   const box = element.getBoundingClientRect();
-  const caret = document.caretRangeFromPoint(box.left + 8, Math.max(box.top, scroller.top) + 8);
+  const caret = document.caretRangeFromPoint(Math.max(box.left, view.left) + 8, Math.max(box.top, view.top) + 8);
   const visible = caret ? proofOffset(map, caret.startContainer, caret.startOffset) ?? 0 : 0;
   let offset = Math.max(0, visible - 500);
   // Never start inside a surrogate pair.

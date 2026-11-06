@@ -16,6 +16,7 @@ static class NativeCore
     [DllImport(Library)] static extern void jena_proofreading_configure(byte[] modelDirectory);
     [DllImport(Library)] static extern void jena_proofread(byte[] items, byte[] terms, ResultCallback callback, nuint context);
     [DllImport(Library)] static extern void jena_proofread_selection(byte[] text, byte[] terms, ResultCallback callback, nuint context);
+    [DllImport(Library)] static extern void jena_search_files(byte[] query, byte[] folders, ResultCallback callback, nuint context);
     [DllImport(Library)] static extern void jena_dictionary_use_file(byte[] path);
     [DllImport(Library)] static extern int jena_dictionary_terms(byte[]? documentPath, out IntPtr result, out IntPtr error);
     [DllImport(Library)] static extern int jena_dictionary_list(byte[]? documentPath, out IntPtr result, out IntPtr error);
@@ -28,6 +29,7 @@ static class NativeCore
     [DllImport(Library)] static extern IntPtr jena_languages();
     [DllImport(Library)] static extern void jena_set_language(byte[] code);
     [DllImport(Library)] static extern void jena_backup_use_directory(byte[] path);
+    [DllImport(Library)] static extern int jena_backup_documents_moved(byte[] source, byte[] destination, out IntPtr error);
     [DllImport(Library)] static extern int jena_backup_has_snapshots(byte[] path, out int has, out IntPtr error);
     [DllImport(Library)] static extern int jena_backup_record(byte[] path, byte[] bytes, nint length, int automatic, byte[]? name, int force, out IntPtr error);
     [DllImport(Library)] static extern int jena_backup_list(byte[] path, out IntPtr result, out IntPtr error);
@@ -102,6 +104,14 @@ static class NativeCore
         return task;
     }
 
+    /// <summary>Searches every Markdown file in the folders, off the UI thread.</summary>
+    public static Task<string> SearchFiles(string query, string foldersJson)
+    {
+        var task = Pending(out var context);
+        jena_search_files(Utf8(query), Utf8(foldersJson), Completion, context);
+        return task;
+    }
+
     /// <summary>Keeps tests away from the author's real dictionary.</summary>
     public static void UseDictionaryFile(string path) => jena_dictionary_use_file(Utf8(path));
 
@@ -158,6 +168,12 @@ static class NativeCore
 
     /// <summary>Keeps tests away from the author's real history.</summary>
     public static void UseBackupDirectory(string path) => jena_backup_use_directory(Utf8(path));
+
+    public static void BackupDocumentsMoved(string source, string destination)
+    {
+        if (jena_backup_documents_moved(Utf8(source), Utf8(destination), out var error) != 0)
+            throw new InvalidOperationException(Take(error));
+    }
 
     public static bool BackupHasSnapshots(string path)
     {

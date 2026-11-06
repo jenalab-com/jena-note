@@ -7,9 +7,42 @@
 </head>
 <body>
 <div id="toolbar" role="toolbar"></div>
-<div id="scroller">
-  <div id="editor" contenteditable="true" spellcheck="false"></div>
+<div id="find-bar" hidden>
+  <div class="find-row">
+    <input id="find-input" type="text" autocomplete="off" spellcheck="false">
+    <span id="find-count"></span>
+    <button type="button" id="find-previous" tabindex="-1">&#8593;</button>
+    <button type="button" id="find-next" tabindex="-1">&#8595;</button>
+    <button type="button" id="find-close" tabindex="-1">&#215;</button>
+  </div>
+  <div class="find-row" id="replace-row" hidden>
+    <input id="replace-input" type="text" autocomplete="off" spellcheck="false">
+    <button type="button" id="replace-one"></button>
+    <button type="button" id="replace-all"></button>
+  </div>
 </div>
+<div id="stage">
+  <div id="scroller">
+    <div id="page-clip">
+      <div id="editor" contenteditable="true" spellcheck="false"></div>
+    </div>
+  </div>
+  <div id="ruler-layer"></div>
+  <div id="source-view" hidden>
+    <div id="source-header">
+      <span id="source-description"></span>
+      <button type="button" id="source-copy"></button>
+    </div>
+    <pre id="source-text" tabindex="0"></pre>
+  </div>
+  <div id="page-indicator" hidden>
+    <button type="button" id="page-previous" tabindex="-1">&#8249;</button>
+    <span id="page-number"></span>
+    <button type="button" id="page-next" tabindex="-1">&#8250;</button>
+  </div>
+</div>
+<div id="appearance-popover" class="popover" hidden></div>
+<div id="bookmark-popover" class="popover" hidden></div>
 <dialog id="link-dialog">
   <form method="dialog">
     <label><span id="link-label"></span><input id="link-url" type="text" autocomplete="off"></label>
@@ -31,6 +64,10 @@
   </div>
 </div>
 <script src="editor.js"></script>
+<script src="reading.js"></script>
 <script src="proofreading.js"></script>
+<script src="find.js"></script>
+<script src="source.js"></script>
+<script src="start.js"></script>
 </body>
 </html>

@@ -48,6 +48,7 @@ static class Program
 
         app.Startup += (_, _) =>
         {
+            FolderWatch.Follow(AppSettings.Current.SidebarFolders);
             var opened = OfferRecovery();
             foreach (var path in args)
             {

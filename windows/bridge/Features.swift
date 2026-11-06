@@ -132,6 +132,56 @@ public func jena_proofread_selection(_ text: UnsafePointer<CChar>, _ terms: Unsa
     }
 }
 
+// MARK: - File search
+
+private struct SearchResponse: Encodable {
+    struct Hit: Encodable {
+        let line: Int
+        let text: String
+        let start: Int
+        let length: Int
+        let ordinal: Int
+    }
+    struct File: Encodable {
+        let path: String
+        let hits: [Hit]
+    }
+    let truncated: Bool
+    let results: [File]
+}
+
+private var currentSearch: FileSearchToken?
+
+/// `folders` is `["path"]`. A new search cancels the running one, whose callback still arrives.
+@_cdecl("jena_search_files")
+public func jena_search_files(_ query: UnsafePointer<CChar>, _ folders: UnsafePointer<CChar>,
+                              _ callback: JenaResultCallback, _ context: UInt) {
+    let text = String(cString: query)
+    let foldersJSON = String(cString: folders)
+    currentSearch?.cancel()
+    let token = FileSearchToken()
+    currentSearch = token
+    Task.detached {
+        do {
+            let paths = try JSONDecoder().decode([String].self, from: Data(foldersJSON.utf8))
+            let urls = paths.map { URL(fileURLWithPath: $0, isDirectory: true) }
+            let (results, truncated) = FileSearcher.searchSync(query: text, folders: urls, token: token)
+            let files = results.map { result in
+                // URL.path has a leading slash on Windows, which no Windows program can open.
+                let path = result.fileURL.withUnsafeFileSystemRepresentation { $0.map { String(cString: $0) } } ?? result.fileURL.path
+                return SearchResponse.File(path: path, hits: result.hits.map { hit in
+                    let snippet = FileSearcher.makeSnippet(lineText: hit.lineText, matchRange: hit.matchRangeInLine)
+                    return SearchResponse.Hit(line: hit.lineNumber, text: snippet.text, start: snippet.highlight.location,
+                                              length: snippet.highlight.length, ordinal: hit.ordinalInFile)
+                })
+            }
+            try encode(SearchResponse(truncated: truncated, results: files)).withCString { callback($0, nil, context) }
+        } catch {
+            message(for: error).withCString { callback(nil, $0, context) }
+        }
+    }
+}
+
 // MARK: - Personal dictionary
 
 private var dictionary = PersonalDictionaryStore.shared

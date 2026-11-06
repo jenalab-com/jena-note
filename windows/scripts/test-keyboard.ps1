@@ -70,6 +70,29 @@ try {
     $recovered = [IO.File]::ReadAllText($path)
     Check 'recovered text saves' ($recovered -cmatch 'lost') ($recovered -replace "`n", '\n')
 
+    # Find with real keys: closing selects the match, so typing replaces it.
+    Send '^f'
+    Send 'lost'
+    Send '{ESC}'
+    Send 'found'
+    Send '^s'
+    Start-Sleep -Milliseconds 600
+    $found = [IO.File]::ReadAllText($path)
+    Check 'Ctrl+F finds, and Esc selects the match' ($found -cmatch 'found' -and $found -cnotmatch 'lost') ($found -replace "`n", '\n')
+
+    # From the sidebar's search field, focus is outside the page.
+    Send '^+f'
+    Send 'nothing'
+    Send '{ESC}'
+    Send '^f'
+    Send 'found'
+    Send '{ESC}'
+    Send 'again'
+    Send '^s'
+    Start-Sleep -Milliseconds 600
+    $again = [IO.File]::ReadAllText($path)
+    Check 'Ctrl+F works from the sidebar search' ($again -cmatch 'again' -and $again -cnotmatch 'found') ($again -replace "`n", '\n')
+
     # Forcing the process closed below would hide an app that never exits.
     [void]$process.CloseMainWindow()
     Check 'closing the window ends the app' ($process.WaitForExit(15000))

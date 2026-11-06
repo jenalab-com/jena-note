@@ -16,6 +16,18 @@ public func jena_backup_use_directory(_ path: UnsafePointer<CChar>) {
     backups = DocumentBackupStore(directory: URL(fileURLWithPath: String(cString: path), isDirectory: true))
 }
 
+@_cdecl("jena_backup_documents_moved")
+public func jena_backup_documents_moved(_ source: UnsafePointer<CChar>, _ destination: UnsafePointer<CChar>,
+                                        _ error: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>) -> Int32 {
+    do {
+        try backups.documentsMoved(from: URL(fileURLWithPath: String(cString: source)),
+                                   to: URL(fileURLWithPath: String(cString: destination)))
+        return 0
+    } catch let failure {
+        return report(failure, error)
+    }
+}
+
 @_cdecl("jena_backup_has_snapshots")
 public func jena_backup_has_snapshots(_ path: UnsafePointer<CChar>, _ has: UnsafeMutablePointer<Int32>,
                                       _ error: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>) -> Int32 {

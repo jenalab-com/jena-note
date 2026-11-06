@@ -158,6 +158,461 @@
   };
 
   const steps = {
+    async find(check) {
+      const lines = ['가나다 ABC 가나다', '**x** abc', 'abc'];
+      render([
+        { type: 'heading', level: 1, runs: [text(lines[0])] },
+        { type: 'paragraph', runs: [{ text: 'x', bold: true }, text(' abc')] },
+        { type: 'codeBlock', lines: ['abc'], language: null },
+        { type: 'table', headerRow: 0, rows: [[[text('abc')]], [[text('z')]]] },
+      ]);
+      placeCaret(root.firstElementChild, 0);
+      const markup = root.innerHTML;
+      const before = saved();
+      findOpen(false);
+      findInput.value = 'abc';
+      findInput.dispatchEvent(new Event('input'));
+      check('finds in every kind of block, ignoring case', findMatches.length === 4, findMatches.length);
+      check('finding leaves the document alone', root.innerHTML === markup && saved() === before);
+      check('shows the count', findCount.textContent === '1/4', findCount.textContent);
+      check('highlights matches', CSS.highlights.has('find') && CSS.highlights.has('find-current'));
+      findMove(true);
+      check('moves forward', findCount.textContent === '2/4', findCount.textContent);
+      findMove(false);
+      findMove(false);
+      check('wraps around backward', findCount.textContent === '4/4', findCount.textContent);
+      findMove(true);
+      check('wraps around forward', findCount.textContent === '1/4', findCount.textContent);
+
+      findClose();
+      placeCaret(root.children[2], 0);
+      findOpen(false);
+      check('a search starts from the caret', findCount.textContent === '3/4', findCount.textContent);
+
+      findInput.value = 'a.c(';
+      findInput.dispatchEvent(new Event('input'));
+      check('search text is not a pattern', findMatches.length === 0 && document.getElementById('replace-all').disabled, findMatches.length);
+
+      findClose();
+      placeCaret(root.firstElementChild, 0);
+      findOpen(false);
+      findInput.value = 'abc';
+      findInput.dispatchEvent(new Event('input'));
+      replaceRow.hidden = false;
+      replaceInput.value = 'abcd';
+      findReplaceCurrent();
+      check('replace changes one match', saved().includes('가나다 abcd 가나다') && root.textContent.match(/abc/gi).length === 4, root.textContent);
+      check('replace moves past its own text', findMatches[findCurrent]?.element === root.children[1], findMatches[findCurrent]?.element?.tagName);
+      exec('undo');
+      check('replace can be undone', root.firstElementChild.textContent === lines[0], root.firstElementChild.textContent);
+
+      findInput.value = 'abc';
+      findInput.dispatchEvent(new Event('input'));
+      replaceInput.value = '';
+      const count = findReplaceAll();
+      check('replace all reports its count', count === 4, count);
+      check('replace all empties every match', !/abc/i.test(root.textContent) && root.firstElementChild.textContent === '가나다  가나다', root.textContent);
+      const bold = readBlocks()[1].runs[0];
+      check('replace keeps formatting around it', bold.text === 'x' && bold.bold === true, JSON.stringify(bold));
+
+      render([{ type: 'paragraph', runs: [text('한글 abc')] }]);
+      findInput.value = '한글';
+      findInput.dispatchEvent(new Event('input'));
+      const current = findMatches[findCurrent].range.toString();
+      findClose();
+      check('closing selects the match', getSelection().toString() === current && findBar.hidden, getSelection().toString());
+      check('closing clears the highlights', !CSS.highlights.has('find') && !CSS.highlights.has('find-current'));
+      render([]);
+    },
+    async jumpSecond(check) {
+      const selected = getSelection().toString();
+      const line = getSelection().anchorNode?.parentElement?.closest('p')?.textContent;
+      check('a search result jumps to its occurrence', selected === '오랫만' && line === '둘째 오랫만에', `${selected} / ${line}`);
+    },
+    async sourceShown(check) {
+      check('the source view covers the editor', sourceActive && !sourceView.hidden, sourceActive);
+      check('it shows the saved form', sourceText.textContent.includes('**굵게** <b>꺾쇠</b>'), sourceText.textContent);
+      check('markup in the text stays text', sourceText.querySelector('b') === null);
+      check('keys go to the source', document.activeElement === sourceText, document.activeElement?.id);
+
+      // What would change the document does nothing here.
+      const blocks = JSON.stringify(readBlocks());
+      const shown = sourceText.textContent;
+      run('bold');
+      run('h1');
+      runSourceNative('undo');
+      runSourceNative('paste');
+      runSourceNative('cut');
+      runReadingCommand('bookmarkToggle');
+      runReadingCommand('paged');
+      check('commands leave the document alone', JSON.stringify(readBlocks()) === blocks && reading.mode === 'scroll' && bookmarks.length === 0);
+      check('commands leave the source alone', sourceText.textContent === shown);
+      check('only its own button works', document.getElementById('toolbar-bold')?.disabled !== false
+        && [...document.querySelectorAll('#toolbar button')].every(button => button.disabled === (button.id !== 'toolbar-source')));
+
+      // Select All takes the source and nothing behind it.
+      sourceText.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true, cancelable: true }));
+      check('select all stays in the source', getSelection().toString().trimEnd() === shown.trimEnd(), getSelection().toString().length);
+      runSourceNative('selectAll');
+      check('the menu command does the same', getSelection().toString().trimEnd() === shown.trimEnd());
+
+      // Find works, replace does not.
+      findOpen(true);
+      check('replace stays closed', replaceRow.hidden && !findBar.hidden);
+      findInput.value = '**';
+      findInput.dispatchEvent(new Event('input'));
+      check('find sees the markup', findMatches.length === 2, findMatches.length);
+      replaceInput.value = 'x';
+      findReplaceCurrent();
+      check('replacing does nothing', findReplaceAll() === 0 && sourceText.textContent === shown);
+      findClose();
+      check('closing find selects in the source', getSelection().toString() === '**' && document.activeElement === sourceText, getSelection().toString());
+      findOpen(false);
+      findInput.value = '굵게';
+      findInput.dispatchEvent(new Event('input'));
+      check('an open search stays with the source', findMatches.length === 1 && findMatches[0].element === sourceText, findMatches.length);
+    },
+    async sourceHidden(check) {
+      check('the source view is gone', !sourceActive && sourceView.hidden);
+      check('keys go back to the editor', document.activeElement === root, document.activeElement?.id);
+      check('an open search follows back', !findBar.hidden && findMatches.length === 1 && root.contains(findMatches[0].range.startContainer), findMatches.length);
+      findClose();
+      check('every button works again', [...document.querySelectorAll('#toolbar button')].every(button => !button.disabled));
+    },
+    async readingFonts(check) {
+      await document.fonts.load('400 20px "KoPub Batang App"');
+      await document.fonts.load('700 20px "KoPub Batang App"');
+      const faces = [...document.fonts].filter(face => face.family.includes('KoPub'));
+      check('both bundled faces load', faces.length === 2 && faces.every(face => face.status === 'loaded'), faces.map(face => `${face.weight} ${face.status}`).join(', '));
+      // The two faces have the same widths, so only the ink tells them apart.
+      const ink = weight => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 500;
+        canvas.height = 80;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        context.font = `${weight} 40px "KoPub Batang App"`;
+        context.fillText('Reading 한글 test', 4, 50);
+        return context.getImageData(0, 0, 500, 80).data.reduce((sum, value, index) => (index % 4 === 3 ? sum + value : sum), 0);
+      };
+      check('bold text uses the bold face', ink(700) > ink(400) * 1.1, `${ink(400)} ${ink(700)}`);
+      render([{ type: 'heading', level: 1, runs: [text('제목')] }]);
+      const heading = getComputedStyle(root.firstElementChild);
+      check('a heading is bold', heading.fontWeight === '700', heading.fontWeight);
+      render([]);
+    },
+    async readingMeasures(check) {
+      const near = (a, b) => Math.abs(a - b) < 0.01;
+      // The same answers as ReaderMetrics on macOS.
+      const grid = 0.25 * 72 / 2.54;
+      check('margins snap to a quarter centimeter', near(snappedMargin(grid * 1.4), grid) && snappedMargin(-5) === 0);
+      let margins = clampedMargins(500, 500, 400);
+      check('the left margin wins when they do not fit', margins.left === 280 && margins.right === 0, JSON.stringify(margins));
+      check('text keeps its minimum width', textWidth(400, 500, 500) === 120 && textWidth(100, 50, 50) === 100);
+      check('two pages need room', fitsSpread(2 * 600 + 56 + 48, 600, false) && !fitsSpread(2 * 600 + 56 + 47, 600, false));
+      check('two pages hold on a little', fitsSpread(2 * 600 + 56 + 48 - 40, 600, true) && !fitsSpread(2 * 600 + 56 + 48 - 41, 600, true));
+      check('a spread starts on an even page', spreadStart(0) === 0 && spreadStart(3) === 2 && spreadStart(4) === 4);
+
+      // Anchors: the cases in the shared ReadingAnchor tests.
+      const text = '가나다라마바사 첫째 문단입니다.\n둘째 문단입니다. 끝까지 이어집니다.\n셋째.';
+      const anchor = makeAnchor(10, text);
+      check('an anchor holds its place', resolveAnchor(anchor, text) === 10, resolveAnchor(anchor, text));
+      check('an anchor finds text that moved', resolveAnchor(anchor, `앞에 넣음 ${text}`) === 16, resolveAnchor(anchor, `앞에 넣음 ${text}`));
+      check('an anchor without its text stays in range', resolveAnchor({ characterOffset: 999, contextSnippet: '없는 글', contentLength: 0 }, text) === text.length);
+      check('an anchor at the end stays in range', resolveAnchor({ characterOffset: 999, contextSnippet: '', contentLength: 0 }, text) === text.length);
+      const twice = 'abc xyz abc xyz abc';
+      check('the nearest match wins', resolveAnchor({ characterOffset: 9, contextSnippet: 'abc', contentLength: 0 }, twice) === 8, resolveAnchor({ characterOffset: 9, contextSnippet: 'abc', contentLength: 0 }, twice));
+      check('an edit before moves the offset', offsetAfterEdit(10, 2, 3, 5) === 12);
+      check('an edit after leaves the offset', offsetAfterEdit(1, 2, 3, 5) === 1);
+      check('an edit around lands inside', offsetAfterEdit(4, 2, 5, 1) === 3);
+      check('a preview flattens lines', previewText(0, 'a\n\n  b') === 'a b');
+      check('a long preview is cut', previewText(0, 'x'.repeat(100)).length === 61);
+
+      // Counting is the same as TextMetrics: a line break counts nowhere, a space only in one.
+      const counts = textCounts('가 나\n다\t라');
+      check('counts follow macOS', counts.noSpaces === 4 && counts.withSpaces === 6, JSON.stringify(counts));
+      const emoji = textCounts('\u{1F468}\u200D\u{1F469} e\u0301');
+      check('joined characters count once', emoji.noSpaces === 2 && emoji.withSpaces === 3, JSON.stringify(emoji));
+    },
+    async readingLayout(check) {
+      const saved = { ...reading };
+      const near = (a, b, tolerance = 1) => Math.abs(a - b) <= tolerance;
+      const sample = Array.from({ length: 200 }, (_, index) => ({ type: 'paragraph', runs: [text(`문단 ${index}. 그제야 리에느가 빵을 받아 들고 조용히 고개를 끄덕였다. 창밖으로는 비가 내리고 있었고 아무도 말을 꺼내지 않았다.`)] }));
+      const set = values => {
+        Object.assign(reading, values);
+        applyReadingStyle();
+        layoutReading();
+      };
+      render(sample);
+      set({ mode: 'scroll', paper: 'automatic', pageWidth: 0, marginLeft: 0, marginRight: 0, bodySize: 15, fontScale: 1.3, letterSpacing: 0, weight: 'regular', lineSpacing: 1.5 });
+      const before = JSON.stringify(readBlocks());
+
+      // Scroll view
+      const expected = 35 * glyphAdvance();
+      check('the book width is a count of characters', near(root.getBoundingClientRect().width, Math.min(expected, scroller.clientWidth - 120)), root.getBoundingClientRect().width);
+      check('there is one ruler', rulers.length === 1 && rulers[0].canvas.isConnected);
+      widthMode = 'mobile';
+      layoutReading();
+      check('the mobile width is fixed', near(root.getBoundingClientRect().width, 360), root.getBoundingClientRect().width);
+      widthMode = 'book';
+      set({ marginLeft: 40, marginRight: 60, pageWidth: 500 });
+      check('margins take from the page', near(root.getBoundingClientRect().width, 400), root.getBoundingClientRect().width);
+      const textLeft = root.getBoundingClientRect().left;
+      check('the ruler starts a margin before the text', near(rulers[0].canvas.getBoundingClientRect().left, textLeft - 40), rulers[0].canvas.getBoundingClientRect().left);
+      set({ marginLeft: 0, marginRight: 0, pageWidth: 0, paper: 'a4' });
+      check('a paper size sets the width', near(root.getBoundingClientRect().width, 595.28), root.getBoundingClientRect().width);
+      set({ paper: 'a3' });
+      check('a sheet wider than the window scrolls sideways', paperWidth() > scroller.clientWidth ? scroller.scrollWidth > scroller.clientWidth : true, `${scroller.scrollWidth}`);
+      set({ paper: 'automatic' });
+
+      // The ruler
+      set({ pageWidth: 400 });
+      const ruler = rulers[0];
+      beginRulerDrag(ruler, 'left', 0);
+      applyRulerDrag(50);
+      const grid = 0.25 * 72 / 2.54;
+      check('dragging a handle snaps', near(ruler.left, Math.round(50 / grid) * grid, 0.01), ruler.left);
+      applyRulerDrag(9999);
+      check('a margin leaves room for text', near(ruler.left, 280, 0.01), ruler.left);
+      applyRulerDrag(-30);
+      check('dragging past the edge widens the page', ruler.left === 0 && ruler.width > 400, `${ruler.left} ${ruler.width}`);
+      rulerDrag = null;
+      set({ pageWidth: 0 });
+
+      // Paged view
+      set({ mode: 'paged' });
+      check('the page is marked as paged', document.body.classList.contains('paged'));
+      check('text flows into pages', pageCount > 1, pageCount);
+      check('the document is one element still', root.children.length === 200);
+      const firstPage = root.children[0].getClientRects()[0];
+      const clip = pageClip.getBoundingClientRect();
+      check('the first page shows at the left', firstPage.left >= clip.left - 1 && firstPage.right <= clip.right + 1, `${firstPage.left} ${clip.left}`);
+      const last = pageCount;
+      showPage(1);
+      check('pages turn whole', isSpread ? currentPage === 0 || currentPage === 2 : Math.abs(pageClip.scrollLeft - pageStep) <= 1, `${pageClip.scrollLeft} ${pageStep}`);
+      showPage(9999);
+      check('pages stop at the last', currentPage <= last - 1, `${currentPage} ${last}`);
+      const lastBlock = root.lastElementChild.getClientRects();
+      const lastRect = lastBlock[lastBlock.length - 1];
+      check('the last page can be reached', lastRect.left < clip.right && lastRect.right > clip.left, `${lastRect.left} ${clip.left} ${clip.right}`);
+      showPage(0);
+
+      const pagesBefore = pageCount;
+      set({ marginLeft: 150 });
+      check('narrower text makes more pages', pageCount > pagesBefore, `${pagesBefore} ${pageCount}`);
+      set({ marginLeft: 0 });
+      check('wider text makes fewer pages again', pageCount === pagesBefore, `${pagesBefore} ${pageCount}`);
+
+      // Page Down from a page start must not fall back to the page before.
+      const settle = () => new Promise(resolve => setTimeout(resolve, 60));
+      showPage(0);
+      placeCaret(root.children[0], 0);
+      root.focus();
+      await settle();
+      const turn = isSpread ? 2 : 1;
+      press('PageDown');
+      await settle();
+      check('page down turns a page', currentPage === turn, currentPage);
+      press('PageDown');
+      await settle();
+      check('page down turns again from a page start', currentPage === 2 * turn, currentPage);
+      const pageStart = visibleOffset();
+      const pageStartCaret = caretRect();
+      check('the caret stands on the new page', pageStartCaret && pageStartCaret.left >= clip.left - 1 && pageStartCaret.left < clip.right, `${pageStartCaret?.left} ${clip.left}`);
+      showPage(0);
+      anchorOffset = pageStart;
+      getSelection().removeAllRanges();
+      root.blur();
+      applyAnchor();
+      check('a stored place at a page start reopens on that page', currentPage === 2 * turn, currentPage);
+      press('PageUp');
+      root.focus();
+      showPage(0);
+
+      // The caret takes the page with it.
+      placeCaret(root.children[150], 0);
+      root.focus();
+      syncPageToCaret();
+      const caret = caretRect();
+      check('the page follows the caret', caret && caret.left >= clip.left - 1 && caret.left < clip.right, `${caret?.left} ${clip.left} ${clip.right}`);
+      check('whole pages only', Math.abs(pageClip.scrollLeft - currentPage * pageStep) < 1, `${pageClip.scrollLeft} ${currentPage * pageStep}`);
+      const beforeTyping = saved;
+      exec('insertText', '쓴글');
+      check('typing on a later page reaches the document', root.children[150].textContent.startsWith('쓴글'));
+      exec('undo');
+      check('undo works on a later page', !root.children[150].textContent.startsWith('쓴글'));
+
+      // Two pages side by side, when the window has room for them.
+      widthMode = 'mobile';
+      layoutReading();
+      check('a narrow page opens as a spread', isSpread && rulers.length === 2, `${isSpread} ${rulers.length} ${scroller.clientWidth}`);
+      const spreadClip = pageClip.getBoundingClientRect();
+      check('a spread is two pages and a gutter', near(spreadClip.width, 2 * 360 + 56), spreadClip.width);
+      showPage(0);
+      const spreadColumns = new Set();
+      for (const block of root.children) {
+        for (const rect of block.getClientRects()) {
+          if (rect.right > spreadClip.left && rect.left < spreadClip.right) spreadColumns.add(Math.round(rect.left));
+        }
+      }
+      check('both pages show text', spreadColumns.size === 2, [...spreadColumns].join(','));
+      showPage(3);
+      check('a spread starts on an even page', currentPage === 2, currentPage);
+      check('the indicator names both pages', document.getElementById('page-number').textContent.startsWith('3–4'), document.getElementById('page-number').textContent);
+      // An odd last page sits alone on the left, and the view can still reach it.
+      showPage(pageCount - 1);
+      const spreadEnd = root.lastElementChild.getClientRects();
+      const endRect = spreadEnd[spreadEnd.length - 1];
+      check('the last spread can be reached', endRect.left < spreadClip.right && endRect.right > spreadClip.left, `${endRect.left} ${spreadClip.left} ${spreadClip.right} ${pageCount}`);
+      check('whole spreads only', Math.abs(pageClip.scrollLeft - currentPage * pageStep) <= 1, `${pageClip.scrollLeft} ${currentPage * pageStep}`);
+      widthMode = 'book';
+      layoutReading();
+      showPage(0);
+
+      // A sheet wider than the window shrinks to fit, and keeps its line breaks.
+      set({ paper: 'a3' });
+      check('a wide sheet zooms out', pageZoom < 1 && near(pageZoom, Math.min(1, scroller.clientWidth / (841.89 + 48)), 0.01), pageZoom);
+      const sheet = pageClip.getBoundingClientRect();
+      const host = scroller.getBoundingClientRect();
+      check('the sheet fits the window', sheet.left >= host.left - 1 && sheet.right <= host.right + 1, `${sheet.left} ${sheet.right} ${host.left} ${host.right}`);
+      check('the ruler matches the sheet', near(rulers[0].canvas.getBoundingClientRect().width, sheet.width, 2), `${rulers[0].canvas.getBoundingClientRect().width} ${sheet.width}`);
+      const zoomedPages = pageCount;
+      showPage(1);
+      const moved = [...root.children].some(block => [...block.getClientRects()].some(rect => rect.left >= sheet.left - 1 && rect.left < sheet.right));
+      check('a zoomed page turns to text', zoomedPages >= 1 && moved, zoomedPages);
+      placeCaret(root.children[150], 0);
+      root.focus();
+      syncPageToCaret();
+      const zoomedCaret = caretRect();
+      check('the page follows the caret when zoomed', zoomedCaret && zoomedCaret.left >= sheet.left - 1 && zoomedCaret.left < sheet.right, `${zoomedCaret?.left} ${sheet.left} ${sheet.right}`);
+      set({ paper: 'automatic' });
+      showPage(0);
+
+      // Find across pages
+      findOpen(false);
+      findInput.value = '문단 180.';
+      findInput.dispatchEvent(new Event('input'));
+      const found = findMatches[findCurrent]?.range.getClientRects()[0];
+      check('find turns to the page of the match', found && found.left >= clip.left - 1 && found.left < clip.right, `${found?.left} ${clip.left}`);
+      findClose();
+
+      // Position survives a change of view.
+      goToOffset(offsetOfPosition(root.children[120].firstChild, 0));
+      const offset = anchorOffset;
+      set({ mode: 'scroll' });
+      const top = root.children[120].getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      check('going to scroll view keeps the place', near(top, SCROLL_READ_OFFSET, 40), top);
+      check('the offset reads back', Math.abs(visibleOffset() - offset) < 60, `${visibleOffset()} ${offset}`);
+      set({ mode: 'paged' });
+      const rect = root.children[120].getClientRects()[0];
+      const visible = pageClip.getBoundingClientRect();
+      check('going to paged view keeps the place', rect.left >= visible.left - 1 && rect.left < visible.right, `${rect.left} ${visible.left}`);
+
+      // Blocks in view
+      const inView = blocksInView();
+      check('proofreading sees this page only', inView.includes(root.children[120]) && inView.length < 40, inView.length);
+
+      // Presentation never reaches the file.
+      for (const change of [{ weight: 'bold' }, { weight: 'light' }, { font: 'sans' }, { lineSpacing: 2 }, { fontScale: 2 }, { paper: 'a5' }, { marginLeft: 50 }]) {
+        set(change);
+        check(`${Object.keys(change)[0]} ${Object.values(change)[0]} leaves the document alone`, JSON.stringify(readBlocks()) === before);
+      }
+      set({ mode: 'scroll', weight: 'bold', paper: 'automatic', marginLeft: 0, font: saved.font, lineSpacing: 1.5, fontScale: 1.3 });
+      render([{ type: 'paragraph', runs: [text('글자')] }]);
+      layoutReading();
+      const paragraph = root.firstElementChild;
+      const selection = getSelection();
+      selection.removeAllRanges();
+      const range = document.createRange();
+      range.selectNodeContents(paragraph);
+      selection.addRange(range);
+      run('bold');
+      const blocks = readBlocks();
+      check('bold works while reading in bold', blocks[0].runs[0].bold === true, JSON.stringify(blocks[0]));
+      set({ weight: 'regular' });
+
+      // Long manuscript: what typing costs on a page.
+      const sentence = '그제야 리에느가 빵을 받아 들고 조용히 고개를 끄덕였다. 창밖으로 내리는 비를 한참 바라보다가 천천히 입을 열었다. '.repeat(3);
+      render(Array.from({ length: 3300 }, () => ({ type: 'paragraph', runs: [text(sentence)] })));
+      set({ mode: 'paged' });
+      let started = performance.now();
+      updatePageCount();
+      const layoutMs = Math.round(performance.now() - started);
+      const pages = pageCount;
+      placeCaret(root.children[1650], 0);
+      root.focus();
+      syncPageToCaret();
+      started = performance.now();
+      for (let index = 0; index < 10; index++) {
+        exec('insertText', '가');
+        root.getBoundingClientRect();
+      }
+      const keyMs = Math.round((performance.now() - started) / 10);
+      for (let index = 0; index < 10; index++) exec('undo');
+      check(`long manuscript in pages: ${pages} pages, layout ${layoutMs} ms, typing ${keyMs} ms per key`, keyMs < 60, keyMs);
+
+      Object.assign(reading, saved);
+      widthMode = 'book';
+      render([]);
+      applyReadingStyle();
+      layoutReading();
+    },
+    async readingBookmarks(check) {
+      const saved = readingPath;
+      const sample = Array.from({ length: 120 }, (_, index) => ({ type: 'paragraph', runs: [text(`문단 ${index} 내용이 여기에 있습니다.`)] }));
+      render(sample);
+      readingBeforeLoad();
+      readingPath = 'test-path';
+      trackedText = displayText();
+      layoutReading();
+      scroller.scrollTop = 0;
+      check('no path means no bookmark', (() => { readingPath = null; const done = bookmarkHere(); readingPath = 'test-path'; return done === false && bookmarks.length === 0; })());
+      goToOffset(offsetOfPosition(root.children[50].firstChild, 0));
+      bookmarkHere();
+      check('a bookmark marks this screen', bookmarks.length === 1, bookmarks.length);
+      const mark = bookmarks[0].characterOffset;
+      check('the toolbar shows it', document.getElementById('toolbar-bookmark')?.classList.contains('on') !== false);
+      bookmarkHere();
+      check('a second press removes it', bookmarks.length === 0, bookmarks.length);
+      goToOffset(mark);
+      bookmarkHere();
+
+      // Edits before it move it, by exactly what was typed.
+      placeCaret(root.children[2], 0);
+      exec('insertText', '앞에 넣은 글');
+      adjustBookmarksForEdit();
+      const typed = '앞에 넣은 글'.length;
+      check('an edit before a bookmark moves it', bookmarks[0].characterOffset === mark + typed, `${bookmarks[0].characterOffset} ${mark}`);
+      placeCaret(root.children[100], 0);
+      exec('insertText', '뒤에 넣은 글');
+      adjustBookmarksForEdit();
+      check('an edit after a bookmark leaves it', bookmarks[0].characterOffset === mark + typed, bookmarks[0].characterOffset);
+
+      showBookmarkList();
+      const rows = bookmarkPopover.querySelectorAll('.bookmark-open');
+      check('the list shows the text there', rows.length === 1 && rows[0].textContent.includes('문단'), rows[0]?.textContent);
+      rows[0].click();
+      check('choosing one closes the list', bookmarkPopover.hidden);
+      const here = root.children[50].getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      check('choosing one goes there', Math.abs(here - SCROLL_READ_OFFSET) < 60, here);
+      showBookmarkList();
+      bookmarkPopover.querySelector('.bookmark-remove').click();
+      check('a bookmark can be removed from the list', bookmarks.length === 0 && bookmarkPopover.querySelectorAll('.bookmark-open').length === 0);
+      closePopovers();
+
+      // Stored state from the host.
+      const content = displayText();
+      applyReadingState({ path: 'other', progress: makeAnchor(content.indexOf('문단 80 '), content), bookmarks: [makeAnchor(content.indexOf('문단 30 '), content)] });
+      check('stored bookmarks come back', bookmarks.length === 1 && bookmarks[0].characterOffset === content.indexOf('문단 30 '));
+      const restored = root.children[80].getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      check('the reading place comes back', Math.abs(restored - SCROLL_READ_OFFSET) < 60, restored);
+      showAppearance();
+      check('the appearance panel fills', appearancePopover.querySelectorAll('.appearance-row').length === 7 && !appearancePopover.hidden, appearancePopover.children.length);
+      closePopovers();
+      readingPath = saved;
+      bookmarks = [];
+      render([]);
+      scroller.scrollTop = 0;
+    },
     async styleApplied(check) {
       render([
         { type: 'heading', level: 1, runs: [text('제목')] },
@@ -165,10 +620,11 @@
       ]);
       const near = (actual, expected) => Math.abs(parseFloat(actual) - expected) < 0.05;
       const body = getComputedStyle(root);
-      check('body size is in points', near(body.fontSize, 11 * 96 / 72), body.fontSize);
-      check('letter spacing is a percent of the size', near(body.letterSpacing, 11 * 96 / 72 * 0.1), body.letterSpacing);
+      const size = 11 * 1.3;
+      check('body size follows the size and the zoom', near(body.fontSize, size), body.fontSize);
+      check('letter spacing is a percent of the size', near(body.letterSpacing, size * 0.1), body.letterSpacing);
       const heading = getComputedStyle(root.querySelector('h1'));
-      check('headings keep their proportion', near(heading.fontSize, 11 * 96 / 72 * 28 / 15), heading.fontSize);
+      check('headings keep their proportion', near(heading.fontSize, size * 28 / 15), heading.fontSize);
       const code = getComputedStyle(root.querySelector('code'));
       check('code has no letter spacing', code.letterSpacing === 'normal' || parseFloat(code.letterSpacing) === 0, code.letterSpacing);
       const paper = getComputedStyle(document.getElementById('scroller')).backgroundColor;
@@ -312,8 +768,25 @@
     const readBack = readBlocks();
     const readMs = Math.round(performance.now() - started);
     const longOk = readBack.length === long.length;
+    findBar.hidden = false;
+    findInput.value = '그';
+    started = performance.now();
+    findSearch();
+    root.getBoundingClientRect();
+    const findMs = Math.round(performance.now() - started);
+    const findTotal = findMatches.length;
+    // A name changed throughout a manuscript, about once in every paragraph or so.
+    render(long.map((block, index) => (index % 3 === 0 ? { type: 'paragraph', runs: [{ text: `표식 ${sentence}` }] } : block)));
+    findInput.value = '표식';
+    findSearch();
+    const replaceTotal = findMatches.length;
+    replaceInput.value = '이름';
+    started = performance.now();
+    findReplaceAll();
+    const replaceMs = Math.round(performance.now() - started);
+    findClose();
     render([]);
 
-    post({ type: 'selftest', roundTrips, interactions, longDocument: { renderMs, readMs, ok: longOk } });
+    post({ type: 'selftest', roundTrips, interactions, longDocument: { renderMs, readMs, findMs, findTotal, replaceMs, replaceTotal, ok: longOk } });
   };
 })();

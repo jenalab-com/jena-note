@@ -19,5 +19,7 @@
     <Using Remove="System.Drawing" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.*" />
     <Content Include="editor\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\Resources\Fonts\KoPub Batang Medium.ttf" Link="editor\fonts\KoPubBatang-Medium.ttf" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\Resources\Fonts\KoPub Batang Bold.ttf" Link="editor\fonts\KoPubBatang-Bold.ttf" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

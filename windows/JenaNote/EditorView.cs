@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
@@ -20,6 +21,12 @@ sealed class EditorView : WebView2
         "toolbar.bold", "toolbar.italic", "toolbar.code", "toolbar.body", "toolbar.h1", "toolbar.h2", "toolbar.h3",
         "toolbar.ul", "toolbar.ol", "toolbar.quote", "doc.codeBlock", "toolbar.hr", "toolbar.link",
         "menu.format.textColor", "doc.linkPrompt", "doc.ok", "ai.work.cancel",
+        "toolbar.find", "find.replacePlaceholder", "find.replace", "find.replaceAll",
+        "reader.scroll", "reader.paged", "toolbar.appearance", "reader.fontSize", "reader.bookmark.toggle", "reader.bookmark.list",
+        "reader.bookmark.empty", "reader.bookmark.untitled", "paperSize.title", "reader.width", "reader.widthMobile", "reader.widthBook",
+        "reader.font", "reader.weight", "reader.weight.light", "reader.weight.regular", "reader.weight.bold", "reader.lineSpacing",
+        "reader.lineTight", "reader.lineNormal", "reader.lineWide", "reader.letterSpacing", "toolbar.zoom",
+        "source.title", "source.hint", "source.description", "source.copyAll",
         "proof.button", "proof.original", "proof.suggestion", "proof.apply", "proof.select", "proof.unchanged", "dictionary.add",
     };
 
@@ -41,6 +48,8 @@ sealed class EditorView : WebView2
 
     /// <summary>Raised with the editor's revision whenever the author changes the document.</summary>
     public event Action<int>? Changed;
+    /// <summary>Raised with the document's characters without and with spaces.</summary>
+    public event Action<int, int>? CountsChanged;
     /// <summary>Raised with a command name from a keyboard shortcut inside the editor.</summary>
     public event Action<string>? CommandRequested;
     /// <summary>Self test results as raw JSON.</summary>
@@ -96,7 +105,28 @@ sealed class EditorView : WebView2
             _ => CoreWebView2PreferredColorScheme.Auto,
         };
         Send(new { type = "strings", strings = ToolbarKeys.ToDictionary(key => key, NativeCore.Tr) });
-        Send(new { type = "settings", bodySize = settings.BodySize, letterSpacing = settings.LetterSpacing, paper = settings.PaperColor });
+        Send(new
+        {
+            type = "settings",
+            bodySize = settings.BodySize,
+            letterSpacing = settings.LetterSpacing,
+            paper = settings.PaperColor,
+            reading = new
+            {
+                mode = settings.ReadingMode,
+                fontScale = settings.ReadingFontScale,
+                font = settings.ReadingFont,
+                weight = settings.ReadingWeight,
+                lineSpacing = settings.ReadingLineSpacing,
+                lineLength = settings.ReadingLineLength,
+                pageWidth = settings.ReadingPageWidth,
+                marginLeft = settings.ReadingMarginLeft,
+                marginRight = settings.ReadingMarginRight,
+                paper = settings.PaperSize,
+            },
+            fonts = ReadingFaces.Available(),
+            paperSizes = ReadingFaces.PaperSizes(),
+        });
     }
 
     void Send(object message) => CoreWebView2.PostWebMessageAsString(JsonSerializer.Serialize(message));
@@ -121,6 +151,52 @@ sealed class EditorView : WebView2
         Focus();
         Send(new { type = "native", name = command });
     }
+
+    /// <summary>Where this document was being read, sent right after its text.</summary>
+    public void SendReadingState()
+    {
+        var path = DocumentPath;
+        Send(new
+        {
+            type = "readingState",
+            path,
+            progress = path != null ? ReadingStore.Progress(path) : null,
+            bookmarks = path != null ? ReadingStore.Bookmarks(path) : null,
+        });
+    }
+
+    /// <summary>Shows or updates the read-only view of what would be saved.</summary>
+    public void ShowSource(string text)
+    {
+        Focus();
+        Send(new { type = "source", text });
+    }
+
+    public void HideSource()
+    {
+        Focus();
+        Send(new { type = "sourceHide" });
+    }
+
+    /// <summary>The document kept its text but has a new file.</summary>
+    public void SendReadingPath() => Send(new { type = "readingPath", path = DocumentPath });
+
+    /// <summary>"scroll", "paged", "fontUp", "fontDown", "appearance", "bookmarkToggle" or "bookmarkList".</summary>
+    public void ReadingCommand(string name)
+    {
+        Focus();
+        Send(new { type = "readingCommand", name });
+    }
+
+    /// <summary>"open", "replace", "next" or "previous".</summary>
+    public void Find(string action)
+    {
+        Focus();
+        Send(new { type = "find", action });
+    }
+
+    /// <summary>Goes to a match of the search that opened this document.</summary>
+    public void JumpTo(string query, int ordinal) => Send(new { type = "jump", query, ordinal });
 
     public void RunSelfTestStep(string step) => Send(new { type = "selftestStep", step });
 
@@ -174,6 +250,18 @@ sealed class EditorView : WebView2
                 break;
             case "selftest":
                 SelfTestFinished?.Invoke(message);
+                break;
+            case "readingChange":
+                AppSettings.ApplyFromPage(message.GetProperty("values"));
+                break;
+            case "progress":
+                ReadingStore.SetProgress(message.GetProperty("path").GetString()!, JsonNode.Parse(message.GetProperty("anchor").GetRawText()));
+                break;
+            case "bookmarks":
+                ReadingStore.SetBookmarks(message.GetProperty("path").GetString()!, JsonNode.Parse(message.GetProperty("list").GetRawText())!.AsArray());
+                break;
+            case "counts":
+                CountsChanged?.Invoke(message.GetProperty("noSpaces").GetInt32(), message.GetProperty("withSpaces").GetInt32());
                 break;
         }
     }

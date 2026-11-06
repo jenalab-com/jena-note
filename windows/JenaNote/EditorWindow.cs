@@ -16,6 +16,17 @@ sealed class EditorWindow : Window
 {
     readonly EditorView editor = new();
     readonly Menu menu = new();
+    readonly SidebarPanel sidebar;
+    readonly TextBlock statusCounts = new() { Margin = new Thickness(16, 3, 16, 3), FontSize = 11, HorizontalAlignment = HorizontalAlignment.Right, Opacity = 0.7 };
+    (int NoSpaces, int WithSpaces) counts;
+    bool showingSource;
+    MenuItem? sourceMenuItem;
+
+    /// <summary>For tests, so they leave the author's clipboard alone.</summary>
+    public static Action<string>? ClipboardForTest { get; set; }
+    readonly ColumnDefinition sidebarColumn = new();
+    readonly ColumnDefinition splitterColumn = new() { Width = GridLength.Auto };
+    readonly GridSplitter splitter = new() { Width = 4, HorizontalAlignment = HorizontalAlignment.Stretch, ResizeBehavior = GridResizeBehavior.PreviousAndNext };
     string? filePath;
     bool plainText;
     int currentRevision;
@@ -59,8 +70,27 @@ sealed class EditorWindow : Window
         AddShortcuts();
         DockPanel.SetDock(menu, Dock.Top);
         layout.Children.Add(menu);
-        layout.Children.Add(editor);
+        DockPanel.SetDock(statusCounts, Dock.Bottom);
+        layout.Children.Add(statusCounts);
+        sidebar = new SidebarPanel(this);
+        var body = new Grid();
+        body.ColumnDefinitions.Add(sidebarColumn);
+        body.ColumnDefinitions.Add(splitterColumn);
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 240 });
+        Grid.SetColumn(sidebar, 0);
+        Grid.SetColumn(splitter, 1);
+        Grid.SetColumn(editor, 2);
+        body.Children.Add(sidebar);
+        body.Children.Add(splitter);
+        body.Children.Add(editor);
+        layout.Children.Add(body);
         Content = layout;
+        ApplySidebarVisibility();
+        splitter.DragCompleted += (_, _) =>
+        {
+            AppSettings.Current.SidebarWidth = sidebarColumn.ActualWidth;
+            AppSettings.SaveQuietly();
+        };
 
         filePath = path;
         plainText = path != null && DocumentFile.IsPlainText(path);
@@ -74,7 +104,13 @@ sealed class EditorWindow : Window
             StartTimers();
         };
         editor.CommandRequested += RunCommand;
+        editor.CountsChanged += (noSpaces, withSpaces) =>
+        {
+            counts = (noSpaces, withSpaces);
+            UpdateCounts();
+        };
         editor.DocumentPath = path;
+        sidebar.ShowCurrentFile(path);
         editor.AddToDictionaryRequested += term => DictionaryWindow.Present(this, filePath, term);
         editor.AlertRequested += text => MessageBox.Show(this, text, "Jena Note", MessageBoxButton.OK, MessageBoxImage.Information);
         Action dictionaryChanged = editor.DictionaryChanged;
@@ -124,10 +160,21 @@ sealed class EditorWindow : Window
         diskStamp = filePath != null ? DocumentFile.Stamp(filePath) : null;
         if (plainText) editor.LoadPlainText(text);
         else editor.LoadMarkdown(text);
+        editor.SendReadingState();
+        if (showingSource) _ = RefreshSourceAsync();
         // Focus inside the page is not enough. Keys go to the native control that holds focus.
         editor.Focus();
         UpdateTitle();
         StartTimers();
+    }
+
+    void UpdateCounts() =>
+        statusCounts.Text = ReplaceFirst(ReplaceFirst(NativeCore.Tr("status.charCount"), counts.NoSpaces.ToString("N0")), counts.WithSpaces.ToString("N0"));
+
+    static string ReplaceFirst(string format, string value)
+    {
+        var index = format.IndexOf("%@", StringComparison.Ordinal);
+        return index < 0 ? format : format[..index] + value + format[(index + 2)..];
     }
 
     void UpdateTitle()
@@ -176,7 +223,26 @@ sealed class EditorWindow : Window
             new Separator(),
             Item("menu.edit.cut", "Ctrl+X", () => editor.RunNative("cut")),
             Item("menu.edit.copy", "Ctrl+C", () => editor.RunNative("copy")),
-            Item("menu.edit.selectAll", "Ctrl+A", () => editor.RunNative("selectAll"))));
+            Item("menu.edit.selectAll", "Ctrl+A", () => editor.RunNative("selectAll")),
+            new Separator(),
+            Item("menu.edit.find", "Ctrl+F", () => editor.Find("open")),
+            Item("menu.edit.findNext", "F3", () => editor.Find("next")),
+            Item("menu.edit.findPrevious", "Shift+F3", () => editor.Find("previous")),
+            Item("menu.edit.findReplace", "Ctrl+H", () => editor.Find("replace")),
+            Item("menu.edit.findInFiles", "Ctrl+Shift+F", () => RunCommand("searchFiles"))));
+        menu.Items.Add(Top("menu.view",
+            Item("menu.view.toggleSidebar", "Ctrl+\\", () => RunCommand("toggleSidebar")),
+            new Separator(),
+            Item("reader.scroll", "", () => editor.ReadingCommand("scroll")),
+            Item("reader.paged", "", () => editor.ReadingCommand("paged")),
+            Item("toolbar.appearance", "", () => editor.ReadingCommand("appearance")),
+            new Separator(),
+            Item("reader.fontUp", "Ctrl+=", () => editor.ReadingCommand("fontUp")),
+            Item("reader.fontDown", "Ctrl+-", () => editor.ReadingCommand("fontDown")),
+            new Separator(),
+            sourceMenuItem = Item("source.title", "", () => RunCommand("toggleSource")),
+            Item("menu.view.toggleBookmark", "Ctrl+D", () => editor.ReadingCommand("bookmarkToggle")),
+            Item("menu.view.bookmarkList", "", () => editor.ReadingCommand("bookmarkList"))));
         menu.Items.Add(Top("menu.format",
             Item("menu.format.bold", "Ctrl+B", () => editor.Run("bold")),
             Item("menu.format.italic", "Ctrl+I", () => editor.Run("italic")),
@@ -205,6 +271,17 @@ sealed class EditorWindow : Window
         InputBindings.Add(new KeyBinding(new RelayCommand(() => RunCommand("saveAs")), Key.S, ModifierKeys.Control | ModifierKeys.Shift));
         InputBindings.Add(new KeyBinding(new RelayCommand(() => RunCommand("open")), Key.O, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(new RelayCommand(() => RunCommand("new")), Key.N, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(new RelayCommand(() => RunCommand("settings")), Key.OemComma, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(new RelayCommand(() => editor.Find("open")), Key.F, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(new RelayCommand(() => editor.Find("replace")), Key.H, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(new RelayCommand(() => editor.Find("next")), Key.F3, ModifierKeys.None));
+        InputBindings.Add(new KeyBinding(new RelayCommand(() => editor.Find("previous")), Key.F3, ModifierKeys.Shift));
+        InputBindings.Add(new KeyBinding(new RelayCommand(() => RunCommand("searchFiles")), Key.F, ModifierKeys.Control | ModifierKeys.Shift));
+        InputBindings.Add(new KeyBinding(new RelayCommand(() => editor.ReadingCommand("bookmarkToggle")), Key.D, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(new RelayCommand(() => editor.ReadingCommand("fontUp")), Key.OemPlus, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(new RelayCommand(() => editor.ReadingCommand("fontDown")), Key.OemMinus, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(new RelayCommand(() => RunCommand("toggleSidebar")), Key.OemBackslash, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(new RelayCommand(() => RunCommand("toggleSidebar")), Key.Oem5, ModifierKeys.Control));
     }
 
     sealed class RelayCommand(Action action) : ICommand
@@ -214,7 +291,7 @@ sealed class EditorWindow : Window
         public void Execute(object? parameter) => action();
     }
 
-    async void RunCommand(string name)
+    public async void RunCommand(string name)
     {
         switch (name)
         {
@@ -232,6 +309,19 @@ sealed class EditorWindow : Window
                 break;
             case "settings":
                 SettingsWindow.Present(this);
+                break;
+            case "toggleSource":
+                _ = ToggleSourceAsync();
+                break;
+            case "copySource":
+                _ = CopySourceAsync();
+                break;
+            case "toggleSidebar":
+                AppSettings.Update(settings => settings.SidebarVisible = !settings.SidebarVisible);
+                break;
+            case "searchFiles":
+                if (!AppSettings.Current.SidebarVisible) AppSettings.Update(settings => settings.SidebarVisible = true);
+                sidebar.FocusSearch();
                 break;
             case "history":
                 if (filePath == null)
@@ -290,6 +380,7 @@ sealed class EditorWindow : Window
         target.plainText = DocumentFile.IsPlainText(path);
         target.editor.DocumentFolder = Path.GetDirectoryName(Path.GetFullPath(path));
         target.editor.DocumentPath = path;
+        target.sidebar.ShowCurrentFile(path);
         target.LoadIntoEditor(text);
         return target;
     }
@@ -348,6 +439,8 @@ sealed class EditorWindow : Window
             plainText = saveAsPlain;
             editor.DocumentFolder = Path.GetDirectoryName(Path.GetFullPath(path));
             editor.DocumentPath = path;
+            editor.SendReadingPath();
+            sidebar.ShowCurrentFile(path);
             if (modeChanged)
             {
                 LoadIntoEditor(text);
@@ -431,12 +524,183 @@ sealed class EditorWindow : Window
         MessageBox.Show(this, NativeCore.Tr("backup.failed"), "Jena Note", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
+    // MARK: - Source view
+
+    public bool IsShowingSource => showingSource;
+
+    public async Task ToggleSourceAsync()
+    {
+        showingSource = !showingSource;
+        UpdateSourceMenuItem();
+        if (showingSource) await RefreshSourceAsync();
+        else editor.HideSource();
+    }
+
+    void UpdateSourceMenuItem()
+    {
+        if (sourceMenuItem != null) sourceMenuItem.IsChecked = showingSource;
+    }
+
+    async Task RefreshSourceAsync()
+    {
+        var text = await CurrentTextAsync();
+        // The author may have gone back to the editor while this was on its way.
+        if (showingSource) editor.ShowSource(text);
+    }
+
+    async Task CopySourceAsync()
+    {
+        var text = await CurrentTextAsync();
+        if (ClipboardForTest != null)
+        {
+            ClipboardForTest(text);
+            return;
+        }
+        try
+        {
+            Clipboard.SetDataObject(text, copy: true);
+        }
+        catch (System.Runtime.InteropServices.ExternalException error)
+        {
+            MessageBox.Show(this, error.Message, "Jena Note", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    // MARK: - Sidebar
+
+    static IEnumerable<EditorWindow> AllDocuments => Application.Current.Windows.OfType<EditorWindow>().ToList();
+    static bool SamePath(string? a, string b) =>
+        a != null && string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Opens a file in this window, or brings forward the window already showing it.</summary>
+    public async Task OpenFromSidebarAsync(string path, string? query, int ordinal)
+    {
+        var shown = AllDocuments.FirstOrDefault(window => SamePath(window.filePath, path));
+        if (shown != null)
+        {
+            shown.Activate();
+            if (query != null)
+            {
+                // A search result points into the document, not its source.
+                if (shown.showingSource) await shown.ToggleSourceAsync();
+                shown.editor.JumpTo(query, ordinal);
+            }
+            return;
+        }
+        if (!await SettleChangesAsync()) return;
+        string text;
+        try
+        {
+            text = DocumentFile.Read(path);
+        }
+        catch (DocumentFile.NotUtf8Exception)
+        {
+            MessageBox.Show(this, NativeCore.Tr("open.notUTF8"), "Jena Note", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, NativeCore.Tr("doc.openFailed").Replace("%@", error.Message), "Jena Note", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        if (query != null && showingSource) await ToggleSourceAsync();
+        ShowFile(path, text);
+        if (query != null) editor.JumpTo(query, ordinal);
+    }
+
+    void ShowFile(string? path, string text)
+    {
+        recoveryTimer.Stop();
+        autosaveTimer.Stop();
+        RecoveryStore.Delete(recoveryId);
+        filePath = path;
+        plainText = path != null && DocumentFile.IsPlainText(path);
+        editor.DocumentFolder = path != null ? Path.GetDirectoryName(Path.GetFullPath(path)) : null;
+        editor.DocumentPath = path;
+        sidebar.ShowCurrentFile(path);
+        LoadIntoEditor(text);
+    }
+
+    /// <summary>Saves or asks about changes, as closing does. False means the author cancelled.</summary>
+    async Task<bool> SettleChangesAsync()
+    {
+        while (saving) await Task.Delay(20);
+        if (IsDirty && AutosaveEnabled && filePath != null) await WriteAsync(filePath, automatic: true);
+        if (!IsDirty) return true;
+
+        var name = filePath != null ? Path.GetFileName(filePath) : NativeCore.Tr("doc.untitled");
+        var answer = IsSelfTesting ? CloseAnswerForTest : MessageBox.Show(this, NativeCore.Tr("doc.unsaved").Replace("%@", name), "Jena Note",
+            MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        if (answer == MessageBoxResult.Cancel) return false;
+        if (answer == MessageBoxResult.Yes) return await SaveAsync(chooseLocation: false);
+        return true;
+    }
+
+    /// <summary>Before a rename: what is on disk must be current, because the file is about to move.</summary>
+    public static async Task<bool> SaveDocumentsInsideAsync(string path)
+    {
+        foreach (var window in AllDocuments.Where(window => window.filePath != null && SidebarFiles.Relocated(window.filePath, path, path) != null))
+        {
+            if (!await window.SettleChangesAsync()) return false;
+        }
+        return true;
+    }
+
+    /// <summary>After a rename: open documents follow their files.</summary>
+    public static void DocumentsMoved(string source, string destination)
+    {
+        try
+        {
+            NativeCore.BackupDocumentsMoved(source, destination);
+        }
+        catch (InvalidOperationException error)
+        {
+            // The files have moved either way. Only earlier versions stay under the old name.
+            Trace.TraceWarning("History did not follow the move: {0}", error.Message);
+        }
+        ReadingStore.Moved(source, destination);
+        foreach (var window in AllDocuments)
+        {
+            var moved = window.filePath != null ? SidebarFiles.Relocated(window.filePath, source, destination) : null;
+            if (moved == null) continue;
+            window.filePath = moved;
+            window.editor.DocumentPath = moved;
+            window.editor.DocumentFolder = Path.GetDirectoryName(moved);
+            window.editor.SendReadingPath();
+            window.diskStamp = DocumentFile.Stamp(moved);
+            window.sidebar.ShowCurrentFile(moved);
+            window.UpdateTitle();
+        }
+    }
+
+    /// <summary>After files reach the Recycle Bin: windows showing them must not write them back.</summary>
+    public static void DocumentsDeleted(string path)
+    {
+        foreach (var window in AllDocuments.Where(window => window.filePath != null && SidebarFiles.Relocated(window.filePath, path, path) != null))
+            window.ShowFile(null, "");
+    }
+
+    public SidebarPanel Sidebar => sidebar;
+    public string? DocumentPath => filePath;
+
     // MARK: - Settings
+
+    void ApplySidebarVisibility()
+    {
+        var visible = AppSettings.Current.SidebarVisible;
+        sidebar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        splitter.Visibility = sidebar.Visibility;
+        sidebarColumn.MinWidth = visible ? 140 : 0;
+        sidebarColumn.Width = visible ? new GridLength(AppSettings.Current.SidebarWidth) : new GridLength(0);
+    }
 
     void ApplySettings()
     {
         FillMenu();
+        UpdateSourceMenuItem();
         UpdateTitle();
+        UpdateCounts();
+        ApplySidebarVisibility();
         editor.ApplySettings();
         if (AutosaveEnabled)
         {

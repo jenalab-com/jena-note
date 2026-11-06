@@ -494,11 +494,12 @@ function promptLink() {
 }
 
 function run(name) {
+  if (sourceActive) return;
   if (plainMode && name !== 'proofSelection') return;
   root.focus();
   if (BLOCK_COMMANDS[name]) return setBlock(BLOCK_COMMANDS[name]);
   switch (name) {
-    case 'bold': exec('bold'); break;
+    case 'bold': withPlainWeight(() => exec('bold')); break;
     case 'italic': exec('italic'); break;
     case 'code': toggleInlineCode(); break;
     case 'hr': insertRule(); break;
@@ -556,16 +557,31 @@ const SHORTCUTS = {
   o: () => post({ type: 'command', name: 'open' }),
   n: () => post({ type: 'command', name: 'new' }),
   ',': () => post({ type: 'command', name: 'settings' }),
+  f: event => (event.shiftKey ? post({ type: 'command', name: 'searchFiles' }) : findOpen(false)),
+  h: () => findOpen(true),
+  '\\': () => post({ type: 'command', name: 'toggleSidebar' }),
+  d: () => runReadingCommand('bookmarkToggle'),
+  '=': () => runReadingCommand('fontUp'),
+  '+': () => runReadingCommand('fontUp'),
+  '-': () => runReadingCommand('fontDown'),
 };
 
 document.addEventListener('keydown', event => {
   if (event.ctrlKey && !event.altKey) {
     const action = SHORTCUTS[event.key.toLowerCase()];
+    // Formatting belongs to the document, not to what is being typed in the find bar.
+    if (findBar.contains(event.target) && ['b', 'i', 'u'].includes(event.key.toLowerCase())) return;
     if (action) {
       event.preventDefault();
       action(event);
       return;
     }
+  }
+  if (event.key === 'F3') {
+    event.preventDefault();
+    if (findBar.hidden) findOpen(false);
+    else findMove(!event.shiftKey);
+    return;
   }
   if (event.target !== root) return;
   // During Korean composition these keys belong to the input method.
@@ -639,6 +655,9 @@ function buildToolbar() {
     button.addEventListener('click', () => run(item[0]));
     toolbar.append(button);
   }
+  appendReadingToolbar(toolbar);
+  updateSourceToolbar();
+  fillSourceStrings();
   document.getElementById('link-label').textContent = strings['doc.linkPrompt'] ?? '';
   document.getElementById('link-ok').textContent = strings['doc.ok'] ?? 'OK';
   document.getElementById('link-cancel').textContent = strings['ai.work.cancel'] ?? 'Cancel';
@@ -656,6 +675,7 @@ document.getElementById('color-input').addEventListener('change', event => {
 // MARK: - Host messages
 
 function loadDocument(message) {
+  readingBeforeLoad();
   plainMode = message.plain === true;
   document.body.classList.toggle('plain', plainMode);
   if (plainMode) renderPlain(message.text);
@@ -664,6 +684,7 @@ function loadDocument(message) {
   document.getElementById('scroller').scrollTop = 0;
   placeCaret(root.firstElementChild, 0);
   root.focus();
+  readingAfterLoad();
 }
 
 window.chrome.webview.addEventListener('message', event => {
@@ -694,7 +715,17 @@ window.chrome.webview.addEventListener('message', event => {
     case 'run':
       run(message.name);
       break;
+    case 'source':
+      showSource(message.text);
+      break;
+    case 'sourceHide':
+      hideSource();
+      break;
     case 'native':
+      if (sourceActive) {
+        runSourceNative(message.name);
+        break;
+      }
       root.focus();
       exec(message.name);
       break;
@@ -708,7 +739,3 @@ window.chrome.webview.addEventListener('message', event => {
     }
   }
 });
-
-document.execCommand('defaultParagraphSeparator', false, 'p');
-ensureEditableLine();
-post({ type: 'ready' });
