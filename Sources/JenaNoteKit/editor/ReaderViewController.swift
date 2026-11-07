@@ -93,7 +93,20 @@ final class PageTextView: NSTextView {
         return super.validateUserInterfaceItem(item)
     }
 
+    weak var punctuation: PunctuationController?
+
+    override func flagsChanged(with event: NSEvent) {
+        punctuation?.handleFlagsChanged(event, in: self)
+        super.flagsChanged(with: event)
+    }
+
+    override func insertNewline(_ sender: Any?) {
+        punctuation?.handleNewline(in: self)
+        super.insertNewline(sender)
+    }
+
     override func keyDown(with event: NSEvent) {
+        punctuation?.noteKeyDown()
         if !hasMarkedText(), event.keyCode == 121 || event.keyCode == 116 {
             onPageKey?(event.keyCode == 121)
             return
@@ -109,6 +122,7 @@ final class PageTextView: NSTextView {
     }
 
     override func insertText(_ insertString: Any, replacementRange: NSRange) {
+        if punctuation?.handleTyped(insertString, replacementRange: replacementRange, in: self) == true { return }
         super.insertText(insertString, replacementRange: replacementRange)
         onInputFinished?()
     }
@@ -161,6 +175,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
     private(set) var isPaginationComplete = false
     var paginationCalculationCount: Int { paginator?.computedPageCount ?? 0 }
     weak var formattingTarget: EditorViewController?
+    weak var punctuation: PunctuationController?
     private var lastSelection: NSRange?
     var selectedTextRange: NSRange? {
         if let active = activePageTextView { return active.selectedRange() }
@@ -829,6 +844,7 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         tv.isVerticallyResizable = false
         tv.isHorizontallyResizable = false
         tv.delegate = self
+        tv.punctuation = punctuation
         tv.onPageKey = { [weak self] next in
             if next { self?.goToNextPage() } else { self?.goToPreviousPage() }
         }
@@ -836,6 +852,9 @@ class ReaderViewController: NSViewController, NSTextStorageDelegate, NSTextViewD
         syncTypingAttributes(tv)
         return tv
     }
+
+    /// 포커스가 다른 곳에 있어도 부호를 넣을 수 있는 페이지.
+    var inputTextView: PageTextView? { activePageTextView ?? pageViews.first }
 
     private var activePageTextView: PageTextView? {
         guard let focused = view.window?.firstResponder as? PageTextView,

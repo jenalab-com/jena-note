@@ -173,6 +173,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         formatMenu.addItem(withTitle: L10n.tr("menu.format.ol"), action: #selector(EditorViewController.toggleOrderedList), keyEquivalent: "")
         formatMenu.addItem(withTitle: L10n.tr("menu.format.quote"), action: #selector(EditorViewController.toggleBlockquote), keyEquivalent: "")
         formatMenu.addItem(.separator())
+        formatMenu.addItem(withTitle: PunctuationKind.dialogue.menuTitle, action: #selector(EditorWindowController.toggleDialogueMark(_:)), keyEquivalent: "1")
+        formatMenu.addItem(withTitle: PunctuationKind.quotation.menuTitle, action: #selector(EditorWindowController.toggleQuotationMark(_:)), keyEquivalent: "2")
+        formatMenu.addItem(withTitle: PunctuationKind.thought.menuTitle, action: #selector(EditorWindowController.toggleThoughtMark(_:)), keyEquivalent: "3")
+        formatMenu.addItem(.separator())
         let linkItem = formatMenu.addItem(withTitle: L10n.tr("menu.format.link"), action: #selector(EditorViewController.insertLink), keyEquivalent: "k")
         linkItem.keyEquivalentModifierMask = .command
         formatMenu.addItem(.separator())

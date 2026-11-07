@@ -17,6 +17,7 @@ class EditorWindowController: NSWindowController {
     private var previousMinimumSize: NSSize?
     private(set) var sourcePreview: MarkdownSourceViewController?
     private(set) var isShowingSource = false
+    let punctuationController = PunctuationController()
     private var sourceReturnSelection = NSRange(location: 0, length: 0)
     private var sourceReturnOffset = 0
     private var aiPanelWidth = AIChatViewController.defaultPanelWidth
@@ -89,6 +90,10 @@ class EditorWindowController: NSWindowController {
         self.editorVC = editor
         editor.hostWindowController = self
         self.splitVC = split
+        _ = editor.view
+        editor.textView.punctuation = punctuationController
+        punctuationController.finishComposition = { [weak self] in self?.readerVC?.finishComposition() }
+        punctuationController.onChange = { [weak self] _ in self?.updatePunctuationToolbar() }
 
         setupContentLayout(window: window, split: split)
         setupToolbar(for: window)
@@ -189,7 +194,10 @@ class EditorWindowController: NSWindowController {
     override var document: AnyObject? {
         get { super.document }
         set {
-            if super.document !== newValue { proofreadingController?.cancel() }
+            if super.document !== newValue {
+                proofreadingController?.cancel()
+                punctuationController.reset()
+            }
             if let old = super.document as? MarkdownDocument, isAIActive {
                 _ = AIConversationStore.shared.conversation(for: old)
             }
@@ -242,6 +250,7 @@ class EditorWindowController: NSWindowController {
         if isShowingSource { hideMarkdownSource(); return }
         guard let doc = document as? MarkdownDocument else { return }
         readerVC?.finishComposition()
+        punctuationController.reset()
         sourceReturnSelection = documentSelection
         sourceReturnOffset = positionProvider?.currentCharacterOffset ?? 0
         positionProvider?.flushPositionChange()
@@ -393,6 +402,7 @@ class EditorWindowController: NSWindowController {
             ?? NSAttributedString()
         let reader = ReaderViewController(content: live)
         reader.formattingTarget = editorVC
+        reader.punctuation = punctuationController
         reader.onPositionChanged = { [weak self] offset in
             self?.saveReadingProgress(offset: offset)
             self?.updateBookmarkButtonState()
@@ -849,6 +859,15 @@ extension EditorWindowController: NSMenuItemValidation {
             return canProofreadSelection
         case #selector(showDocumentReplace(_:)):
             return !isShowingSource
+        case #selector(toggleDialogueMark(_:)):
+            menuItem.state = punctuationController.isActive(.dialogue) ? .on : .off
+            return canTogglePunctuation
+        case #selector(toggleQuotationMark(_:)):
+            menuItem.state = punctuationController.isActive(.quotation) ? .on : .off
+            return canTogglePunctuation
+        case #selector(toggleThoughtMark(_:)):
+            menuItem.state = punctuationController.isActive(.thought) ? .on : .off
+            return canTogglePunctuation
         case #selector(manageEndnotes(_:)):
             guard let doc = document as? MarkdownDocument else { return false }
             return !isShowingSource && doc.fileType != "public.plain-text" && doc.fileURL?.pathExtension.lowercased() != "txt"

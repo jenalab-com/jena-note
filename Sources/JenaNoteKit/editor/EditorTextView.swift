@@ -40,6 +40,23 @@ class EditorTextView: NSTextView {
         liveProofreading?.schedule()
     }
 
+    weak var punctuation: PunctuationController?
+
+    override func insertText(_ insertString: Any, replacementRange: NSRange) {
+        if punctuation?.handleTyped(insertString, replacementRange: replacementRange, in: self) == true { return }
+        super.insertText(insertString, replacementRange: replacementRange)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        punctuation?.noteKeyDown()
+        super.keyDown(with: event)
+    }
+
+    override func flagsChanged(with event: NSEvent) {
+        punctuation?.handleFlagsChanged(event, in: self)
+        super.flagsChanged(with: event)
+    }
+
     // MARK: - Setup
 
     override func awakeFromNib() {
@@ -285,6 +302,7 @@ class EditorTextView: NSTextView {
     // MARK: - Return Key: 목록에서 Enter 시 새 항목 추가
 
     override func insertNewline(_ sender: Any?) {
+        punctuation?.handleNewline(in: self)
         guard let storage = textStorage else {
             super.insertNewline(sender)
             return
