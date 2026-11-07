@@ -23,6 +23,8 @@ final class StatusBarView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     /// 우측 글자수 라벨 텍스트 갱신.
+    var charCountText: String { charLabel.stringValue }
+
     func setCharCountText(_ text: String) {
         charLabel.stringValue = text
     }

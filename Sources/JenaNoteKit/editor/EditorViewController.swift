@@ -6,6 +6,7 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
     // MARK: - Properties
 
     weak var hostWindowController: EditorWindowController?
+    private var unsyncedEdit: UnsyncedEdit?
     var textView: EditorTextView!
     private var scrollView: NSScrollView!
     /// 스크롤 보기의 치수자. 스크롤과 무관하게 단 위에 고정돼 있다(워드처럼).
@@ -53,6 +54,7 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         textView.autoresizingMask = [.width]
         textView.configure()
         textView.delegate = self
+        textView.textStorage?.delegate = self
 
         scrollView.documentView = textView
         view = scrollView
@@ -115,11 +117,13 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
     func loadContent(of doc: MarkdownDocument) {
         guard let storage = textView.textStorage else { return }
         storage.replaceContents(with: doc.content)
+        unsyncedEdit = nil
         if storage.length == 0 {
             textView.typingAttributes = textView.defaultTypingAttributes()
         }
         // 문서는 언제나 원본 스타일로 들어온다 — 조판이 켜져 있으면 새 문서에도 다시 입힌다.
         if isReadingLayout { restyleStorage(keepSelection: false) }
+        unsyncedEdit = nil
         textView.relayoutImageAttachments()
         if lastLoadedDocument !== doc {
             lastLoadedDocument = doc
@@ -167,7 +171,10 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
         // 새 줄(Enter)이 만드는 속성도 같은 조판을 입도록 넘긴다.
         textView.displayStyler = isReadingLayout ? Self.readingStyled : nil
 
+        // 표시만 다시 칠한다 — 아직 문서로 안 넘어간 편집의 범위는 그대로 둔다.
+        let edit = unsyncedEdit
         storage.replaceContents(with: next)
+        unsyncedEdit = edit
 
         if keepSelection, NSMaxRange(selection) <= storage.length {
             textView.setSelectedRange(selection)
@@ -591,17 +598,56 @@ class EditorViewController: NSViewController, ReadingPositionProviding {
     }
 }
 
+// MARK: - NSTextStorageDelegate
+
+/// 문서로 아직 넘어가지 않은 편집의 범위. 앞뒤로 변하지 않은 길이만 기억하므로
+/// 한글 조합처럼 편집이 여러 번 쌓인 뒤 확정돼도 범위를 합칠 수 있다.
+struct UnsyncedEdit: Equatable {
+    var prefix: Int
+    var suffix: Int
+}
+
+extension EditorViewController: NSTextStorageDelegate {
+    func textStorage(_ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorageEditActions,
+                     range editedRange: NSRange, changeInLength delta: Int) {
+        guard editedRange.location != NSNotFound else { return }
+        let prefix = editedRange.location
+        let suffix = textStorage.length - NSMaxRange(editedRange)
+        unsyncedEdit = UnsyncedEdit(prefix: min(unsyncedEdit?.prefix ?? prefix, prefix),
+                                    suffix: min(unsyncedEdit?.suffix ?? suffix, suffix))
+    }
+}
+
 // MARK: - NSTextViewDelegate
 
 extension EditorViewController: NSTextViewDelegate {
     func textDidChange(_ notification: Notification) {
         guard let storage = textView.textStorage else { return }
-        // 조판은 화면에만 입힌다 — 문서에는 언제나 원본 스타일로 넘긴다.
-        // 덕분에 조판을 켠 채 저장해도 파일에 읽기용 서체·배율이 눌러앉지 않는다.
-        let content: NSAttributedString = isReadingLayout ? ReaderMetrics.unstyled(storage) : storage
-        document?.textDidChange(content)
+        syncEdit(from: storage)
         hostWindowController?.refreshSourcePreview()
-        updateStatusBarCharCount()
+        // 소설 전체를 세는 일은 입력을 기다리게 할 이유가 없다.
+        if let host = hostWindowController {
+            host.documentFinder.refresh()
+            host.scheduleCharCountUpdate()
+        } else { updateStatusBarCharCount() }
+    }
+
+    /// 조판은 화면에만 입힌다 — 문서에는 언제나 원본 스타일로 넘긴다.
+    /// 덕분에 조판을 켠 채 저장해도 파일에 읽기용 서체·배율이 눌러앉지 않는다.
+    /// 글자 하나에 문서 전체를 복사하면 긴 글에서 입력이 끊기므로 바뀐 범위만 넘긴다.
+    private func syncEdit(from storage: NSTextStorage) {
+        guard let doc = document else { return }
+        let edit = unsyncedEdit
+        unsyncedEdit = nil
+        let unchanged = (edit?.prefix ?? 0) + (edit?.suffix ?? 0)
+        guard let edit, unchanged <= min(doc.content.length, storage.length) else {
+            doc.textDidChange(isReadingLayout ? ReaderMetrics.unstyled(storage) : storage)
+            return
+        }
+        let changed = NSRange(location: edit.prefix, length: storage.length - unchanged)
+        let replacement = storage.attributedSubstring(from: changed)
+        doc.applyEditorEdit(in: NSRange(location: edit.prefix, length: doc.content.length - unchanged),
+                            with: isReadingLayout ? ReaderMetrics.unstyled(replacement) : replacement)
     }
 
     func textViewDidChangeSelection(_ notification: Notification) {

@@ -246,6 +246,8 @@ final class LiveProofreadingController {
     private func clear(all: Bool = false) {
         dismissPopover()
         candidates.removeAll()
+        // Every keystroke lands here. Sweeping a whole novel for marks that do not exist stalls typing.
+        guard !markedRanges.isEmpty else { return }
         guard let view = textView, let layout = view.layoutManager else { markedRanges.removeAll(); return }
         let full = NSRange(location: 0, length: layout.textStorage?.length ?? 0)
         for range in all ? [full] : markedRanges {

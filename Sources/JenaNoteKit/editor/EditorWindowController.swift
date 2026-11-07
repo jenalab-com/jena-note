@@ -7,9 +7,10 @@ class EditorWindowController: NSWindowController {
     private(set) var sidebarVC: SidebarViewController!
     private(set) var editorVC: EditorViewController!
     private var splitVC: NSSplitViewController!
-    private let statusBar = StatusBarView()
+    let statusBar = StatusBarView()
     private var lastNotifiedMissingURL: URL?
     private var readerCountWork: DispatchWorkItem?
+    private var charCountGeneration = 0
     private(set) var aiChatVC: AIChatViewController?
     var proofreadingController: AIProofreadingController?
     var proofreadingService = AISelectionProofreader()
@@ -162,7 +163,10 @@ class EditorWindowController: NSWindowController {
     /// 텍스트로부터 글자수를 계산해 상태바를 갱신한다.
     func updateCharCount(for text: String) {
         documentFinder.refresh()
-        let counts = TextMetrics.counts(for: text)
+        showCharCount(TextMetrics.counts(for: text))
+    }
+
+    private func showCharCount(_ counts: (noSpaces: Int, withSpaces: Int)) {
         let noSpaces = TextMetrics.formatted(counts.noSpaces)
         let withSpaces = TextMetrics.formatted(counts.withSpaces)
         statusBar.setCharCountText(String(format: L10n.tr("status.charCount"), noSpaces, withSpaces))
@@ -466,12 +470,28 @@ class EditorWindowController: NSWindowController {
             sourceReturnSelection = NSRange(location: min(sourceReturnSelection.location, doc.content.length), length: 0)
         }
         refreshSourcePreview()
-        // Counting a whole novel is unrelated to the typing-critical path.
+        scheduleCharCountUpdate()
+    }
+
+    /// Counting a whole novel is unrelated to the typing-critical path.
+    func scheduleCharCountUpdate() {
+        guard let doc = document as? MarkdownDocument else { return }
         readerCountWork?.cancel()
         let work = DispatchWorkItem { [weak self, weak doc] in
             guard let self = self, let doc = doc,
                   (self.document as? MarkdownDocument) === doc else { return }
-            self.updateCharCount(for: doc.content.string)
+            self.documentFinder.refresh()
+            self.charCountGeneration += 1
+            let generation = self.charCountGeneration
+            let text = doc.content.string
+            // Even after a pause, the next keystroke must not wait for a whole novel to be counted.
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                let counts = TextMetrics.counts(for: text)
+                DispatchQueue.main.async {
+                    guard let self, self.charCountGeneration == generation else { return }
+                    self.showCharCount(counts)
+                }
+            }
         }
         readerCountWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)

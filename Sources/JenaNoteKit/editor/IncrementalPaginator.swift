@@ -99,7 +99,7 @@ final class IncrementalPaginator {
         // existed. Clear that container's cache, not the preceding page's cache.
         layoutManager.textContainerChangedGeometry(container)
         layoutManager.ensureLayout(for: container)
-        let glyphs = layoutManager.glyphRange(for: container)
+        let glyphs = glyphRange(of: container, startingAtCharacter: ranges.last.map(NSMaxRange) ?? 0)
         let range = layoutManager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
         computedPageCount += 1
         if range.length == 0 && range.location < storage.length {
@@ -118,6 +118,29 @@ final class IncrementalPaginator {
             let insertionPage = containers.firstIndex { $0 === insertionContainer }
             isComplete = !needsInsertionLine || insertionPage.map { $0 <= index } == true
         }
+    }
+
+    /// `glyphRange(for:)` walks the layout from the start of the document, so typing near
+    /// the end of a novel paid for every page before it. The previous page's end is known;
+    /// only this page's lines are visited.
+    private func glyphRange(of container: NSTextContainer, startingAtCharacter character: Int) -> NSRange {
+        guard character < storage.length else { return NSRange(location: layoutManager.numberOfGlyphs, length: 0) }
+        let first = layoutManager.glyphIndexForCharacter(at: character)
+        // numberOfGlyphs would generate glyphs to the end of the book on every page.
+        let laidOut = layoutManager.firstUnlaidGlyphIndex()
+        var end = first
+        var previousTop = -CGFloat.infinity
+        // ensureLayout(for:) already placed these lines. Asking for more would lay out the rest of
+        // the book, and asking each line for its container costs more than the walk being avoided.
+        // Line tops only grow within a container, so a top that fails to grow is the next page.
+        while end < laidOut {
+            var line = NSRange()
+            let rect = layoutManager.lineFragmentRect(forGlyphAt: end, effectiveRange: &line, withoutAdditionalLayout: true)
+            guard NSMaxRange(line) > end, rect.minY > previousTop else { break }
+            previousTop = rect.minY
+            end = NSMaxRange(line)
+        }
+        return NSRange(location: first, length: end - first)
     }
 
     private var endsInLineBreak: Bool {

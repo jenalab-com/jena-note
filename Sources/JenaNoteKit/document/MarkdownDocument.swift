@@ -133,6 +133,12 @@ class MarkdownDocument: NSDocument {
         updateChangeCount(.changeDone)
     }
 
+    /// 스크롤 편집기의 변경분. Undo는 편집기가 이미 등록했으므로 문서는 내용만 맞춘다.
+    func applyEditorEdit(in range: NSRange, with replacement: NSAttributedString) {
+        content.replaceCharacters(in: range, with: replacement)
+        updateChangeCount(.changeDone)
+    }
+
     /// 페이지 뷰가 사라져도 Undo는 문서에 남는다. 표시용 서식이 제거된 변경분만 받는다.
     func replaceReaderContent(in range: NSRange, with replacement: NSAttributedString,
                               origin: AnyObject? = nil) {
