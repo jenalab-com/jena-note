@@ -1,7 +1,7 @@
 import Foundation
 
 enum AIProvider: String, CaseIterable, Codable {
-    case claude, codex, gemini, grok
+    case claude, codex, gemini, grok, local
 
     var title: String {
         switch self {
@@ -9,6 +9,7 @@ enum AIProvider: String, CaseIterable, Codable {
         case .codex: return "Codex (GPT)"
         case .gemini: return "Gemini CLI"
         case .grok: return "Grok CLI"
+        case .local: return "Local (llama.cpp)"
         }
     }
 
@@ -23,12 +24,14 @@ enum AIProvider: String, CaseIterable, Codable {
         case .codex: address = "https://developers.openai.com/codex/cli"
         case .gemini: address = "https://geminicli.com/docs/get-started/installation/"
         case .grok: address = "https://docs.x.ai/build/overview"
+        case .local: address = "https://github.com/ggml-org/llama.cpp"
         }
         return URL(string: address)!
     }
 
     var installCommand: String {
         switch self {
+        case .local: return "brew install llama.cpp"
         case .claude: return "curl -fsSL https://claude.ai/install.sh | bash"
         case .grok: return "curl -fsSL https://x.ai/cli/install.sh | bash"
         case .codex: return "curl -fsSL https://chatgpt.com/codex/install.sh | sh"
@@ -44,7 +47,7 @@ enum AIProvider: String, CaseIterable, Codable {
         case .claude: return ["auth", "login"]
         case .codex: return ["login"]
         case .grok: return ["login", "--oauth"]
-        case .gemini: return []
+        case .gemini, .local: return []
         }
     }
 }
@@ -56,6 +59,27 @@ enum AISettings {
     static var grokProfile: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         return base.appendingPathComponent("JenaNote/GrokCLI", isDirectory: true)
+    }
+
+    static var applicationSupport: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("JenaNote", isDirectory: true)
+    }
+
+    static let defaultLocalServerAddress = "http://127.0.0.1:8080"
+    static var localServerAddress: String {
+        get { UserDefaults.standard.string(forKey: "ai.local.address") ?? defaultLocalServerAddress }
+        set { UserDefaults.standard.set(newValue.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "ai.local.address") }
+    }
+    static var localServerURL: URL? {
+        guard let url = URL(string: localServerAddress), url.host != nil,
+              ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return nil }
+        return url
+    }
+
+    /// A local server may already be running without a launcher, so only the server can say.
+    static func canAttemptRequest(with provider: AIProvider) -> Bool {
+        provider == .local || executable(for: provider) != nil
     }
 
     static var provider: AIProvider {
@@ -89,6 +113,8 @@ enum AISettings {
 
     static func executable(for provider: AIProvider) -> URL? {
         let custom = customPath(for: provider)
+        // The launcher is the user's own script, so no conventional name exists to search for.
+        if provider == .local && custom.isEmpty { return nil }
         let candidates = custom.isEmpty ? searchDirectories.map { "\($0)/\(provider.rawValue)" }
             : [(custom as NSString).expandingTildeInPath]
         return candidates.first(where: { path in

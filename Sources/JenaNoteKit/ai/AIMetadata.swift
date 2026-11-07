@@ -110,6 +110,7 @@ final class AIMetadataClient {
     func cancel() { process.cancel() }
 
     func load(provider: AIProvider, completion: @escaping (Result<AIMetadata, Error>) -> Void) {
+        if provider == .local { completion(.success(AIMetadata())); return }
         guard let executable = AISettings.executable(for: provider) else {
             completion(.failure(AIError(message: L10n.tr("ai.notInstalled")))); return
         }

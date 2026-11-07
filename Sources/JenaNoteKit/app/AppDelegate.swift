@@ -34,6 +34,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    public func applicationWillTerminate(_ notification: Notification) {
+        AILocalServer.shared.stopForTermination()
+    }
+
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
     }

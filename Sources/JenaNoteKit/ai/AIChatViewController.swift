@@ -612,7 +612,7 @@ final class AIChatViewController: NSViewController {
     private func sendWithIndex(work: AIWorkContextAssembler, document: MarkdownDocument,
                                conversation: AIConversation, question: String, mode: AIChatMode,
                                history: [AIChatMessage], provider: AIProvider) {
-        guard AISettings.executable(for: provider) != nil else { render(status: L10n.tr("ai.notInstalled")); return }
+        guard AISettings.canAttemptRequest(with: provider) else { render(status: L10n.tr("ai.notInstalled")); return }
         let token = UUID()
         generation = token
         let userIndex = conversation.messages.count

@@ -2,12 +2,18 @@ import AppKit
 
 final class AISettingsViewController: NSViewController {
     private let providerPopup = NSPopUpButton()
+    private let pathLabel = NSTextField(labelWithString: "")
     private let pathField = NSTextField()
+    private let addressField = NSTextField()
+    private var addressRow: NSStackView!
     private let status = NSTextField(wrappingLabelWithString: "")
     private let detail = NSTextField(wrappingLabelWithString: "")
     private var checkButton: NSButton!
     private var installButton: NSButton!
     private var loginButton: NSButton!
+    private var docsButton: NSButton!
+    private var runButton: NSButton!
+    private var serverObserver: NSObjectProtocol?
     private var probe: AIClient?
     private var versionProcess: AIProcess?
     private var generation = UUID()
@@ -34,10 +40,18 @@ final class AISettingsViewController: NSViewController {
         installButton = NSButton(title: L10n.tr("ai.install"), target: self, action: #selector(install))
         loginButton = NSButton(title: L10n.tr("ai.login"), target: self, action: #selector(login))
         checkButton = NSButton(title: L10n.tr("ai.recheck"), target: self, action: #selector(recheck))
-        let docs = NSButton(title: L10n.tr("ai.instructions"), target: self, action: #selector(openDocs))
+        docsButton = NSButton(title: L10n.tr("ai.instructions"), target: self, action: #selector(openDocs))
+        runButton = NSButton(title: L10n.tr("ai.local.run"), target: self, action: #selector(toggleLocalServer))
+        addressField.placeholderString = AISettings.defaultLocalServerAddress
+        addressField.stringValue = AISettings.localServerAddress
+        addressField.setAccessibilityLabel(L10n.tr("ai.local.address"))
+        addressField.target = self
+        addressField.action = #selector(addressChanged)
+        addressRow = NSStackView(views: [NSTextField(labelWithString: L10n.tr("ai.local.address")), addressField])
+        addressRow.orientation = .horizontal
         let pathRow = NSStackView(views: [pathField, browse])
         pathRow.orientation = .horizontal
-        let actions = NSStackView(views: [installButton, loginButton, checkButton, docs])
+        let actions = NSStackView(views: [runButton, installButton, loginButton, checkButton, docsButton])
         actions.orientation = .horizontal
         actions.spacing = 8
         status.font = .systemFont(ofSize: 12)
@@ -46,8 +60,7 @@ final class AISettingsViewController: NSViewController {
         status.setAccessibilityElement(true)
         detail.font = .systemFont(ofSize: 11)
         detail.textColor = .secondaryLabelColor
-        let stack = NSStackView(views: [title, providerPopup, NSTextField(labelWithString: L10n.tr("ai.path")),
-                                       pathRow, actions, status, detail])
+        let stack = NSStackView(views: [title, providerPopup, pathLabel, pathRow, addressRow, actions, status, detail])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 12
@@ -58,13 +71,20 @@ final class AISettingsViewController: NSViewController {
             stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
             stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 20),
             pathRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            addressRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             status.widthAnchor.constraint(equalTo: stack.widthAnchor),
             detail.widthAnchor.constraint(equalTo: stack.widthAnchor)
         ])
+        serverObserver = NotificationCenter.default.addObserver(forName: AILocalServer.stateDidChange, object: AILocalServer.shared,
+                                                                queue: .main) { [weak self] _ in self?.showInstallation() }
         providerChanged()
     }
 
-    deinit { probe?.cancel(); versionProcess?.cancel() }
+    deinit {
+        probe?.cancel()
+        versionProcess?.cancel()
+        if let serverObserver { NotificationCenter.default.removeObserver(serverObserver) }
+    }
 
     override func viewDidDisappear() {
         super.viewDidDisappear()
@@ -80,11 +100,55 @@ final class AISettingsViewController: NSViewController {
         AISettings.provider = AIProvider.allCases[max(0, providerPopup.indexOfSelectedItem)]
         pathField.stringValue = AISettings.customPath(for: AISettings.provider)
         checkButton.isEnabled = true
-        detail.stringValue = L10n.tr("ai.setupHelp") + (AISettings.provider == .grok ? "\n" + L10n.tr("ai.grokProfile") : "")
+        let isLocal = AISettings.provider == .local
+        for control in [installButton, loginButton, checkButton, docsButton] as [NSView] { control.isHidden = isLocal }
+        runButton.isHidden = !isLocal
+        addressRow.isHidden = !isLocal
+        pathLabel.stringValue = L10n.tr(isLocal ? "ai.local.path" : "ai.path")
+        pathField.placeholderString = L10n.tr(isLocal ? "ai.local.pathPlaceholder" : "ai.pathPlaceholder")
+        detail.stringValue = isLocal ? L10n.tr("ai.local.help")
+            : L10n.tr("ai.setupHelp") + (AISettings.provider == .grok ? "\n" + L10n.tr("ai.grokProfile") : "")
+        if isLocal { AILocalServer.shared.refresh() }
         showInstallation()
     }
 
+    private func showLocalServerState() {
+        let server = AILocalServer.shared
+        runButton.title = L10n.tr("ai.local.run")
+        runButton.isEnabled = true
+        switch server.state {
+        case .stopped:
+            status.stringValue = L10n.tr("ai.local.stopped")
+        case .failed(let message):
+            status.stringValue = String(message.prefix(2000))
+        case .starting(let since):
+            let seconds = Int(Date().timeIntervalSince(since))
+            status.stringValue = String(format: L10n.tr("ai.local.starting"), String(format: "%d:%02d", seconds / 60, seconds % 60))
+            runButton.title = L10n.tr("ai.local.stop")
+        case .running(let owned):
+            status.stringValue = L10n.tr(owned ? "ai.local.running" : "ai.local.external")
+            runButton.title = L10n.tr("ai.local.stop")
+            // Stopping a server this app did not start is not this app's call.
+            runButton.isEnabled = owned
+        }
+    }
+
+    @objc private func addressChanged() {
+        AISettings.localServerAddress = addressField.stringValue
+        AILocalServer.shared.refresh()
+    }
+
+    @objc private func toggleLocalServer() {
+        pathChanged()
+        addressChanged()
+        switch AILocalServer.shared.state {
+        case .starting, .running: AILocalServer.shared.stop()
+        case .stopped, .failed: AILocalServer.shared.start()
+        }
+    }
+
     private func showInstallation() {
+        guard AISettings.provider != .local else { showLocalServerState(); return }
         if let executable = AISettings.executable(for: AISettings.provider) {
             let verified = verifiedConnections.contains(connectionKey(executable))
             status.stringValue = L10n.tr(verified ? "ai.connected" : "ai.installed") + "\n" + executable.path
