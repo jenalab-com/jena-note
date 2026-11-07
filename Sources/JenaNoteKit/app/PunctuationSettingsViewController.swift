@@ -39,6 +39,8 @@ final class PunctuationSettingsViewController: NSViewController, NSTextFieldDele
         grid.columnSpacing = 14
         grid.rowAlignment = .firstBaseline
         grid.column(at: 0).width = 72
+        // 아래 안내문이 더 넓어도 표는 내용 폭만 차지한다 — 늘어나면 남는 폭이 한 칸에 몰려 칸 사이가 벌어진다.
+        grid.setContentHuggingPriority(.required, for: .horizontal)
 
         triggersCheckbox.state = settings.punctuationTriggersEnabled ? .on : .off
         triggersCheckbox.target = self

@@ -27,6 +27,7 @@ The built-in macOS editors (TextEdit, Notes) cannot save formatting as `.md`, wh
 
 - **WYSIWYG Markdown editing** — Formatting is shown applied, without `**`, `#` or `>` symbols. Saving produces standard `.md`.
 - **Formatting toolbar** — Bold, italic, headings (H1–H3), bulleted and numbered lists, code, blockquote, link.
+- **Dialogue, quotation and thought marks** — Turning a mark on inserts only the opening mark, and turning it off inserts only the closing mark. Toggle with the header buttons, ⌘1–3, a typed sequence such as `;;;`, or double Shift; with text selected, the mark wraps it. Each author sets the marks and leading spaces (0–2) in the Marks settings tab.
 - **Sidebar folder browser** — Register a folder to see its `.md` files as a recursive tree. Clicking a file swaps the document in place in the current window. FSEvents keeps the tree live (external additions, deletions and renames appear automatically), and registered folders are restored after relaunch.
 - **Unified editing view** — Edit directly without switching between reading and editing modes. The top toolbar provides formatting, insert, find, bookmarks and AI; the view settings adjust typeface, display weight, zoom, line spacing and mobile/book text width. You can edit while keeping page and two-page layouts; later pages are laid out incrementally. Arrow keys move the cursor; Page Up/Down and scroll gestures turn pages. A `…` in the total page count means pagination is still in progress.
 - **CLI-based AI chat** — The AI button opens a per-document chat. It recognizes selected text and can give guidance or edit directly; edits are undoable with ⌘Z. The editor switches to scroll layout while AI is in use. Install and sign in to Claude Code, Codex, Gemini CLI or Grok CLI from Settings and use **Recheck** to test the connection. Recheck sends a short AI request and may use quota. Conversations are kept per file while the app is running. Grok requires a first sign-in in a JenaNote-specific profile so it does not conflict with your existing setup.
@@ -105,6 +106,7 @@ Apps you build yourself have no quarantine attribute, so the Gatekeeper steps ab
 | Add Folder | ⇧⌘O |
 | Toggle Sidebar | ⌥⌘S |
 | Undo / Redo | ⌘Z / ⇧⌘Z |
+| Dialogue / quotation / thought mark on·off | ⌘1 / ⌘2 / ⌘3 |
 
 ## File format
 
