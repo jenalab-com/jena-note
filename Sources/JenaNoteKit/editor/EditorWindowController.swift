@@ -7,9 +7,10 @@ class EditorWindowController: NSWindowController {
     private(set) var sidebarVC: SidebarViewController!
     private(set) var editorVC: EditorViewController!
     private var splitVC: NSSplitViewController!
-    private let statusBar = StatusBarView()
+    let statusBar = StatusBarView()
     private var lastNotifiedMissingURL: URL?
     private var readerCountWork: DispatchWorkItem?
+    private var charCountGeneration = 0
     private(set) var aiChatVC: AIChatViewController?
     var proofreadingController: AIProofreadingController?
     var proofreadingService = AISelectionProofreader()
@@ -17,6 +18,7 @@ class EditorWindowController: NSWindowController {
     private var previousMinimumSize: NSSize?
     private(set) var sourcePreview: MarkdownSourceViewController?
     private(set) var isShowingSource = false
+    let punctuationController = PunctuationController()
     private var sourceReturnSelection = NSRange(location: 0, length: 0)
     private var sourceReturnOffset = 0
     private var aiPanelWidth = AIChatViewController.defaultPanelWidth
@@ -89,6 +91,10 @@ class EditorWindowController: NSWindowController {
         self.editorVC = editor
         editor.hostWindowController = self
         self.splitVC = split
+        _ = editor.view
+        editor.textView.punctuation = punctuationController
+        punctuationController.finishComposition = { [weak self] in self?.readerVC?.finishComposition() }
+        punctuationController.onChange = { [weak self] _ in self?.updatePunctuationToolbar() }
 
         setupContentLayout(window: window, split: split)
         setupToolbar(for: window)
@@ -157,7 +163,10 @@ class EditorWindowController: NSWindowController {
     /// 텍스트로부터 글자수를 계산해 상태바를 갱신한다.
     func updateCharCount(for text: String) {
         documentFinder.refresh()
-        let counts = TextMetrics.counts(for: text)
+        showCharCount(TextMetrics.counts(for: text))
+    }
+
+    private func showCharCount(_ counts: (noSpaces: Int, withSpaces: Int)) {
         let noSpaces = TextMetrics.formatted(counts.noSpaces)
         let withSpaces = TextMetrics.formatted(counts.withSpaces)
         statusBar.setCharCountText(String(format: L10n.tr("status.charCount"), noSpaces, withSpaces))
@@ -189,7 +198,10 @@ class EditorWindowController: NSWindowController {
     override var document: AnyObject? {
         get { super.document }
         set {
-            if super.document !== newValue { proofreadingController?.cancel() }
+            if super.document !== newValue {
+                proofreadingController?.cancel()
+                punctuationController.reset()
+            }
             if let old = super.document as? MarkdownDocument, isAIActive {
                 _ = AIConversationStore.shared.conversation(for: old)
             }
@@ -242,6 +254,7 @@ class EditorWindowController: NSWindowController {
         if isShowingSource { hideMarkdownSource(); return }
         guard let doc = document as? MarkdownDocument else { return }
         readerVC?.finishComposition()
+        punctuationController.reset()
         sourceReturnSelection = documentSelection
         sourceReturnOffset = positionProvider?.currentCharacterOffset ?? 0
         positionProvider?.flushPositionChange()
@@ -393,6 +406,7 @@ class EditorWindowController: NSWindowController {
             ?? NSAttributedString()
         let reader = ReaderViewController(content: live)
         reader.formattingTarget = editorVC
+        reader.punctuation = punctuationController
         reader.onPositionChanged = { [weak self] offset in
             self?.saveReadingProgress(offset: offset)
             self?.updateBookmarkButtonState()
@@ -456,12 +470,28 @@ class EditorWindowController: NSWindowController {
             sourceReturnSelection = NSRange(location: min(sourceReturnSelection.location, doc.content.length), length: 0)
         }
         refreshSourcePreview()
-        // Counting a whole novel is unrelated to the typing-critical path.
+        scheduleCharCountUpdate()
+    }
+
+    /// Counting a whole novel is unrelated to the typing-critical path.
+    func scheduleCharCountUpdate() {
+        guard let doc = document as? MarkdownDocument else { return }
         readerCountWork?.cancel()
         let work = DispatchWorkItem { [weak self, weak doc] in
             guard let self = self, let doc = doc,
                   (self.document as? MarkdownDocument) === doc else { return }
-            self.updateCharCount(for: doc.content.string)
+            self.documentFinder.refresh()
+            self.charCountGeneration += 1
+            let generation = self.charCountGeneration
+            let text = doc.content.string
+            // Even after a pause, the next keystroke must not wait for a whole novel to be counted.
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                let counts = TextMetrics.counts(for: text)
+                DispatchQueue.main.async {
+                    guard let self, self.charCountGeneration == generation else { return }
+                    self.showCharCount(counts)
+                }
+            }
         }
         readerCountWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)
@@ -849,6 +879,15 @@ extension EditorWindowController: NSMenuItemValidation {
             return canProofreadSelection
         case #selector(showDocumentReplace(_:)):
             return !isShowingSource
+        case #selector(toggleDialogueMark(_:)):
+            menuItem.state = punctuationController.isActive(.dialogue) ? .on : .off
+            return canTogglePunctuation
+        case #selector(toggleQuotationMark(_:)):
+            menuItem.state = punctuationController.isActive(.quotation) ? .on : .off
+            return canTogglePunctuation
+        case #selector(toggleThoughtMark(_:)):
+            menuItem.state = punctuationController.isActive(.thought) ? .on : .off
+            return canTogglePunctuation
         case #selector(manageEndnotes(_:)):
             guard let doc = document as? MarkdownDocument else { return false }
             return !isShowingSource && doc.fileType != "public.plain-text" && doc.fileURL?.pathExtension.lowercased() != "txt"

@@ -22,6 +22,8 @@ class ReaderToolbar: NSToolbar {
     private weak var zoomLabel: NSTextField?
     private static let itemLists = NSToolbarItem.Identifier("lists")
     private static let itemInsert = NSToolbarItem.Identifier("insert")
+    private static let itemPunctuation = NSToolbarItem.Identifier("punctuation")
+    private weak var punctuationControl: NSSegmentedControl?
     private static let itemProofreading = NSToolbarItem.Identifier("proofreadSelection")
     private static let itemFind = NSToolbarItem.Identifier("documentFind")
     private static let itemReplaceToggle = NSToolbarItem.Identifier("documentReplaceToggle")
@@ -54,6 +56,12 @@ class ReaderToolbar: NSToolbar {
         pageModeControl?.setEnabled(!active && !isAIActive, forSegment: 1)
         if active { formatItems.updateSelection(hasSelectedText: false) }
         proofreadingButton?.isEnabled = hasSelectedText && !active
+    }
+
+    func updatePunctuation(active: [PunctuationKind]) {
+        for (index, kind) in PunctuationKind.allCases.enumerated() {
+            punctuationControl?.setSelected(active.contains(kind), forSegment: index)
+        }
     }
 
     func updateState(attributes: [NSAttributedString.Key: Any]) {
@@ -196,7 +204,7 @@ extension ReaderToolbar: NSToolbarDelegate {
     func toolbarDefaultItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] {
         [ReaderToolbar.itemFind, ReaderToolbar.itemReplaceToggle, ReaderToolbar.itemMode, ReaderToolbar.itemAppearance, ReaderToolbar.itemSource, .space,
          ReaderToolbar.itemHeading, ReaderToolbar.itemFontSize, .init("bold"), .init("italic"), .init("inlineCode"),
-         ReaderToolbar.itemLists, ReaderToolbar.itemInsert, .init("textColor"),
+         ReaderToolbar.itemLists, ReaderToolbar.itemInsert, ReaderToolbar.itemPunctuation, .init("textColor"),
          .flexibleSpace, ReaderToolbar.itemBookmark, ReaderToolbar.itemBookmarkList,
          ReaderToolbar.itemProofreading, ReaderToolbar.itemAI]
     }
@@ -312,6 +320,20 @@ extension ReaderToolbar: NSToolbarDelegate {
                 (L10n.tr("toolbar.image"), #selector(EditorViewController.insertImage)),
                 (L10n.tr("toolbar.rule"), #selector(EditorViewController.insertHorizontalRule))
             ])
+        case ReaderToolbar.itemPunctuation:
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.label = L10n.tr("settings.tab.punctuation")
+            item.visibilityPriority = .high
+            let kinds = PunctuationKind.allCases
+            let control = NSSegmentedControl(labels: kinds.map(\.shortTitle), trackingMode: .selectAny, target: target,
+                                             action: #selector(EditorWindowController.punctuationSegmentChanged(_:)))
+            for (index, kind) in kinds.enumerated() {
+                control.setToolTip("\(kind.menuTitle) (\(kind.shortcutLabel))", forSegment: index)
+            }
+            control.isEnabled = !isSourceActive
+            punctuationControl = control
+            item.view = control
+            return item
         case ReaderToolbar.itemBookmark:
             let item = iconItem(id, label: L10n.tr("reader.bookmark.toggle"), symbol: "bookmark",
                                 action: #selector(EditorWindowController.toggleBookmark(_:)))

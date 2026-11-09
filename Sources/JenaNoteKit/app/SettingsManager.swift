@@ -46,6 +46,43 @@ final class SettingsManager {
         NSDocumentController.shared.autosavingDelay = autosaveEnabled ? Double(autosaveInterval) : 0
     }
 
+    // MARK: - Punctuation
+
+    func punctuationStyle(for kind: PunctuationKind) -> PunctuationStyle {
+        let fallback = PunctuationStyle.defaultStyle(for: kind)
+        let prefix = "jn_punctuation_\(kind.rawValue)_"
+        let range = PunctuationStyle.leadingSpacesRange
+        let spaces = defaults.object(forKey: prefix + "leadingSpaces") as? Int ?? fallback.leadingSpaces
+        return PunctuationStyle(opening: defaults.string(forKey: prefix + "opening") ?? fallback.opening,
+                                closing: defaults.string(forKey: prefix + "closing") ?? fallback.closing,
+                                leadingSpaces: min(max(spaces, range.lowerBound), range.upperBound),
+                                trigger: defaults.string(forKey: prefix + "trigger") ?? fallback.trigger)
+    }
+
+    func setPunctuationStyle(_ style: PunctuationStyle, for kind: PunctuationKind) {
+        let prefix = "jn_punctuation_\(kind.rawValue)_"
+        defaults.set(style.opening, forKey: prefix + "opening")
+        defaults.set(style.closing, forKey: prefix + "closing")
+        defaults.set(style.leadingSpaces, forKey: prefix + "leadingSpaces")
+        defaults.set(style.trigger, forKey: prefix + "trigger")
+    }
+
+    var punctuationTriggersEnabled: Bool {
+        get { defaults.bool(forKey: "jn_punctuationTriggersEnabled") }
+        set { defaults.set(newValue, forKey: "jn_punctuationTriggersEnabled") }
+    }
+
+    var punctuationClosesOnReturn: Bool {
+        get { defaults.bool(forKey: "jn_punctuationClosesOnReturn") }
+        set { defaults.set(newValue, forKey: "jn_punctuationClosesOnReturn") }
+    }
+
+    /// Shift 두 번으로 켤 부호. nil이면 쓰지 않는다.
+    var punctuationShiftTarget: PunctuationKind? {
+        get { defaults.string(forKey: "jn_punctuationShiftTarget").flatMap(PunctuationKind.init(rawValue:)) }
+        set { defaults.set(newValue?.rawValue, forKey: "jn_punctuationShiftTarget") }
+    }
+
     // MARK: - Language
 
     typealias Language = AppLanguage

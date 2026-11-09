@@ -92,6 +92,12 @@ class HelpWindowController: NSWindowController {
         result.append(shortcut(L10n.tr("help.format.link"), key: L10n.tr("help.format.link.d")))
         result.append(spacer(height: 6))
 
+        result.append(h3(L10n.tr("settings.tab.punctuation")))
+        for kind in PunctuationKind.allCases {
+            result.append(shortcut(kind.menuTitle, key: kind.shortcutLabel))
+        }
+        result.append(spacer(height: 6))
+
         result.append(h3(L10n.tr("help.format.para")))
         result.append(shortcut(L10n.tr("help.format.body"), key: L10n.tr("help.format.body.d")))
         result.append(shortcut(L10n.tr("help.format.h1"), key: L10n.tr("help.format.h1.d")))

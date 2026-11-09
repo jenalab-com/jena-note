@@ -28,7 +28,7 @@ class PreferencesWindowController: NSWindowController {
         NSApp.activate(ignoringOtherApps: true)
     }
     func showAI() {
-        tabs.selectedTabViewItemIndex = 2
+        tabs.selectedTabViewItemIndex = tabs.tabViewItems.firstIndex { $0.identifier as? String == "ai" } ?? 0
         show()
     }
 
@@ -36,7 +36,7 @@ class PreferencesWindowController: NSWindowController {
         tabs.tabStyle = .segmentedControlOnTop
         let general = NSViewController(); general.view = NSView()
         let ui = NSViewController(); ui.view = NSView()
-        for (id, controller) in [("general", general), ("ui", ui), ("ai", AISettingsViewController())] {
+        for (id, controller) in [("general", general), ("ui", ui), ("punctuation", PunctuationSettingsViewController()), ("ai", AISettingsViewController())] {
             let item = NSTabViewItem(viewController: controller)
             item.identifier = id
             tabs.addTabViewItem(item)
@@ -102,9 +102,10 @@ class PreferencesWindowController: NSWindowController {
         guard let raw = languagePopup.selectedItem?.representedObject as? String,
               let language = SettingsManager.Language(rawValue: raw) else { return }
         SettingsManager.shared.language = language
-        // Recreate the AI page so all of its localized controls follow the new language.
-        let old = tabs.tabViewItems[2]
-        tabs.removeTabViewItem(old)
+        // Recreate these pages so all of their localized controls follow the new language.
+        for old in tabs.tabViewItems.suffix(2) { tabs.removeTabViewItem(old) }
+        let punctuation = NSTabViewItem(viewController: PunctuationSettingsViewController()); punctuation.identifier = "punctuation"
+        tabs.addTabViewItem(punctuation)
         let ai = NSTabViewItem(viewController: AISettingsViewController()); ai.identifier = "ai"
         tabs.addTabViewItem(ai)
         refreshLabels()

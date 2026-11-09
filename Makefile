@@ -1,5 +1,5 @@
 APP_NAME    = JenaNote
-VERSION     = 1.9.1
+VERSION     = 2.0.0
 BUILD_DIR   = .build
 BUNDLE      = $(BUILD_DIR)/$(APP_NAME).app
 BINARY      = $(BUNDLE)/Contents/MacOS/$(APP_NAME)

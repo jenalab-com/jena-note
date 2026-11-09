@@ -134,7 +134,8 @@ final class AIWorkRetrieval {
             complete(.failure(AIError(message: L10n.tr("ai.timeout"))))
         }
         deadline = timeout
-        DispatchQueue.main.asyncAfter(deadline: .now() + 240, execute: timeout)
+        let limit = provider == .local ? Double(Self.maximumRounds) * AIClient.localTimeout : 240
+        DispatchQueue.main.asyncAfter(deadline: .now() + limit, execute: timeout)
         prioritize?(candidates)
         var selected: [AIIndexedPassage] = candidates
         // Recent prose supplies continuity even for vague requests such as "continue".
