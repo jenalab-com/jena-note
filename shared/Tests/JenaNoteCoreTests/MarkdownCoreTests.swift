@@ -23,6 +23,15 @@ final class MarkdownCoreTests: XCTestCase {
         }
     }
 
+    /// Punctuation marks can start a line with spaces or a dash. Saving must keep them as written.
+    func testIndentedDialogueSurvivesSavingAndOpening() {
+        for line in ["  \"네\"", " '네'", "  - 네", "— 네"] {
+            let blocks = MarkdownParser.parse(line + "\n\n다음\n")
+            XCTAssertEqual(blocks.first, .paragraph([MarkdownRun(text: line)]), line)
+            XCTAssertEqual(MarkdownWriter.write(blocks), line + "\n\n다음\n", line)
+        }
+    }
+
     func testJSONKeepsTheWholeModel() throws {
         for item in MarkdownCorpus.cases {
             let blocks = MarkdownParser.parse(item.input)
