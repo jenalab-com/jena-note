@@ -173,4 +173,25 @@ final class IncrementalPaginatorTests: XCTestCase {
         assertMatchesFresh(paginator)
     }
 
+
+    /// Cells in a table row sit side by side, so a line's top can fall back inside one page.
+    func testTableCellsStayOnTheirPage() {
+        let short = "앞 문단\n\n| A | B | C |\n|---|---|---|\n| 첫째 칸 | 둘째 칸 | 셋째 칸 |\n| 1 | 2 | 3 |\n\n뒤 문단"
+        let small = IncrementalPaginator(storage: NSTextStorage(attributedString: MarkdownSerializer.parse(short)),
+                                         pageSize: NSSize(width: 500, height: 700))
+        finish(small)
+        XCTAssertEqual(small.ranges.count, 1, "A short document with a table fits on one page")
+
+        let row = "| 여러 줄로 넘어가는 긴 칸의 글입니다 | 둘째 칸 | 셋째 칸도 조금 길게 씁니다 |\n"
+        let long = "첫 문단\n\n| A | B | C |\n|---|---|---|\n" + String(repeating: row, count: 30) + "\n끝 문단"
+        let paginator = IncrementalPaginator(storage: NSTextStorage(attributedString: MarkdownSerializer.parse(long)),
+                                             pageSize: pageSize)
+        finish(paginator)
+        XCTAssertGreaterThan(paginator.ranges.count, 1)
+        for (index, cached) in paginator.ranges.enumerated() {
+            let glyphs = paginator.layoutManager.glyphRange(for: paginator.containers[index])
+            let live = paginator.layoutManager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+            XCTAssertEqual(cached, live, "Page \(index) must hold what TextKit placed in its container")
+        }
+    }
 }

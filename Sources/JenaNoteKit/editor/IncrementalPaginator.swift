@@ -132,12 +132,18 @@ final class IncrementalPaginator {
         var previousTop = -CGFloat.infinity
         // ensureLayout(for:) already placed these lines. Asking for more would lay out the rest of
         // the book, and asking each line for its container costs more than the walk being avoided.
-        // Line tops only grow within a container, so a top that fails to grow is the next page.
+        // Line tops grow within a container, so a top that fails to grow is usually the next page.
+        // Table cells in one row sit side by side, though, and the next cell starts at the row's top
+        // again. Only at those points is the container asked, which keeps the walk cheap.
         while end < laidOut {
             var line = NSRange()
             let rect = layoutManager.lineFragmentRect(forGlyphAt: end, effectiveRange: &line, withoutAdditionalLayout: true)
-            guard NSMaxRange(line) > end, rect.minY > previousTop else { break }
-            previousTop = rect.minY
+            guard NSMaxRange(line) > end else { break }
+            if rect.minY <= previousTop,
+               layoutManager.textContainer(forGlyphAt: end, effectiveRange: nil, withoutAdditionalLayout: true) !== container {
+                break
+            }
+            previousTop = max(previousTop, rect.minY)
             end = NSMaxRange(line)
         }
         return NSRange(location: first, length: end - first)
