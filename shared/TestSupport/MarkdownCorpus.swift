@@ -63,7 +63,7 @@ public enum MarkdownCorpus {
         .init("h3 keeps bold marks", "### **a** b", "### **a** b\n"),
         .init("heading keeps italic", "# *a*", "# *a*\n"),
         .init("h1 bold italic keeps italic only", "# ***a***", "# *a*\n"),
-        .init("heading starting with an image stays a heading", "# ![a](b.png) 제목", "# ![a](b.png) 제목\n", macLegacy: "![a](b.png) 제목\n"),
+        .init("heading starting with an image stays a heading", "# ![a](b.png) 제목", "# ![a](b.png) 제목\n", macLegacy: "![a](b.png)** 제목**\n"),
         .init("heading with a later image", "# 제목 ![a](b.png)", "# 제목 ![a](b.png)\n"),
 
         // Inline
@@ -121,7 +121,7 @@ public enum MarkdownCorpus {
         .init("empty first code line stays", "```\n\nabc\n```", "```\n\nabc\n```\n", macLegacy: "abc\n```\n"),
         .init("empty last code line stays", "```\nabc\n\n```\n끝", "```\nabc\n\n```\n끝\n", macLegacy: "```\nabc\n\n끝\n"),
         .init("inline code on one line is no fence", "```a``` b", "`a` b\n", macLegacy: "\n"),
-        .init("inline code can hold backticks", "`` a`b `` c", "`` a`b `` c\n", macLegacy: "` a`b  c\n"),
+        .init("inline code can hold backticks", "`` a`b `` c", "`` a`b `` c\n", macLegacy: " a`b `` c\n"),
         .init("lone backticks stay", "`` a", "`` a\n", macLegacy: " a\n"),
         .init("a longer fence holds a shorter one", "````\n```\nx\n```\n````", "````\n```\nx\n```\n````\n", macLegacy: "x\n"),
 

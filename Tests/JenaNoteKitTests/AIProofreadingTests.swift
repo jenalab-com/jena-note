@@ -1,6 +1,7 @@
 import AppKit
 import XCTest
 @testable import JenaNoteKit
+@testable import JenaNoteCore
 
 final class AIProofreadingTests: XCTestCase {
     func testInteractiveRequestPassesQueuedSummariesWithoutInterruptingCurrentJob() {

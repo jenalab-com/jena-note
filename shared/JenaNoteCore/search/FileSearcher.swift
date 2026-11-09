@@ -57,6 +57,8 @@ public final class FileSearcher {
     private let queue = DispatchQueue(label: "com.jenalab.jenanote.filesearch", qos: .userInitiated)
     private var token: FileSearchToken?
 
+    public init() {}
+
     /// 메인 스레드에서 호출한다. completion도 메인 스레드에서 불린다.
     /// 새 검색이 시작되면 진행 중이던 이전 검색은 취소되고 그 completion은 불리지 않는다.
     public func search(query: String, in folders: [URL],

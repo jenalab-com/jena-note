@@ -58,6 +58,7 @@ public enum MarkdownExport {
         /// Text before and after an image becomes separate blocks around it.
         private mutating func emit(_ runs: [MarkdownRun], suppressBold: Bool = false, make: ([Inline]) -> Block) {
             var inlines: [Inline] = []
+            var lastWasText = false
             for run in runs {
                 if case .image(let path, _, let width) = run.content {
                     if !inlines.isEmpty {
@@ -65,11 +66,26 @@ public enum MarkdownExport {
                         inlines = []
                     }
                     addImage(path: path, width: width)
+                    lastWasText = false
                 } else if let inline = Self.inline(run, suppressBold: suppressBold) {
-                    inlines.append(inline)
+                    let isText: Bool
+                    if case .text = run.content { isText = true } else { isText = false }
+                    // A heading drops bold marks its font already shows, which can leave two text
+                    // pieces that look the same. AppKit keeps those as one run, so join them.
+                    if suppressBold, isText, lastWasText, var last = inlines.last, Self.sameLook(last, inline) {
+                        last.text += inline.text
+                        inlines[inlines.count - 1] = last
+                    } else {
+                        inlines.append(inline)
+                    }
+                    lastWasText = isText
                 }
             }
             if !inlines.isEmpty { blocks.append(make(inlines)) }
+        }
+
+        private static func sameLook(_ a: Inline, _ b: Inline) -> Bool {
+            a.bold == b.bold && a.italic == b.italic && a.code == b.code && a.color == b.color && a.link == b.link
         }
 
         private static func inline(_ run: MarkdownRun, suppressBold: Bool) -> Inline? {

@@ -81,7 +81,14 @@ enum MemoFont {
     static func bold(from base: NSFont) -> NSFont {
         let traits = base.fontDescriptor.symbolicTraits.union(.bold)
         let desc = base.fontDescriptor.withSymbolicTraits(traits)
-        return NSFont(descriptor: desc, size: base.pointSize) ?? base
+        let font = NSFont(descriptor: desc, size: base.pointSize) ?? base
+        // A weight-based system face such as Medium (h3) has no bold face through traits, so the
+        // bold mark would vanish. Only the system family falls back; other fonts keep their face.
+        guard !font.fontDescriptor.symbolicTraits.contains(.bold),
+              base.familyName == NSFont.systemFont(ofSize: base.pointSize).familyName else { return font }
+        let heavier = NSFont.systemFont(ofSize: base.pointSize, weight: .bold)
+        let kept = heavier.fontDescriptor.symbolicTraits.union(base.fontDescriptor.symbolicTraits.subtracting(.bold))
+        return NSFont(descriptor: heavier.fontDescriptor.withSymbolicTraits(kept), size: base.pointSize) ?? heavier
     }
     static func italic(from base: NSFont) -> NSFont {
         let traits = base.fontDescriptor.symbolicTraits.union(.italic)

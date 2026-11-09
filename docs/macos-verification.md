@@ -15,11 +15,19 @@ bash Vendor/Kiwi/scripts/fetch-kiwi-model.sh
 
 ## 2. 빌드와 테스트
 
-- [ ] `make build`가 성공한다
-- [ ] `make test`가 모두 통과한다
-- [ ] `swift test --filter MarkdownCoreParityTests`가 모두 통과한다
+- [x] `make build`가 성공한다
+- [x] `make test`가 모두 통과한다
+- [x] `swift test --filter MarkdownCoreParityTests`가 모두 통과한다
 
 `make test`에는 `JenaNoteKitTests`와 `JenaNoteCoreTests`가 모두 포함된다.
+
+2026-11-09 맥(macOS 26, arm64)에서 확인했다. 처음에는 아래 오류가 나서 고친 뒤 582개가 모두 통과했다.
+
+- 빌드: `FileSearcher`에 공개 `init`이 없어 `SidebarViewController`가 만들지 못했다 → `public init() {}` 추가
+- 테스트 빌드: `AIProofreadingTests`가 `AILocalInferenceQueue`의 내부 `init`을 쓴다 → `@testable import JenaNoteCore` 추가
+- `h3 keeps bold marks`: 맥의 h3 글꼴(시스템 Medium)은 굵은 글꼴을 trait로 만들 수 없어, 문서를 열 때부터 h3 안의 굵게가 사라졌다(기존 맥 버그). `MemoFont.bold(from:)`가 시스템 글꼴일 때만 굵은 시스템 글꼴로 대신하도록 고쳤다. 다른 글꼴은 그대로 둔다
+- `heading starting with an image stays a heading`, `inline code can hold backticks`: `macLegacy` 추정값이 실제와 달라 실측값으로 고쳤다
+- `testSharedExportMatchesTheCurrentBuilder`의 `h1/h2 drops bold marks`: 제목의 굵게를 지운 뒤 같은 모양의 글 조각이 둘로 남았다. AppKit처럼 하나로 합치도록 `MarkdownExport`를 고쳤다(제목에서만, 텍스트 조각끼리만)
 
 ### 오류가 나면
 
@@ -56,8 +64,10 @@ bash Vendor/Kiwi/scripts/fetch-kiwi-model.sh
 
 `docs/markdown-known-issues.md`의 문제는 코드를 읽어서 찾았다. 실제로 재현되는지 확인한다. 테스트용 문서로 시험한다.
 
-- [ ] 표 뒤에 빈 줄을 두고 여러 번 저장하면 빈 줄이 늘어난다
-- [ ] 끝 줄이 빈 코드 블록을 저장하면 닫는 펜스가 사라진다
+- [x] 표 뒤에 빈 줄을 두고 여러 번 저장하면 빈 줄이 늘어난다
+- [x] 끝 줄이 빈 코드 블록을 저장하면 닫는 펜스가 사라진다
+
+2026-11-09 맥 `MarkdownSerializer`로 재현했다. 표 뒤 빈 줄은 저장할 때마다 1개씩 늘고(`\n\n` → `\n\n\n` → …), 코드 블록은 닫는 펜스가 사라져 뒤의 글까지 코드가 된다. 같은 입력을 `coreParse`/`coreSerialize`로 세 번 저장하면 그대로다.
 
 ## 5. 통과한 뒤에 할 일
 
