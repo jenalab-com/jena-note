@@ -4,19 +4,6 @@ import NaturalLanguage
 import FoundationModels
 #endif
 
-struct AIIndexSummary {
-    enum Origin: String, Codable { case apple, excerpt }
-    let text: String
-    let origin: Origin
-    var issue: String? = nil
-
-    static func excerpt(_ passage: AIIndexedPassage, reason: String) -> AIIndexSummary {
-        // The complete original remains searchable; this preview is never called an AI summary.
-        let preview = String(passage.text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(700))
-        return AIIndexSummary(text: preview.isEmpty ? L10n.tr("ai.index.blank") : preview, origin: .excerpt, issue: reason)
-    }
-}
-
 /// No provider credentials or CLI dependency. Call enqueue on the main queue.
 final class AIWorkLocalSummarizer {
     enum Availability: Equatable {

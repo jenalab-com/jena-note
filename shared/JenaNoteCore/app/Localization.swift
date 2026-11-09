@@ -16,6 +16,11 @@ public enum L10n {
     ]
 
     private static let ko: [String: String] = [
+        "doc.aiIndexAutomatic": "원문 검색이 준비되면 바로 채팅할 수 있어요. Windows에서는 요약 대신 원문 발췌로 자료를 찾아요. 맥에서 만든 요약이 있으면 함께 써요.",
+        "doc.aiApplied": "수정했습니다. 본문에서 Ctrl+Z로 되돌릴 수 있습니다. 여러 곳을 고쳤으면 여러 번 눌러야 합니다.",
+        "doc.aiShimUnsupported": "이 파일 형식은 바로 실행할 수 없어요. .exe 파일이나 npm이 만든 .cmd 파일의 경로를 지정해 주세요.",
+        "doc.aiNeedNode": "Node.js가 필요해요. Node.js를 설치한 뒤 다시 시도해 주세요.",
+        "doc.aiNoInstaller": "Windows용 설치 명령을 확인하지 못했어요. 설치 안내를 보고 설치한 뒤 실행 파일 경로를 지정해 주세요.",
         "reader.font.batang": "바탕",
         "reader.font.malgunGothic": "맑은 고딕",
         "doc.revealExplorer": "탐색기에서 보기",
@@ -594,6 +599,11 @@ public enum L10n {
     ]
 
     private static let en: [String: String] = [
+        "doc.aiIndexAutomatic": "You can chat as soon as the source search is ready. On Windows, material is found by excerpts of the original text. Summaries made on a Mac are used too.",
+        "doc.aiApplied": "Revised. Press Ctrl+Z in the document to undo. Several changes may take several presses.",
+        "doc.aiShimUnsupported": "This kind of file cannot be run directly. Choose an .exe file, or a .cmd file made by npm.",
+        "doc.aiNeedNode": "Node.js is required. Install Node.js and try again.",
+        "doc.aiNoInstaller": "No confirmed install command for Windows. Follow the instructions, then choose the executable.",
         "reader.font.batang": "Batang",
         "reader.font.malgunGothic": "Malgun Gothic",
         "doc.revealExplorer": "Show in Explorer",
@@ -1157,6 +1167,11 @@ public enum L10n {
     ]
 
     private static let zh: [String: String] = [
+        "doc.aiIndexAutomatic": "原文搜索准备好后即可聊天。在 Windows 上通过原文摘录查找资料。在 Mac 上生成的摘要也会一并使用。",
+        "doc.aiApplied": "已修改。可在文档中按 Ctrl+Z 撤销。如果改了多处，需要按多次。",
+        "doc.aiShimUnsupported": "无法直接运行此类文件。请选择 .exe 文件或 npm 生成的 .cmd 文件。",
+        "doc.aiNeedNode": "需要 Node.js。请安装 Node.js 后重试。",
+        "doc.aiNoInstaller": "尚未确认 Windows 的安装命令。请按照安装说明安装，然后选择可执行文件。",
         "reader.font.batang": "Batang",
         "reader.font.malgunGothic": "Malgun Gothic",
         "doc.revealExplorer": "在资源管理器中显示",
@@ -1368,6 +1383,11 @@ public enum L10n {
     ]
 
     private static let ja: [String: String] = [
+        "doc.aiIndexAutomatic": "原文検索の準備ができればすぐにチャットできます。Windows では要約の代わりに原文の抜粋で資料を探します。Mac で作成した要約があれば一緒に使います。",
+        "doc.aiApplied": "修正しました。本文で Ctrl+Z を押すと元に戻せます。複数箇所の場合は複数回押してください。",
+        "doc.aiShimUnsupported": "この形式のファイルは直接実行できません。.exe ファイルか npm が作成した .cmd ファイルを指定してください。",
+        "doc.aiNeedNode": "Node.js が必要です。Node.js をインストールしてからもう一度お試しください。",
+        "doc.aiNoInstaller": "Windows 用のインストールコマンドを確認できませんでした。案内に従ってインストールし、実行ファイルを指定してください。",
         "reader.font.batang": "Batang",
         "reader.font.malgunGothic": "Malgun Gothic",
         "doc.revealExplorer": "エクスプローラーで表示",
@@ -1579,6 +1599,11 @@ public enum L10n {
     ]
 
     private static let es: [String: String] = [
+        "doc.aiIndexAutomatic": "Puedes chatear en cuanto la búsqueda del texto original esté lista. En Windows, el material se busca con extractos del original. También se usan los resúmenes creados en un Mac.",
+        "doc.aiApplied": "Revisado. Pulsa Ctrl+Z en el documento para deshacer. Si hubo varios cambios, puede hacer falta pulsarlo varias veces.",
+        "doc.aiShimUnsupported": "Este tipo de archivo no se puede ejecutar directamente. Elige un archivo .exe o un .cmd creado por npm.",
+        "doc.aiNeedNode": "Se necesita Node.js. Instala Node.js e inténtalo de nuevo.",
+        "doc.aiNoInstaller": "No hay un comando de instalación confirmado para Windows. Sigue las instrucciones y elige el ejecutable.",
         "reader.font.batang": "Batang",
         "reader.font.malgunGothic": "Malgun Gothic",
         "doc.revealExplorer": "Mostrar en el Explorador",
@@ -1790,6 +1815,11 @@ public enum L10n {
     ]
 
     private static let de: [String: String] = [
+        "doc.aiIndexAutomatic": "Sobald die Suche im Originaltext bereit ist, kannst du chatten. Unter Windows wird Material über Auszüge aus dem Original gefunden. Auf einem Mac erstellte Zusammenfassungen werden mitgenutzt.",
+        "doc.aiApplied": "Überarbeitet. Mit Strg+Z im Dokument rückgängig machen. Bei mehreren Änderungen sind mehrere Schritte nötig.",
+        "doc.aiShimUnsupported": "Dieser Dateityp kann nicht direkt ausgeführt werden. Wähle eine .exe-Datei oder eine von npm erstellte .cmd-Datei.",
+        "doc.aiNeedNode": "Node.js wird benötigt. Installiere Node.js und versuche es erneut.",
+        "doc.aiNoInstaller": "Kein bestätigter Installationsbefehl für Windows. Folge der Anleitung und wähle dann die ausführbare Datei.",
         "reader.font.batang": "Batang",
         "reader.font.malgunGothic": "Malgun Gothic",
         "doc.revealExplorer": "Im Explorer anzeigen",
@@ -2001,6 +2031,11 @@ public enum L10n {
     ]
 
     private static let fr: [String: String] = [
+        "doc.aiIndexAutomatic": "Vous pouvez discuter dès que la recherche dans le texte original est prête. Sous Windows, le contenu est trouvé grâce à des extraits de l’original. Les résumés créés sur un Mac sont aussi utilisés.",
+        "doc.aiApplied": "Révisé. Appuyez sur Ctrl+Z dans le document pour annuler. Plusieurs changements peuvent demander plusieurs appuis.",
+        "doc.aiShimUnsupported": "Ce type de fichier ne peut pas être exécuté directement. Choisissez un fichier .exe ou un .cmd créé par npm.",
+        "doc.aiNeedNode": "Node.js est requis. Installez Node.js puis réessayez.",
+        "doc.aiNoInstaller": "Aucune commande d’installation confirmée pour Windows. Suivez les instructions puis choisissez l’exécutable.",
         "reader.font.batang": "Batang",
         "reader.font.malgunGothic": "Malgun Gothic",
         "doc.revealExplorer": "Afficher dans l’Explorateur",

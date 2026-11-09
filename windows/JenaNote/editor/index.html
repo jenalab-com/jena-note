@@ -21,6 +21,7 @@
     <button type="button" id="replace-all"></button>
   </div>
 </div>
+<div id="workspace">
 <div id="stage">
   <div id="scroller">
     <div id="page-clip">
@@ -41,6 +42,54 @@
     <button type="button" id="page-next" tabindex="-1">&#8250;</button>
   </div>
 </div>
+<div id="ai-splitter" hidden></div>
+<aside id="ai-panel" hidden>
+  <div id="ai-header">
+    <span id="ai-document"></span>
+    <button type="button" id="ai-settings" tabindex="-1">&#8943;</button>
+  </div>
+  <button type="button" id="ai-work" tabindex="-1">
+    <span id="ai-work-dot"></span>
+    <span id="ai-work-text"></span>
+    <span id="ai-work-button"></span>
+  </button>
+  <div id="ai-transcript">
+    <div id="ai-messages"></div>
+    <div id="ai-loading" hidden><span class="ai-progress"></span><span id="ai-waiting"></span></div>
+  </div>
+  <div id="ai-composer">
+    <div id="ai-selection" hidden></div>
+    <textarea id="ai-input" rows="3" spellcheck="false"></textarea>
+    <div id="ai-options">
+      <div id="ai-mode" class="segments">
+        <button type="button" data-mode="guide" tabindex="-1"></button>
+        <button type="button" data-mode="edit" tabindex="-1"></button>
+      </div>
+      <button type="button" id="ai-usage" tabindex="-1">&#9432;</button>
+      <select id="ai-model"></select>
+      <button type="button" id="ai-send" tabindex="-1"></button>
+    </div>
+  </div>
+  <div id="ai-footer">
+    <span id="ai-usage-status"></span>
+    <button type="button" id="ai-usage-reload" tabindex="-1">&#8635;</button>
+  </div>
+</aside>
+</div>
+<div id="ai-usage-popover" class="popover" hidden>
+  <div id="ai-session"></div>
+  <div id="ai-usage-details"></div>
+  <button type="button" id="ai-usage-refresh" tabindex="-1"></button>
+</div>
+<dialog id="ai-model-dialog">
+  <form method="dialog">
+    <label><span id="ai-model-label"></span><input id="ai-model-input" type="text" autocomplete="off" spellcheck="false"></label>
+    <div class="dialog-buttons">
+      <button value="cancel" id="ai-model-cancel" formnovalidate></button>
+      <button value="ok" id="ai-model-ok"></button>
+    </div>
+  </form>
+</dialog>
 <div id="appearance-popover" class="popover" hidden></div>
 <div id="bookmark-popover" class="popover" hidden></div>
 <dialog id="link-dialog">
@@ -68,6 +117,7 @@
 <script src="proofreading.js"></script>
 <script src="find.js"></script>
 <script src="source.js"></script>
+<script src="ai.js"></script>
 <script src="start.js"></script>
 </body>
 </html>

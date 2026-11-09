@@ -115,12 +115,16 @@ sealed class EditorWindow : Window
         editor.AlertRequested += text => MessageBox.Show(this, text, "Jena Note", MessageBoxButton.OK, MessageBoxImage.Information);
         Action dictionaryChanged = editor.DictionaryChanged;
         DictionaryWindow.Changed += dictionaryChanged;
+        Action workChanged = editor.RefreshWorkStatus;
+        WorkIndex.Changed += workChanged;
+        Closed += (_, _) => WorkIndex.Changed -= workChanged;
         Action settingsChanged = ApplySettings;
         AppSettings.Changed += settingsChanged;
         Closed += (_, _) =>
         {
             AppSettings.Changed -= settingsChanged;
             DictionaryWindow.Changed -= dictionaryChanged;
+            editor.CancelAi();
             autosaveTimer.Stop();
             recoveryTimer.Stop();
             RecoveryStore.Delete(recoveryId);
@@ -161,6 +165,7 @@ sealed class EditorWindow : Window
         if (plainText) editor.LoadPlainText(text);
         else editor.LoadMarkdown(text);
         editor.SendReadingState();
+        if (filePath != null) WorkIndex.Schedule(filePath);
         if (showingSource) _ = RefreshSourceAsync();
         // Focus inside the page is not enough. Keys go to the native control that holds focus.
         editor.Focus();
@@ -241,6 +246,7 @@ sealed class EditorWindow : Window
             Item("reader.fontDown", "Ctrl+-", () => editor.ReadingCommand("fontDown")),
             new Separator(),
             sourceMenuItem = Item("source.title", "", () => RunCommand("toggleSource")),
+            Item("ai.title", "", () => editor.ToggleAi()),
             Item("menu.view.toggleBookmark", "Ctrl+D", () => editor.ReadingCommand("bookmarkToggle")),
             Item("menu.view.bookmarkList", "", () => editor.ReadingCommand("bookmarkList"))));
         menu.Items.Add(Top("menu.format",
@@ -312,6 +318,12 @@ sealed class EditorWindow : Window
                 break;
             case "toggleSource":
                 _ = ToggleSourceAsync();
+                break;
+            case "aiSettings":
+                SettingsWindow.Present(this).ShowAi();
+                break;
+            case "aiWorkAction":
+                await RunWorkActionAsync();
                 break;
             case "copySource":
                 _ = CopySourceAsync();
@@ -432,6 +444,7 @@ sealed class EditorWindow : Window
             KeepHistoryBeforeWrite(path, changedOnDisk);
             DocumentFile.WriteBytes(path, bytes);
             KeepHistoryAfterWrite(path, bytes, automatic);
+            WorkIndex.Schedule(path);
 
             var pageRevision = content.GetProperty("revision").GetInt32();
             var modeChanged = saveAsPlain != plainText;
@@ -522,6 +535,52 @@ sealed class EditorWindow : Window
         if (reportedBackupFailure || IsSelfTesting) return;
         reportedBackupFailure = true;
         MessageBox.Show(this, NativeCore.Tr("backup.failed"), "Jena Note", MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    // MARK: - Work context
+
+    /// <summary>What the row under the document name does, by what it currently says.</summary>
+    async Task RunWorkActionAsync()
+    {
+        var path = filePath;
+        if (path == null) return;
+        try
+        {
+            using var status = JsonDocument.Parse(await Task.Run(() => NativeCore.WorkStatus(path)));
+            switch (status.RootElement.GetProperty("kind").GetString())
+            {
+                case "corrupt":
+                    // First setup must never overwrite a file that could not be read.
+                    NativeCore.WorkSetCorruptAside(path);
+                    WorkContextWindow.Present(this, path, 2);
+                    break;
+                case "notInWork":
+                    WorkContextWindow.Present(this, path, 2);
+                    break;
+                case "disabled":
+                    WorkContextWindow.Present(this, path, 2).Apply(new { op = "setEnabled", on = true });
+                    break;
+                default:
+                    WorkContextWindow.Present(this, path, 0);
+                    break;
+            }
+            editor.RefreshWorkStatus();
+        }
+        catch (InvalidOperationException error)
+        {
+            MessageBox.Show(this, error.Message, "Jena Note", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    /// <summary>What open documents hold now, which may be newer than their files.</summary>
+    public static async Task<Dictionary<string, string>> OpenDocumentTextsAsync()
+    {
+        var texts = new Dictionary<string, string>();
+        foreach (var window in AllDocuments)
+        {
+            if (window.filePath != null && window.IsDirty) texts[window.filePath] = await window.CurrentTextAsync();
+        }
+        return texts;
     }
 
     // MARK: - Source view

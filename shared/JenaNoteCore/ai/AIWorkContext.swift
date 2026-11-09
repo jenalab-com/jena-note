@@ -93,6 +93,7 @@ public struct AIWorkContext: Equatable {
     /// alone leaves the whole path untouched when the leaf does not exist.)
     fileprivate static func norm(_ url: URL) -> URL {
         let standardized = url.standardizedFileURL
+        if let remembered = rememberedNorm(of: standardized) { return remembered }
         var existing = standardized
         var rest: [String] = []
         while !FileManager.default.fileExists(atPath: existing.path),
@@ -105,10 +106,84 @@ public struct AIWorkContext: Equatable {
         return rest.reduce(existing.resolvingSymlinksInPath()) { $0.appendingPathComponent($1) }
     }
 
+    // Going through a whole work asks about the same folders hundreds of times, and on a network or
+    // sync drive each answer is slow. Within one operation on one thread, a folder is resolved once,
+    // and a file only needs checking that it is not itself a link. Other threads must never see
+    // this: what it remembers is only true for the operation that asked.
+    private final class PathCache {
+        var depth = 0
+        var resolved: [String: URL] = [:]
+        var listed = Set<String>()
+    }
+
+    private static let pathCacheKey = "JenaNote.AIWorkContext.pathCache"
+
+    private static var currentPathCache: PathCache? {
+        Thread.current.threadDictionary[pathCacheKey] as? PathCache
+    }
+
+    /// Runs `body` with path checks remembered until it returns.
+    public static func withPathCache<T>(_ body: () throws -> T) rethrows -> T {
+        let cache = currentPathCache ?? PathCache()
+        Thread.current.threadDictionary[pathCacheKey] = cache
+        cache.depth += 1
+        defer {
+            cache.depth -= 1
+            if cache.depth == 0 { Thread.current.threadDictionary.removeObject(forKey: pathCacheKey) }
+        }
+        return try body()
+    }
+
+    /// A listing already said this is a plain file or folder, reached without passing through a link.
+    static func noteListed(_ url: URL) {
+        guard let cache = currentPathCache else { return }
+        let standardized = url.standardizedFileURL
+        cache.resolved[standardized.path] = norm(standardized.deletingLastPathComponent())
+            .appendingPathComponent(standardized.lastPathComponent, isDirectory: false)
+        cache.listed.insert(standardized.path)
+    }
+
+    private static func isListed(_ url: URL) -> Bool {
+        currentPathCache?.listed.contains(url.path) ?? false
+    }
+
+    private static func rememberedNorm(of standardized: URL) -> URL? {
+        guard let cache = currentPathCache else { return nil }
+        if let known = cache.resolved[standardized.path] { return known }
+        let parent = standardized.deletingLastPathComponent()
+        let isTop = parent.path == standardized.path
+        let type = (try? FileManager.default.attributesOfItem(atPath: standardized.path))?[.type] as? FileAttributeType
+        let resolved: URL
+        switch type {
+        case .typeRegular? where !isTop:
+            // A plain file stands where its folder does.
+            resolved = norm(parent).appendingPathComponent(standardized.lastPathComponent, isDirectory: false)
+        case nil where !isTop:
+            // Nothing here yet. It will be wherever its nearest existing folder really is.
+            resolved = norm(parent).appendingPathComponent(standardized.lastPathComponent, isDirectory: false)
+        default:
+            // Folders, links and the top of a drive go the full way, once. This is also what spells
+            // a short Windows name like ANDROM~1 in full, so every path compares alike.
+            resolved = standardized.resolvingSymlinksInPath()
+        }
+        cache.resolved[standardized.path] = resolved
+        return resolved
+    }
+
     /// `""` and `"."` name the work root itself (writing folder == root).
     private static func isRootPath(_ path: String) -> Bool { path.isEmpty || path == "." }
 
+    /// `C:/x` looks relative to code written for slashes. On Windows it is an absolute path.
+    public static func isDrivePath(_ path: String) -> Bool {
+        #if os(Windows)
+        return path.contains(":")
+        #else
+        return false
+        #endif
+    }
+
     private static func isSafeRelative(_ path: String) -> Bool {
+        if isDrivePath(path) { return false }
         if path.isEmpty || path.hasPrefix("/") || path.hasPrefix("~") { return false }
         return !path.split(separator: "/", omittingEmptySubsequences: false).contains("..")
     }
@@ -201,7 +276,9 @@ public struct AIWorkContext: Equatable {
         guard target.count >= base.count, Array(target.prefix(base.count)) == base else { return false }
         var current = root.standardizedFileURL
         for component in target.dropFirst(base.count) {
-            current.appendPathComponent(component)
+            // Saying what it is keeps this from asking the disk, on top of the check below.
+            current.appendPathComponent(component, isDirectory: false)
+            if isListed(current) { continue }
             // attributesOfItem does not follow a symlink at the leaf (lstat semantics).
             guard let attributes = try? FileManager.default.attributesOfItem(atPath: current.path) else {
                 break // nothing exists from here on, so nothing below can be a link

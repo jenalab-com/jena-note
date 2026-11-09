@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
@@ -28,8 +29,8 @@ sealed class SettingsWindow : Window
 
     SettingsWindow()
     {
-        Width = 560;
-        Height = 420;
+        Width = 600;
+        Height = 500;
         MinWidth = 480;
         MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -41,9 +42,152 @@ sealed class SettingsWindow : Window
     {
         Title = NativeCore.Tr("settings.title");
         var tabs = new TabControl { Margin = new Thickness(10) };
-        tabs.Items.Add(new TabItem { Header = NativeCore.Tr("settings.tab.general"), Content = BuildGeneral() });
-        tabs.Items.Add(new TabItem { Header = NativeCore.Tr("settings.tab.ui"), Content = BuildAppearance() });
+        // The default style gives each tab a wide minimum, and three of them would need two rows.
+        tabs.Items.Add(new TabItem { Header = NativeCore.Tr("settings.tab.general"), Content = BuildGeneral(), MinWidth = 72 });
+        tabs.Items.Add(new TabItem { Header = NativeCore.Tr("settings.tab.ui"), Content = BuildAppearance(), MinWidth = 72 });
+        tabs.Items.Add(new TabItem { Header = "AI", MinWidth = 72, Content = new ScrollViewer { Content = BuildAi(), VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
         Content = tabs;
+    }
+
+    public void ShowAi()
+    {
+        if (Content is TabControl tabs) tabs.SelectedIndex = tabs.Items.Count - 1;
+    }
+
+    CancellationTokenSource? aiCheck;
+
+    UIElement BuildAi()
+    {
+        var form = NewForm();
+        using var providers = JsonDocument.Parse(NativeCore.AiProviders());
+        var list = providers.RootElement.EnumerateArray().Select(item => (
+            Id: item.GetProperty("id").GetString()!,
+            Title: item.GetProperty("title").GetString()!,
+            Docs: item.GetProperty("documentation").GetString()!)).ToList();
+
+        var path = new TextBox { MinWidth = 260, ToolTip = NativeCore.Tr("ai.pathPlaceholder") };
+        var status = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
+        var detail = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 11, Opacity = 0.7, Margin = new Thickness(0, 8, 0, 0) };
+        var install = new Button { Content = NativeCore.Tr("ai.install"), Padding = new Thickness(10, 2, 10, 2) };
+        var login = new Button { Content = NativeCore.Tr("ai.login"), Padding = new Thickness(10, 2, 10, 2), Margin = new Thickness(6, 0, 0, 0) };
+        var check = new Button { Content = NativeCore.Tr("ai.recheck"), Padding = new Thickness(10, 2, 10, 2), Margin = new Thickness(6, 0, 0, 0) };
+        var docs = new Button { Content = NativeCore.Tr("ai.instructions"), Padding = new Thickness(10, 2, 10, 2), Margin = new Thickness(6, 0, 0, 0) };
+
+        string Current() => AppSettings.Current.AiProvider;
+
+        void ShowState()
+        {
+            var executable = AiExecutable.Locate(Current());
+            var verified = executable != null && AiService.IsVerified(Current(), executable);
+            status.Text = executable == null
+                ? NativeCore.Tr("ai.notInstalled")
+                : NativeCore.Tr(verified ? "ai.connected" : "ai.installed") + "\n" + executable;
+            install.IsEnabled = executable == null && AiService.InstallCommand(Current()) != null;
+            login.Content = NativeCore.Tr(verified ? "ai.loggedIn" : "ai.login");
+            login.IsEnabled = executable != null && !verified;
+            detail.Text = NativeCore.Tr("ai.setupHelp")
+                + (Current() == "grok" ? "\n" + NativeCore.Tr("ai.grokProfile") : "")
+                + (AiService.InstallCommand(Current()) == null ? "\n" + NativeCore.Tr("doc.aiNoInstaller") : "");
+        }
+
+        void Reset()
+        {
+            aiCheck?.Cancel();
+            check.IsEnabled = true;
+        }
+
+        void SavePath()
+        {
+            var value = path.Text.Trim();
+            if (AppSettings.Current.AiPaths.GetValueOrDefault(Current(), "") == value) return;
+            Reset();
+            AppSettings.Update(current => current.AiPaths[current.AiProvider] = value);
+            ShowState();
+        }
+
+        void Fill()
+        {
+            path.Text = AppSettings.Current.AiPaths.GetValueOrDefault(Current(), "");
+            ShowState();
+        }
+
+        AddRow(form, NativeCore.Tr("ai.settings"), Choice(list.Select(item => (item.Id, item.Title)), Current(), value =>
+        {
+            Reset();
+            AppSettings.Update(current => current.AiProvider = value);
+            Fill();
+        }));
+
+        path.LostFocus += (_, _) => SavePath();
+        var browse = new Button { Content = NativeCore.Tr("ai.browse"), Padding = new Thickness(10, 2, 10, 2), Margin = new Thickness(6, 0, 0, 0) };
+        browse.Click += (_, _) =>
+        {
+            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "CLI (*.exe;*.cmd;*.bat)|*.exe;*.cmd;*.bat" };
+            if (dialog.ShowDialog(this) != true) return;
+            path.Text = dialog.FileName;
+            SavePath();
+        };
+        var pathRow = new DockPanel();
+        DockPanel.SetDock(browse, Dock.Right);
+        pathRow.Children.Add(browse);
+        pathRow.Children.Add(path);
+        AddRow(form, NativeCore.Tr("ai.path"), pathRow);
+
+        void OpenTerminal(bool installing, string opened)
+        {
+            SavePath();
+            try
+            {
+                AiService.OpenTerminal(Current(), installing);
+                status.Text = NativeCore.Tr(opened);
+            }
+            catch (Exception error) when (error is AiFailure or IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
+            {
+                status.Text = error.Message;
+            }
+        }
+        install.Click += (_, _) => OpenTerminal(true, "ai.installOpened");
+        login.Click += (_, _) => OpenTerminal(false, "ai.loginOpened");
+        docs.Click += (_, _) =>
+        {
+            var address = list.First(item => item.Id == Current()).Docs;
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(address) { UseShellExecute = true });
+        };
+        check.Click += async (_, _) =>
+        {
+            SavePath();
+            Reset();
+            var cancel = aiCheck = new CancellationTokenSource();
+            status.Text = NativeCore.Tr("ai.checking");
+            check.IsEnabled = false;
+            login.IsEnabled = false;
+            try
+            {
+                var (_, message) = await AiService.CheckAsync(Current(), cancel.Token);
+                if (cancel.IsCancellationRequested) return;
+                ShowState();
+                status.Text = message;
+            }
+            catch (Exception error) when (error is AiFailure or AiFailureWithTokens or IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                if (cancel.IsCancellationRequested) return;
+                ShowState();
+                status.Text = error.Message.Length > 2000 ? error.Message[..2000] : error.Message;
+            }
+            check.IsEnabled = true;
+        };
+        Closed += (_, _) => aiCheck?.Cancel();
+
+        var actions = new StackPanel { Orientation = Orientation.Horizontal };
+        actions.Children.Add(install);
+        actions.Children.Add(login);
+        actions.Children.Add(check);
+        actions.Children.Add(docs);
+        AddRow(form, null, actions);
+        AddRow(form, null, status);
+        AddRow(form, null, detail);
+        Fill();
+        return form;
     }
 
     static Grid NewForm()

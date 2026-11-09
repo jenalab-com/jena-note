@@ -16,6 +16,29 @@ static class NativeCore
     [DllImport(Library)] static extern void jena_proofreading_configure(byte[] modelDirectory);
     [DllImport(Library)] static extern void jena_proofread(byte[] items, byte[] terms, ResultCallback callback, nuint context);
     [DllImport(Library)] static extern void jena_proofread_selection(byte[] text, byte[] terms, ResultCallback callback, nuint context);
+    [DllImport(Library)] static extern int jena_work_status(byte[] path, out IntPtr result, out IntPtr error);
+    [DllImport(Library)] static extern int jena_work_prepare(byte[] path, out IntPtr result, out IntPtr error);
+    [DllImport(Library)] static extern int jena_work_session_open(byte[] request, out IntPtr handle, out IntPtr error);
+    [DllImport(Library)] static extern int jena_work_session_start(IntPtr handle, out IntPtr result, out IntPtr error);
+    [DllImport(Library)] static extern int jena_work_session_receive(IntPtr handle, byte[] answer, out IntPtr result, out IntPtr error);
+    [DllImport(Library)] static extern int jena_work_session_prompt(IntPtr handle, byte[] request, out IntPtr result, out IntPtr error);
+    [DllImport(Library)] static extern void jena_work_session_close(IntPtr handle);
+    [DllImport(Library)] static extern int jena_work_window_open(byte[] path, out IntPtr result, out IntPtr error);
+    [DllImport(Library)] static extern int jena_work_window_describe(byte[] root, byte[] config, byte[] current, out IntPtr result, out IntPtr error);
+    [DllImport(Library)] static extern int jena_work_window_edit(byte[] root, byte[] config, int provisional, byte[] edit, out IntPtr result, out IntPtr error);
+    [DllImport(Library)] static extern int jena_work_set_corrupt_aside(byte[] path, out IntPtr error);
+    [DllImport(Library)] static extern IntPtr jena_ai_providers();
+    [DllImport(Library)] static extern int jena_ai_command(byte[] provider, byte[] policy, byte[] promptFile, byte[]? model, out IntPtr result, out IntPtr error);
+    [DllImport(Library)] static extern int jena_ai_answer(byte[] provider, int status, byte[] stdout, byte[] stderr, out IntPtr result, out IntPtr error);
+    [DllImport(Library)] static extern int jena_ai_prompt(byte[] request, out IntPtr result, out IntPtr error);
+    [DllImport(Library)] static extern int jena_ai_parse_edit(byte[] answer, out IntPtr result, out IntPtr error);
+    [DllImport(Library)] static extern IntPtr jena_ai_metadata_arguments(byte[] provider);
+    [DllImport(Library)] static extern IntPtr jena_ai_metadata_open(byte[] provider);
+    [DllImport(Library)] static extern IntPtr jena_ai_metadata_initial(IntPtr handle);
+    [DllImport(Library)] static extern IntPtr jena_ai_metadata_receive(IntPtr handle, byte[] line, out int complete);
+    [DllImport(Library)] static extern IntPtr jena_ai_metadata_result(IntPtr handle);
+    [DllImport(Library)] static extern void jena_ai_metadata_close(IntPtr handle);
+    [DllImport(Library)] static extern IntPtr jena_ai_metadata_plain(byte[] provider, byte[] output);
     [DllImport(Library)] static extern void jena_search_files(byte[] query, byte[] folders, ResultCallback callback, nuint context);
     [DllImport(Library)] static extern void jena_dictionary_use_file(byte[] path);
     [DllImport(Library)] static extern int jena_dictionary_terms(byte[]? documentPath, out IntPtr result, out IntPtr error);
@@ -103,6 +126,114 @@ static class NativeCore
         jena_proofread_selection(Utf8(text), Utf8(termsJson), Completion, context);
         return task;
     }
+
+    public static string WorkStatus(string path)
+    {
+        var status = jena_work_status(Utf8(path), out var result, out var error);
+        return Checked(status, result, error);
+    }
+
+    public static string WorkPrepare(string path)
+    {
+        var status = jena_work_prepare(Utf8(path), out var result, out var error);
+        return Checked(status, result, error);
+    }
+
+    /// <summary>Zero when the document is not in a work that is switched on.</summary>
+    public static IntPtr WorkSessionOpen(string requestJson)
+    {
+        if (jena_work_session_open(Utf8(requestJson), out var handle, out var error) != 0) throw new InvalidOperationException(Take(error));
+        return handle;
+    }
+
+    public static string WorkSessionStart(IntPtr handle)
+    {
+        var status = jena_work_session_start(handle, out var result, out var error);
+        return Checked(status, result, error);
+    }
+
+    public static string WorkSessionReceive(IntPtr handle, string answer)
+    {
+        var status = jena_work_session_receive(handle, Utf8(answer), out var result, out var error);
+        return Checked(status, result, error);
+    }
+
+    public static string WorkSessionPrompt(IntPtr handle, string requestJson)
+    {
+        var status = jena_work_session_prompt(handle, Utf8(requestJson), out var result, out var error);
+        return Checked(status, result, error);
+    }
+
+    public static void WorkSessionClose(IntPtr handle) => jena_work_session_close(handle);
+
+    public static string WorkWindowOpen(string path)
+    {
+        var status = jena_work_window_open(Utf8(path), out var result, out var error);
+        return Checked(status, result, error);
+    }
+
+    public static string WorkWindowDescribe(string root, string config, string current)
+    {
+        var status = jena_work_window_describe(Utf8(root), Utf8(config), Utf8(current), out var result, out var error);
+        return Checked(status, result, error);
+    }
+
+    public static string WorkWindowEdit(string root, string config, bool provisional, string edit)
+    {
+        var status = jena_work_window_edit(Utf8(root), Utf8(config), provisional ? 1 : 0, Utf8(edit), out var result, out var error);
+        return Checked(status, result, error);
+    }
+
+    public static void WorkSetCorruptAside(string path)
+    {
+        if (jena_work_set_corrupt_aside(Utf8(path), out var error) != 0) throw new InvalidOperationException(Take(error));
+    }
+
+    public static string AiProviders() => Take(jena_ai_providers());
+
+    static string Checked(int status, IntPtr result, IntPtr error) =>
+        status == 0 ? Take(result) : throw new InvalidOperationException(Take(error));
+
+    public static string AiCommand(string provider, string policy, string promptFile, string? model)
+    {
+        var status = jena_ai_command(Utf8(provider), Utf8(policy), Utf8(promptFile), OptionalUtf8(model), out var result, out var error);
+        return Checked(status, result, error);
+    }
+
+    public static string AiAnswer(string provider, int exitCode, string stdout, string stderr)
+    {
+        var status = jena_ai_answer(Utf8(provider), exitCode, Utf8(stdout), Utf8(stderr), out var result, out var error);
+        return Checked(status, result, error);
+    }
+
+    public static string AiPrompt(string requestJson)
+    {
+        var status = jena_ai_prompt(Utf8(requestJson), out var result, out var error);
+        return Checked(status, result, error);
+    }
+
+    public static string AiParseEdit(string answer)
+    {
+        var status = jena_ai_parse_edit(Utf8(answer), out var result, out var error);
+        return Checked(status, result, error);
+    }
+
+    public static string[] AiMetadataArguments(string provider) =>
+        System.Text.Json.JsonSerializer.Deserialize<string[]>(Take(jena_ai_metadata_arguments(Utf8(provider)))) ?? Array.Empty<string>();
+
+    public static IntPtr AiMetadataOpen(string provider) => jena_ai_metadata_open(Utf8(provider));
+    public static string AiMetadataInitial(IntPtr handle) => Take(jena_ai_metadata_initial(handle));
+
+    public static string? AiMetadataReceive(IntPtr handle, string line, out bool complete)
+    {
+        var reply = jena_ai_metadata_receive(handle, Utf8(line), out var done);
+        complete = done != 0;
+        return reply == IntPtr.Zero ? null : Take(reply);
+    }
+
+    public static string AiMetadataResult(IntPtr handle) => Take(jena_ai_metadata_result(handle));
+    public static void AiMetadataClose(IntPtr handle) => jena_ai_metadata_close(handle);
+    public static string AiMetadataPlain(string provider, string output) => Take(jena_ai_metadata_plain(Utf8(provider), Utf8(output)));
 
     /// <summary>Searches every Markdown file in the folders, off the UI thread.</summary>
     public static Task<string> SearchFiles(string query, string foldersJson)

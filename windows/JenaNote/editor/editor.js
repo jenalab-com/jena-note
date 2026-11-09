@@ -569,8 +569,8 @@ const SHORTCUTS = {
 document.addEventListener('keydown', event => {
   if (event.ctrlKey && !event.altKey) {
     const action = SHORTCUTS[event.key.toLowerCase()];
-    // Formatting belongs to the document, not to what is being typed in the find bar.
-    if (findBar.contains(event.target) && ['b', 'i', 'u'].includes(event.key.toLowerCase())) return;
+    // Formatting belongs to the document, not to what is being typed in a field.
+    if ((findBar.contains(event.target) || event.target === aiInput) && ['b', 'i', 'u'].includes(event.key.toLowerCase())) return;
     if (action) {
       event.preventDefault();
       action(event);

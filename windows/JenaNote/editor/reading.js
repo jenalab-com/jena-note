@@ -46,6 +46,7 @@ let pageStep = 1;
 let rulers = [];
 let rulerDrag = null;
 let shiftHeld = false;
+let aiActive = false;
 
 let readingPath = null;
 let anchorOffset = 0;
@@ -92,7 +93,8 @@ function maxPageWidth(hostWidth, spread) {
 
 const paperWidth = () => paperSizes.find(size => size.id === reading.paper)?.width ?? 0;
 const displaySize = () => reading.bodySize * reading.fontScale;
-const isPaged = () => reading.mode === 'paged' && !plainMode;
+// The AI panel works on a scrolling document, and the page view returns when it closes.
+const isPaged = () => reading.mode === 'paged' && !plainMode && !aiActive;
 const WEIGHTS = { light: 300, regular: 400, bold: 700 };
 
 function currentFontCss() {
@@ -160,6 +162,7 @@ function layoutScroll(hostWidth, page, margins, column) {
   const fixed = widthMode === 'book' && paperWidth() > 0;
   let side;
   let rulerX;
+  let rulerWidth = page;
   if (fixed) {
     // A sheet wider than the window scrolls sideways, and its line breaks stay as they are.
     const pageX = Math.max(SCROLL_SIDE_INSET, (hostWidth - page) / 2);
@@ -169,12 +172,15 @@ function layoutScroll(hostWidth, page, margins, column) {
     rulerX = pageX;
   } else {
     side = Math.max(SCROLL_SIDE_INSET, (hostWidth - column) / 2);
-    root.style.width = `${Math.max(MIN_TEXT_WIDTH, hostWidth - 2 * side)}px`;
+    const shown = Math.max(MIN_TEXT_WIDTH, hostWidth - 2 * side);
+    root.style.width = `${shown}px`;
     rulerX = side - margins.left;
+    // When the window is narrower than the page, the ruler matches the text, so its handles stay in reach.
+    rulerWidth = Math.min(page, shown + margins.left + margins.right);
   }
   root.style.marginLeft = `${side}px`;
   setRulerCount(1);
-  placeRuler(rulers[0], rulerX - scroller.scrollLeft, 8, page, margins, {
+  placeRuler(rulers[0], rulerX - scroller.scrollLeft, 8, rulerWidth, margins, {
     canGrow: widthMode === 'book' && !fixed,
     maxWidth: Math.max(MIN_TEXT_WIDTH, hostWidth - 2 * SCROLL_SIDE_INSET),
     paperOrigin: fixed,
@@ -742,6 +748,7 @@ function applyReadingState(message) {
     goToOffset(anchorOffset);
   }
   updateBookmarkButton();
+  aiDocumentChanged();
 }
 
 // MARK: - Ruler
@@ -984,7 +991,9 @@ function runReadingCommand(name) {
   if (sourceActive) return;
   switch (name) {
     case 'scroll': changeReading({ mode: 'scroll' }); break;
-    case 'paged': changeReading({ mode: 'paged' }); break;
+    case 'paged':
+      if (!aiActive) changeReading({ mode: 'paged' });
+      break;
     case 'fontUp': changeReading({ fontScale: stepped(reading.fontScale, 0.1, 0.8, 2) }); break;
     case 'fontDown': changeReading({ fontScale: stepped(reading.fontScale, -0.1, 0.8, 2) }); break;
     case 'appearance': showAppearance(); break;
@@ -1029,12 +1038,17 @@ function appendReadingToolbar(toolbar) {
   toolbar.append(separator());
   toolbar.append(toolbarButton(strings['reader.bookmark.toggle'] ?? '', () => runReadingCommand('bookmarkToggle'), 'toolbar-bookmark'));
   toolbar.append(toolbarButton(strings['reader.bookmark.list'] ?? '', () => runReadingCommand('bookmarkList'), 'toolbar-bookmark-list'));
+  toolbar.append(separator());
+  const ai = toolbarButton('AI', aiToggle, 'toolbar-ai');
+  ai.title = strings['ai.title'] ?? '';
+  toolbar.append(ai);
   updateReadingToolbar();
 }
 
 function updateReadingToolbar() {
-  document.getElementById('toolbar-scroll')?.classList.toggle('on', reading.mode === 'scroll');
-  document.getElementById('toolbar-paged')?.classList.toggle('on', reading.mode === 'paged');
+  document.getElementById('toolbar-scroll')?.classList.toggle('on', !isPaged());
+  document.getElementById('toolbar-paged')?.classList.toggle('on', isPaged());
+  document.getElementById('toolbar-ai')?.classList.toggle('on', aiActive);
   const size = document.getElementById('toolbar-size');
   if (size) size.textContent = `${reading.bodySize}pt`;
   updateBookmarkButton();
@@ -1224,9 +1238,12 @@ window.chrome.webview.addEventListener('message', event => {
     case 'readingState':
       applyReadingState(message);
       break;
-    case 'readingPath':
+    case 'readingPath': {
+      const previous = readingPath;
       readingPath = message.path ?? null;
+      aiPathChanged(previous);
       break;
+    }
     case 'readingCommand':
       runReadingCommand(message.name);
       break;

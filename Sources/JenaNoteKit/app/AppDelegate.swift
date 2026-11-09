@@ -10,6 +10,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     private let recentMenuDelegate = RecentDocumentsMenuDelegate()
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
+        AIWorkContextResolver.useOpenDocuments()
         SettingsManager.shared.applyAppearance()
         SettingsManager.shared.applyAutosave()
         setupMenu()

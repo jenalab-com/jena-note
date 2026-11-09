@@ -389,26 +389,12 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
     // MARK: - Helpers
 
     private static func rebase(_ path: String, from oldRoot: URL, to newRoot: URL) -> String {
-        let parts = path.split(separator: "/", omittingEmptySubsequences: false)
-        guard !path.isEmpty, path != ".", !path.hasPrefix("/"), !path.hasPrefix("~"), !parts.contains("..") else {
-            return path
-        }
-        let absolute = parts.reduce(oldRoot) { $0.appendingPathComponent(String($1)) }
-        if let rel = AIWorkContext.relativePath(of: absolute, to: newRoot), !rel.isEmpty { return rel }
-        return absolute.path
+        AIWorkContextEdits.rebase(path, from: oldRoot, to: newRoot)
     }
 
     /// `invalidPaths` for an in-memory context, matching what `load` would report.
     private static func withInvalidPaths(_ context: AIWorkContext) -> AIWorkContext {
-        var result = context
-        var invalid = context.config.settingsSources.filter { path in
-            var single = context
-            single.config.settingsSources = [path]
-            return single.settingsSourceURLs.isEmpty
-        }
-        if context.writingFolderURL == nil { invalid.append(context.config.writingFolder) }
-        result.invalidPaths = invalid
-        return result
+        AIWorkContextEdits.withInvalidPaths(context)
     }
 }
 

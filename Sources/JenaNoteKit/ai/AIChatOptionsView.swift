@@ -158,13 +158,7 @@ final class AIChatOptionsView: NSStackView {
     private func updateModels() {
         let current = AISettings.model(for: provider)
         var ids = metadata.models.map(\.id)
-        if ids.isEmpty {
-            switch provider {
-            case .claude: ids = ["opus", "sonnet", "haiku"]
-            case .gemini: ids = ["gemini-3-pro-preview", "gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash"]
-            case .codex, .grok: break
-            }
-        }
+        if ids.isEmpty { ids = AIMetadata.fallbackModels(for: provider) }
         if !current.isEmpty, !ids.contains(current) { ids.append(current) }
         modelPicker.removeAllItems()
         for (title, value) in [(L10n.tr("ai.defaultModel"), "")] + ids.map({ ($0, $0) }) {

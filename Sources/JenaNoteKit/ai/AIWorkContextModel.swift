@@ -66,11 +66,7 @@ enum AIWorkContextModel {
 
     /// Unchecking a settings file adds it to `excludedSettings`; checking it again removes it.
     static func toggleIncluded(_ config: inout AIWorkContextConfig, path: String) {
-        if let index = config.excludedSettings.firstIndex(of: path) {
-            config.excludedSettings.remove(at: index)
-        } else {
-            config.excludedSettings.append(path)
-        }
+        AIWorkContextEdits.toggleIncluded(&config, path: path)
     }
 
     static func toggleSummarized(_ config: inout AIWorkContextConfig, path: String) {
@@ -162,32 +158,16 @@ enum AIWorkContextModel {
         return String(format: L10n.tr(key), arguments: args)
     }
 
-    /// Adds a settings source (file or folder) as a root-relative path, then normalizes `enabled`.
-    /// Adding one already present is a no-op.
     static func addingSource(_ url: URL, to config: inout AIWorkContextConfig, root: URL) throws {
-        guard let rel = AIWorkContext.relativePath(of: url, to: root) else {
-            throw AIWorkContextValidationError.settingsOutsideRoot(url.path)
-        }
-        if rel.isEmpty { throw AIWorkContextValidationError.settingsIsRoot }
-        let hadSources = !config.settingsSources.isEmpty
-        if !config.settingsSources.contains(rel) { config.settingsSources.append(rel) }
-        normalizeEnabled(&config, previouslyHadSources: hadSources)
+        try AIWorkContextEdits.addingSource(url, to: &config, root: root)
     }
 
-    /// Excluded/summarized lists are left untouched so re-adding the source restores the choices.
     static func removingSource(_ relativePath: String, from config: inout AIWorkContextConfig) {
-        let hadSources = !config.settingsSources.isEmpty
-        config.settingsSources.removeAll { $0 == relativePath }
-        normalizeEnabled(&config, previouslyHadSources: hadSources)
+        AIWorkContextEdits.removingSource(relativePath, from: &config)
     }
 
-    /// No sources → off. First source after "none" → on, unless the user switched it off by hand.
     static func normalizeEnabled(_ config: inout AIWorkContextConfig, previouslyHadSources: Bool) {
-        if config.settingsSources.isEmpty {
-            config.enabled = false
-        } else if !previouslyHadSources && !config.disabledByUser {
-            config.enabled = true
-        }
+        AIWorkContextEdits.normalizeEnabled(&config, previouslyHadSources: previouslyHadSources)
     }
 
     // MARK: - Folders

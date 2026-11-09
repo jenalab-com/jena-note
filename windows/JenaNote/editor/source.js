@@ -11,7 +11,7 @@ let sourceReturnRange = null;
 
 function updateSourceToolbar() {
   for (const button of document.querySelectorAll('#toolbar button')) {
-    button.disabled = sourceActive && button.id !== 'toolbar-source';
+    button.disabled = (sourceActive && !['toolbar-source', 'toolbar-ai'].includes(button.id)) || (aiActive && button.id === 'toolbar-paged');
   }
   document.getElementById('toolbar-source')?.classList.toggle('on', sourceActive);
 }
