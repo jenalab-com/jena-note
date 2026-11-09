@@ -67,7 +67,7 @@ bash Vendor/Kiwi/scripts/fetch-kiwi-model.sh
 - [ ] 지난 화 탭의 인덱스 상태와 기기 내 요약 개수가 전과 같다 (`AIWorkIndex`를 옮겼다)
 - [ ] 작품을 다시 열어도 기기 내 요약을 처음부터 다시 만들지 않는다 (`AIWorkIndex.split`을 빠르게 고쳤다. 조각 ID가 같아야 한다)
 - [ ] 원문 탐색이 대소문자와 한글을 전처럼 찾는다 (검색을 `AIWorkSearchCorpus`로 바꿨다)
-- [ ] 설정 → AI → Local(llama.cpp)에서 실행·대화·중지가 전처럼 된다 (main의 `.local`을 공유 `AIProvider`로 옮겼다. Windows 공급자 목록에서는 뺐다)
+- [ ] 설정 → AI → Local(llama.cpp)에서 실행·대화·중지가 전처럼 된다 (main의 `.local`을 공유 `AIProvider`로 옮겼다. Windows 공급자 목록에도 나온다)
 - [ ] AI 패널이 작품 문맥을 찾고, 작품 문맥 창을 열어 저장할 수 있다 (`AIWorkContext`를 옮겼다)
 
 ## 4. 저장 버그 재현

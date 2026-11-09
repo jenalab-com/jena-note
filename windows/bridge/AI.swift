@@ -20,8 +20,7 @@ private func provider(_ name: UnsafePointer<CChar>) throws -> AIProvider {
 
 @_cdecl("jena_ai_providers")
 public func jena_ai_providers() -> UnsafeMutablePointer<CChar>? {
-    // Local (llama.cpp) runs a server only the macOS app manages yet.
-    let list: [[String: Any]] = AIProvider.allCases.filter { $0 != .local }.map {
+    let list: [[String: Any]] = AIProvider.allCases.map {
         ["id": $0.rawValue, "title": $0.title, "documentation": $0.documentation.absoluteString, "loginArguments": $0.loginArguments]
     }
     return duplicate((try? encode(list)) ?? "[]")
