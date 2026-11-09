@@ -2,18 +2,62 @@
 
 // Find and replace in the document. Like macOS, matches are highlights over the text, so finding
 // never touches the document, saving or undo. Only replacing edits, one undoable change at a time.
+// Also as on macOS, the query is a field in the toolbar and replacing opens a panel under it.
 
-const findBar = document.getElementById('find-bar');
+const findField = document.getElementById('find-field');
 const findInput = document.getElementById('find-input');
 const findCount = document.getElementById('find-count');
-const replaceRow = document.getElementById('replace-row');
+const replaceRow = document.getElementById('replace-panel');
 const replaceInput = document.getElementById('replace-input');
+/// A search is open from Ctrl+F or typing in the field until Esc or the clear button ends it.
+let findActive = false;
 let findMatches = [];
 let findCurrent = -1;
 // Where the caret was when the bar opened. Focusing the field moves the page selection away.
 let findAnchor = null;
 let findRefreshTimer = 0;
 let findReplacing = false;
+
+function findIsOpen() {
+  return findActive;
+}
+
+/// The search's own fields, whose keys belong to them and not to the document.
+function findOwns(node) {
+  return findField.contains(node) || replaceRow.contains(node);
+}
+
+function findShowReplace() {
+  // The source view is read only, so there is nothing to replace in it.
+  if (sourceActive) return;
+  replaceRow.hidden = false;
+  findPlaceReplace();
+  document.getElementById('toolbar-replace')?.classList.add('on');
+}
+
+function findHideReplace() {
+  replaceRow.hidden = true;
+  document.getElementById('toolbar-replace')?.classList.remove('on');
+}
+
+/// Hangs from the field, at its width, like the macOS panel.
+function findPlaceReplace() {
+  if (replaceRow.hidden) return;
+  const box = findField.getBoundingClientRect();
+  replaceRow.style.left = `${Math.max(8, Math.min(box.left, innerWidth - replaceRow.offsetWidth - 8))}px`;
+  replaceRow.style.top = `${box.bottom + 4}px`;
+  replaceInput.style.width = `${Math.max(140, box.width - 16)}px`;
+}
+
+/// The toolbar button: opens the panel, or closes it and goes back to the query.
+function findToggleReplace() {
+  if (!replaceRow.hidden) {
+    findHideReplace();
+    findInput.focus();
+    return;
+  }
+  findOpen(true);
+}
 
 function findTargets() {
   if (sourceActive) return [sourceText];
@@ -53,6 +97,7 @@ function findPaint() {
   const current = findMatches[findCurrent];
   if (current) CSS.highlights.set('find-current', new Highlight(current.range));
   findCount.textContent = findInput.value ? `${findCurrent + 1}/${findMatches.length}` : '';
+  findField.classList.toggle('has-text', findInput.value !== '');
   const hasMatches = findMatches.length > 0;
   document.getElementById('replace-one').disabled = !hasMatches;
   document.getElementById('replace-all').disabled = !hasMatches;
@@ -85,7 +130,7 @@ function findMove(forward) {
 
 /// Follows edits without moving the view.
 function findRefresh() {
-  if (findBar.hidden || !findInput.value) return;
+  if (!findActive || !findInput.value) return;
   const position = findCurrent;
   findMatches = findCollect(findInput.value);
   findCurrent = findMatches.length === 0 ? -1 : Math.min(Math.max(position, 0), findMatches.length - 1);
@@ -93,23 +138,33 @@ function findRefresh() {
 }
 
 function findOpen(withReplace) {
-  findBar.hidden = false;
-  // The source view is read only, so there is nothing to replace in it.
-  replaceRow.hidden = !withReplace || sourceActive;
+  findActive = true;
+  if (withReplace) findShowReplace();
+  else findHideReplace();
   const selection = getSelection();
   const inDocument = selection?.rangeCount && (sourceActive ? sourceText : root).contains(selection.anchorNode);
   if (inDocument) findAnchor = selection.getRangeAt(0).cloneRange();
   const selected = inDocument && !selection.isCollapsed ? selection.toString() : '';
   if (selected && !selected.includes('\n')) findInput.value = selected;
-  findInput.focus();
-  findInput.select();
+  // With a query already there, replacing starts where the replacement is typed.
+  if (withReplace && !replaceRow.hidden && findInput.value) {
+    replaceInput.focus();
+    replaceInput.select();
+  } else {
+    findInput.focus();
+    findInput.select();
+  }
   findSearch();
 }
 
 /// Ending a search selects the current match, so it can be fixed at once.
 function findClose() {
   const current = findMatches[findCurrent];
-  findBar.hidden = true;
+  findActive = false;
+  findHideReplace();
+  findInput.value = '';
+  findCount.textContent = '';
+  findField.classList.remove('has-text');
   findMatches = [];
   findCurrent = -1;
   findAnchor = null;
@@ -175,8 +230,8 @@ function findReplaceAll() {
 
 /// An open search follows when the source view takes over or gives back the screen.
 function findModeChanged() {
-  if (findBar.hidden) return;
-  if (sourceActive) replaceRow.hidden = true;
+  if (!findActive) return;
+  if (sourceActive) findHideReplace();
   findAnchor = null;
   findMatches = [];
   findCurrent = -1;
@@ -195,7 +250,16 @@ function findJump(query, ordinal) {
   revealRange(match.range);
 }
 
-findInput.addEventListener('input', findSearch);
+findInput.addEventListener('input', () => {
+  findActive = true;
+  findSearch();
+});
+findInput.addEventListener('focus', () => {
+  if (findActive) return;
+  // Clicking into the field starts a search from where the author was.
+  const selection = getSelection();
+  if (selection?.rangeCount && (sourceActive ? sourceText : root).contains(selection.anchorNode)) findAnchor = selection.getRangeAt(0).cloneRange();
+});
 findInput.addEventListener('keydown', event => {
   if (event.isComposing || event.keyCode === 229) return;
   if (event.key === 'Enter') {
@@ -212,13 +276,15 @@ replaceInput.addEventListener('keydown', event => {
     event.preventDefault();
     findReplaceCurrent();
   } else if (event.key === 'Escape') {
+    // As on macOS, this closes only the panel and goes back to the query.
     event.preventDefault();
-    findClose();
+    findHideReplace();
+    findInput.focus();
   }
 });
-document.getElementById('find-previous').addEventListener('click', () => findMove(false));
-document.getElementById('find-next').addEventListener('click', () => findMove(true));
+document.getElementById('find-close').addEventListener('mousedown', event => event.preventDefault());
 document.getElementById('find-close').addEventListener('click', findClose);
+window.addEventListener('resize', findPlaceReplace);
 document.getElementById('replace-one').addEventListener('click', findReplaceCurrent);
 document.getElementById('replace-all').addEventListener('click', findReplaceAll);
 root.addEventListener('input', event => {
@@ -241,11 +307,13 @@ window.chrome.webview.addEventListener('message', event => {
     case 'find':
       if (message.action === 'open') findOpen(false);
       else if (message.action === 'replace') findOpen(true);
-      else if (findBar.hidden) findOpen(false);
+      else if (!findActive) findOpen(false);
       else findMove(message.action === 'next');
       break;
     case 'strings':
       findInput.placeholder = message.strings['toolbar.find'] ?? '';
+      findInput.title = `${message.strings['toolbar.find'] ?? ''} (Ctrl+F)`;
+      document.getElementById('find-close').title = message.strings['ai.work.cancel'] ?? '';
       replaceInput.placeholder = message.strings['find.replacePlaceholder'] ?? '';
       document.getElementById('replace-one').textContent = message.strings['find.replace'] ?? '';
       document.getElementById('replace-all').textContent = message.strings['find.replaceAll'] ?? '';

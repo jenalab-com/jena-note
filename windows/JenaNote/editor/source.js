@@ -11,7 +11,8 @@ let sourceReturnRange = null;
 
 function updateSourceToolbar() {
   for (const button of document.querySelectorAll('#toolbar button')) {
-    button.disabled = (sourceActive && !['toolbar-source', 'toolbar-ai'].includes(button.id)) || (aiActive && button.id === 'toolbar-paged');
+    // As on macOS, finding still works in the source. Nothing that changes the document does.
+    button.disabled = (sourceActive && !['toolbar-source', 'toolbar-ai', 'toolbar-more', 'find-close'].includes(button.id)) || (aiActive && button.id === 'toolbar-paged');
   }
   document.getElementById('toolbar-source')?.classList.toggle('on', sourceActive);
 }
@@ -26,6 +27,7 @@ function showSource(text) {
     const selection = getSelection();
     sourceReturnRange = selection?.rangeCount && root.contains(selection.anchorNode) ? selection.getRangeAt(0).cloneRange() : null;
     sourceActive = true;
+    punctuationReset();
     sourceView.hidden = false;
     proofDismiss();
     closePopovers();

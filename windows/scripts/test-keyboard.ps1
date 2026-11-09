@@ -5,12 +5,15 @@
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path "$PSScriptRoot\..\..").Path
 Add-Type -AssemblyName System.Windows.Forms, Microsoft.VisualBasic
-Add-Type -Namespace JenaKeyboardTest -Name Native -MemberDefinition '[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();'
+Add-Type -Namespace JenaKeyboardTest -Name Native -MemberDefinition '[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);'
 
 $folder = Join-Path $env:TEMP ("jena-keyboard-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $folder | Out-Null
 $path = Join-Path $folder 'sample.md'
 $env:JENANOTE_TEST_DATA = Join-Path $folder 'data'
+# Typed sequences and double Shift are off by default.
+New-Item -ItemType Directory -Path $env:JENANOTE_TEST_DATA | Out-Null
+[IO.File]::WriteAllText((Join-Path $env:JENANOTE_TEST_DATA 'settings.json'), '{"PunctuationTriggersEnabled":true,"PunctuationShiftTarget":"thought"}')
 [IO.File]::WriteAllText($path, "second`n", (New-Object Text.UTF8Encoding($false)))
 
 $process = Start-Process "$repo\windows\JenaNote\bin\Release\net9.0-windows\JenaNote.exe" -ArgumentList "`"$path`"" -PassThru
@@ -92,6 +95,33 @@ try {
     Start-Sleep -Milliseconds 600
     $again = [IO.File]::ReadAllText($path)
     Check 'Ctrl+F works from the sidebar search' ($again -cmatch 'again' -and $again -cnotmatch 'found') ($again -replace "`n", '\n')
+
+    # Punctuation marks from real keys: Ctrl+1, a typed sequence, double Shift, and undo.
+    Send '{ENTER}^1'
+    Send 'hi'
+    Send '^1'
+    Send '{ENTER}a;;;b;;;'
+    Send '{ENTER}'
+    foreach ($round in 1..2) {
+        foreach ($tap in 1..2) {
+            [JenaKeyboardTest.Native]::keybd_event(0x10, 0x2A, 0, [UIntPtr]::Zero)
+            Start-Sleep -Milliseconds 60
+            [JenaKeyboardTest.Native]::keybd_event(0x10, 0x2A, 2, [UIntPtr]::Zero)
+            Start-Sleep -Milliseconds 60
+        }
+        Start-Sleep -Milliseconds 300
+        if ($round -eq 1) { Send 'c' }
+    }
+    Send '{ENTER}d^1^z'
+    Send '^s'
+    Start-Sleep -Milliseconds 600
+    $markText = [IO.File]::ReadAllText($path)
+    $marks = $markText -split "`n"
+    $detail = $markText -replace "`n", '\n'
+    Check 'Ctrl+1 opens and closes dialogue' ($marks -ccontains '"hi"') $detail
+    Check 'a typed sequence becomes the mark' ($marks -ccontains 'a"b"') $detail
+    Check 'double Shift toggles the chosen mark' ($marks -ccontains "'c'") $detail
+    Check 'Ctrl+Z takes a mark back alone' ($marks -ccontains 'd') $detail
 
     # Forcing the process closed below would hide an app that never exits.
     [void]$process.CloseMainWindow()

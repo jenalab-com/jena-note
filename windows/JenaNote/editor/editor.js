@@ -515,6 +515,7 @@ function run(name) {
 // MARK: - Keys
 
 function insertNewLine(event) {
+  punctuationBeforeNewLine();
   const block = currentBlock();
   const tag = block?.tagName;
   if (tag === 'TABLE') return;
@@ -564,13 +565,16 @@ const SHORTCUTS = {
   '=': () => runReadingCommand('fontUp'),
   '+': () => runReadingCommand('fontUp'),
   '-': () => runReadingCommand('fontDown'),
+  1: () => punctuationToggle('dialogue', 'key'),
+  2: () => punctuationToggle('quotation', 'key'),
+  3: () => punctuationToggle('thought', 'key'),
 };
 
 document.addEventListener('keydown', event => {
   if (event.ctrlKey && !event.altKey) {
     const action = SHORTCUTS[event.key.toLowerCase()];
     // Formatting belongs to the document, not to what is being typed in a field.
-    if ((findBar.contains(event.target) || event.target === aiInput) && ['b', 'i', 'u'].includes(event.key.toLowerCase())) return;
+    if ((findOwns(event.target) || event.target === aiInput) && ['b', 'i', 'u', '1', '2', '3'].includes(event.key.toLowerCase())) return;
     if (action) {
       event.preventDefault();
       action(event);
@@ -579,7 +583,7 @@ document.addEventListener('keydown', event => {
   }
   if (event.key === 'F3') {
     event.preventDefault();
-    if (findBar.hidden) findOpen(false);
+    if (!findIsOpen()) findOpen(false);
     else findMove(!event.shiftKey);
     return;
   }
@@ -630,32 +634,7 @@ root.addEventListener('input', () => {
 // MARK: - Toolbar
 
 function buildToolbar() {
-  const toolbar = document.getElementById('toolbar');
-  const items = [
-    ['bold', 'toolbar.bold'], ['italic', 'toolbar.italic'], ['code', 'toolbar.code'], null,
-    ['body', 'toolbar.body'], ['h1', 'toolbar.h1'], ['h2', 'toolbar.h2'], ['h3', 'toolbar.h3'], null,
-    ['ul', 'toolbar.ul'], ['ol', 'toolbar.ol'], ['quote', 'toolbar.quote'], ['codeblock', 'doc.codeBlock'], ['hr', 'toolbar.hr'], null,
-    ['link', 'toolbar.link'], ['color', 'menu.format.textColor'], null,
-    ['proofSelection', 'proof.button'],
-  ];
-  toolbar.replaceChildren();
-  for (const item of items) {
-    if (!item) {
-      const separator = document.createElement('span');
-      separator.className = 'separator';
-      toolbar.append(separator);
-      continue;
-    }
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.tabIndex = -1;
-    button.textContent = strings[item[1]] ?? item[1];
-    // Keeps the selection in the editor while the mouse presses a button.
-    button.addEventListener('mousedown', event => event.preventDefault());
-    button.addEventListener('click', () => run(item[0]));
-    toolbar.append(button);
-  }
-  appendReadingToolbar(toolbar);
+  buildToolbarItems(document.getElementById('toolbar'));
   updateSourceToolbar();
   fillSourceStrings();
   document.getElementById('link-label').textContent = strings['doc.linkPrompt'] ?? '';
@@ -676,6 +655,7 @@ document.getElementById('color-input').addEventListener('change', event => {
 
 function loadDocument(message) {
   readingBeforeLoad();
+  punctuationReset();
   plainMode = message.plain === true;
   document.body.classList.toggle('plain', plainMode);
   if (plainMode) renderPlain(message.text);

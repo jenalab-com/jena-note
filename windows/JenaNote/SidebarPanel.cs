@@ -121,21 +121,13 @@ sealed class SidebarPanel : DockPanel
         Children.Add(content);
     }
 
-    Button ToolButton(string text, string tooltip, RoutedEventHandler click)
-    {
-        var button = new Button { Content = text, ToolTip = tooltip, Padding = new Thickness(6, 0, 6, 0), Margin = new Thickness(2, 0, 0, 0), MinWidth = 26 };
-        button.Click += click;
-        return button;
-    }
 
     void ApplyStrings()
     {
         header.Children.Clear();
         var buttons = new StackPanel { Orientation = Orientation.Horizontal };
-        buttons.Children.Add(ToolButton("+", NativeCore.Tr("sidebar.add.tooltip"), (_, _) => AddFolder()));
-        buttons.Children.Add(ToolButton("\U0001F4C4", NativeCore.Tr("sidebar.create.document"), (_, _) => CreateIn(TargetFolder(), isDirectory: false)));
-        buttons.Children.Add(ToolButton("\U0001F4C1", NativeCore.Tr("sidebar.create.folder"), (_, _) => CreateIn(TargetFolder(), isDirectory: true)));
-        var sort = ToolButton("⇅", NativeCore.Tr("sidebar.sort.tooltip"), (_, _) => { });
+        // Glyphs of Segoe Fluent Icons: Sort, Document, NewFolder and Add, in the macOS order.
+        var sort = Palette.IconButton("\uE8CB", NativeCore.Tr("sidebar.sort.tooltip"), (_, _) => { });
         sort.Click += (_, _) =>
         {
             var menu = SortMenu();
@@ -143,9 +135,14 @@ sealed class SidebarPanel : DockPanel
             menu.IsOpen = true;
         };
         buttons.Children.Add(sort);
+        buttons.Children.Add(Palette.IconButton("\uE8A5", NativeCore.Tr("sidebar.create.document"), (_, _) => CreateIn(TargetFolder(), isDirectory: false)));
+        buttons.Children.Add(Palette.IconButton("\uE8F4", NativeCore.Tr("sidebar.create.folder"), (_, _) => CreateIn(TargetFolder(), isDirectory: true)));
+        buttons.Children.Add(Palette.IconButton("\uE710", NativeCore.Tr("sidebar.add.tooltip"), (_, _) => AddFolder()));
         SetDock(buttons, Dock.Right);
         header.Children.Add(buttons);
-        header.Children.Add(new TextBlock { Text = NativeCore.Tr("sidebar.title"), FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        var title = new TextBlock { Text = NativeCore.Tr("sidebar.title"), FontWeight = FontWeights.SemiBold, FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+        title.SetResourceReference(TextBlock.ForegroundProperty, Palette.Muted);
+        header.Children.Add(title);
 
         searchHint.Text = NativeCore.Tr("sidebar.search.placeholder");
         emptyMessage.Text = NativeCore.Tr("sidebar.empty.message");
@@ -223,9 +220,34 @@ sealed class SidebarPanel : DockPanel
         return node.IsMissing ? name + " — " + NativeCore.Tr("sidebar.missing") : name;
     }
 
+    /// <summary>The name with a folder or document glyph in front, as in the macOS sidebar.</summary>
+    static StackPanel Header(Node node)
+    {
+        var glyph = new TextBlock
+        {
+            Text = node.IsDirectory ? "\uE8B7" : "\uE8A5",
+            FontFamily = Palette.Icons,
+            FontSize = 13,
+            Margin = new Thickness(0, 1, 7, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        glyph.SetResourceReference(TextBlock.ForegroundProperty, Palette.Muted);
+        var header = new StackPanel { Orientation = Orientation.Horizontal, Opacity = node.IsMissing ? 0.6 : 1 };
+        header.Children.Add(glyph);
+        header.Children.Add(new TextBlock { Text = Label(node), VerticalAlignment = VerticalAlignment.Center });
+        return header;
+    }
+
+    static string HeaderText(TreeViewItem item) => item.Header switch
+    {
+        string text => text,
+        StackPanel { Children.Count: > 0 } panel => (panel.Children[^1] as TextBlock)?.Text ?? "",
+        _ => "",
+    };
+
     void Refresh(TreeViewItem item, Node node)
     {
-        item.Header = Label(node);
+        item.Header = Header(node);
         if (!node.IsDirectory || node.IsMissing) return;
         if (item.IsExpanded) Fill(item, node);
         else if (AppSettings.Current.SidebarExpanded.Contains(node.Path)) item.IsExpanded = true;
@@ -233,7 +255,7 @@ sealed class SidebarPanel : DockPanel
 
     TreeViewItem MakeItem(Node node)
     {
-        var item = new TreeViewItem { Tag = node, Header = Label(node), ToolTip = node.Path };
+        var item = new TreeViewItem { Tag = node, Header = Header(node), ToolTip = node.Path };
         // Filled when it opens, so it follows the language and is not replaced by a reload while open.
         var menu = new ContextMenu();
         item.ContextMenu = menu;
@@ -575,7 +597,7 @@ sealed class SidebarPanel : DockPanel
     public object? ItemFor(string path) => AllItems(tree).FirstOrDefault(item => item.Tag is Node node && string.Equals(node.Path, path, StringComparison.OrdinalIgnoreCase));
     public string SearchText { get => search.Text; set => search.Text = value; }
     public int RootCount => tree.Items.Count;
-    public IEnumerable<string> VisibleNames => AllItems(tree).Where(item => item.Tag is Node).Select(item => item.Header as string ?? "");
+    public IEnumerable<string> VisibleNames => AllItems(tree).Where(item => item.Tag is Node).Select(HeaderText);
 
     static TextBlock Snippet(JsonElement hit)
     {

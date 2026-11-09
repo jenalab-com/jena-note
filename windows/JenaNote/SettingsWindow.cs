@@ -45,6 +45,7 @@ sealed class SettingsWindow : Window
         // The default style gives each tab a wide minimum, and three of them would need two rows.
         tabs.Items.Add(new TabItem { Header = NativeCore.Tr("settings.tab.general"), Content = BuildGeneral(), MinWidth = 72 });
         tabs.Items.Add(new TabItem { Header = NativeCore.Tr("settings.tab.ui"), Content = BuildAppearance(), MinWidth = 72 });
+        tabs.Items.Add(new TabItem { Header = NativeCore.Tr("settings.tab.punctuation"), MinWidth = 72, Content = new ScrollViewer { Content = BuildPunctuation(), VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
         tabs.Items.Add(new TabItem { Header = "AI", MinWidth = 72, Content = new ScrollViewer { Content = BuildAi(), VerticalScrollBarVisibility = ScrollBarVisibility.Auto } });
         Content = tabs;
     }
@@ -72,11 +73,46 @@ sealed class SettingsWindow : Window
         var login = new Button { Content = NativeCore.Tr("ai.login"), Padding = new Thickness(10, 2, 10, 2), Margin = new Thickness(6, 0, 0, 0) };
         var check = new Button { Content = NativeCore.Tr("ai.recheck"), Padding = new Thickness(10, 2, 10, 2), Margin = new Thickness(6, 0, 0, 0) };
         var docs = new Button { Content = NativeCore.Tr("ai.instructions"), Padding = new Thickness(10, 2, 10, 2), Margin = new Thickness(6, 0, 0, 0) };
+        var run = new Button { Content = NativeCore.Tr("ai.local.run"), Padding = new Thickness(10, 2, 10, 2) };
+        var address = new TextBox { MinWidth = 260, Text = AppSettings.Current.AiLocalAddress, ToolTip = LocalAi.DefaultAddress };
+        System.Windows.Automation.AutomationProperties.SetName(address, NativeCore.Tr("ai.local.address"));
+        var pathLabel = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 12) };
+        var addressRow = new DockPanel();
+        var addressLabel = new TextBlock { Text = NativeCore.Tr("ai.local.address"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 12) };
 
         string Current() => AppSettings.Current.AiProvider;
+        bool IsLocal() => Current() == "local";
+
+        void ShowServer()
+        {
+            if (!IsLocal()) return;
+            var server = LocalAiServer.Current;
+            status.Text = LocalAiServer.Describe();
+            var active = server.Kind is LocalAiServer.Kind.Starting or LocalAiServer.Kind.Running;
+            run.Content = NativeCore.Tr(active ? "ai.local.stop" : "ai.local.run");
+            // A server this app did not start is not this app's to stop.
+            run.IsEnabled = !(server.Kind == LocalAiServer.Kind.Running && !server.Owned);
+        }
+        Action serverChanged = ShowServer;
+        LocalAiServer.Changed += serverChanged;
+        Closed += (_, _) => LocalAiServer.Changed -= serverChanged;
 
         void ShowState()
         {
+            var local = IsLocal();
+            foreach (var control in new UIElement[] { install, login, check, docs })
+                control.Visibility = local ? Visibility.Collapsed : Visibility.Visible;
+            run.Visibility = local ? Visibility.Visible : Visibility.Collapsed;
+            addressRow.Visibility = local ? Visibility.Visible : Visibility.Collapsed;
+            addressLabel.Visibility = addressRow.Visibility;
+            pathLabel.Text = NativeCore.Tr(local ? "ai.local.path" : "ai.path");
+            path.ToolTip = NativeCore.Tr(local ? "ai.local.pathPlaceholder" : "ai.pathPlaceholder");
+            if (local)
+            {
+                detail.Text = NativeCore.Tr("ai.local.help");
+                ShowServer();
+                return;
+            }
             var executable = AiExecutable.Locate(Current());
             var verified = executable != null && AiService.IsVerified(Current(), executable);
             status.Text = executable == null
@@ -109,6 +145,16 @@ sealed class SettingsWindow : Window
         {
             path.Text = AppSettings.Current.AiPaths.GetValueOrDefault(Current(), "");
             ShowState();
+            if (IsLocal()) _ = LocalAiServer.RefreshAsync();
+        }
+
+        void SaveAddress()
+        {
+            var value = address.Text.Trim();
+            if (value == AppSettings.Current.AiLocalAddress) return;
+            AppSettings.Update(current => current.AiLocalAddress = value);
+            address.Text = AppSettings.Current.AiLocalAddress;
+            _ = LocalAiServer.RefreshAsync();
         }
 
         AddRow(form, NativeCore.Tr("ai.settings"), Choice(list.Select(item => (item.Id, item.Title)), Current(), value =>
@@ -122,7 +168,10 @@ sealed class SettingsWindow : Window
         var browse = new Button { Content = NativeCore.Tr("ai.browse"), Padding = new Thickness(10, 2, 10, 2), Margin = new Thickness(6, 0, 0, 0) };
         browse.Click += (_, _) =>
         {
-            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "CLI (*.exe;*.cmd;*.bat)|*.exe;*.cmd;*.bat" };
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Filter = IsLocal() ? "(*.exe;*.cmd;*.bat;*.ps1)|*.exe;*.cmd;*.bat;*.ps1" : "CLI (*.exe;*.cmd;*.bat)|*.exe;*.cmd;*.bat",
+            };
             if (dialog.ShowDialog(this) != true) return;
             path.Text = dialog.FileName;
             SavePath();
@@ -131,7 +180,27 @@ sealed class SettingsWindow : Window
         DockPanel.SetDock(browse, Dock.Right);
         pathRow.Children.Add(browse);
         pathRow.Children.Add(path);
-        AddRow(form, NativeCore.Tr("ai.path"), pathRow);
+        AddRow(form, null, pathRow);
+        Grid.SetRow(pathLabel, form.RowDefinitions.Count - 1);
+        form.Children.Add(pathLabel);
+
+        address.LostFocus += (_, _) => SaveAddress();
+        address.KeyDown += (_, e) =>
+        {
+            if (e.Key == System.Windows.Input.Key.Enter) SaveAddress();
+        };
+        addressRow.Children.Add(address);
+        AddRow(form, null, addressRow);
+        Grid.SetRow(addressLabel, form.RowDefinitions.Count - 1);
+        form.Children.Add(addressLabel);
+
+        run.Click += async (_, _) =>
+        {
+            SavePath();
+            SaveAddress();
+            if (LocalAiServer.Current.Kind is LocalAiServer.Kind.Starting or LocalAiServer.Kind.Running) LocalAiServer.Stop();
+            else await LocalAiServer.StartAsync();
+        };
 
         void OpenTerminal(bool installing, string opened)
         {
@@ -179,6 +248,7 @@ sealed class SettingsWindow : Window
         Closed += (_, _) => aiCheck?.Cancel();
 
         var actions = new StackPanel { Orientation = Orientation.Horizontal };
+        actions.Children.Add(run);
         actions.Children.Add(install);
         actions.Children.Add(login);
         actions.Children.Add(check);
@@ -231,6 +301,78 @@ sealed class SettingsWindow : Window
             if (!populating && box.SelectedItem is ComboBoxItem { Tag: string value }) changed(value);
         };
         return box;
+    }
+
+    /// <summary>Authors write marks differently, so every value is theirs to set.</summary>
+    UIElement BuildPunctuation()
+    {
+        var settings = AppSettings.Current;
+        var panel = new StackPanel { Margin = new Thickness(16) };
+        var table = new Grid { HorizontalAlignment = HorizontalAlignment.Left };
+        foreach (var width in new[] { 72.0, 90, 90, 90, 110 })
+            table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(width) });
+        void Place(UIElement element, int row, int column)
+        {
+            if (element is FrameworkElement framework) framework.Margin = new Thickness(0, 0, 12, 10);
+            Grid.SetRow(element, row);
+            Grid.SetColumn(element, column);
+            table.Children.Add(element);
+        }
+        string[] headers = { "punctuation.opening", "punctuation.closing", "punctuation.leadingSpaces", "punctuation.trigger" };
+        table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        for (var column = 0; column < headers.Length; column++)
+            Place(new TextBlock { Text = NativeCore.Tr(headers[column]), TextWrapping = TextWrapping.Wrap }, 0, column + 1);
+
+        foreach (var kind in AppSettings.PunctuationKinds)
+        {
+            var row = table.RowDefinitions.Count;
+            table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var style = settings.PunctuationFor(kind);
+            var title = NativeCore.Tr($"menu.format.punctuation.{kind}");
+            Place(new TextBlock { Text = NativeCore.Tr($"punctuation.short.{kind}"), VerticalAlignment = VerticalAlignment.Center }, row, 0);
+
+            TextBox Field(string value, string header, Action<PunctuationStyle, string> apply)
+            {
+                var box = new TextBox { Text = value, VerticalContentAlignment = VerticalAlignment.Center };
+                System.Windows.Automation.AutomationProperties.SetName(box, $"{title} {NativeCore.Tr(header)}");
+                box.TextChanged += (_, _) => AppSettings.UpdatePunctuation(current => apply(current.PunctuationFor(kind), box.Text));
+                return box;
+            }
+            Place(Field(style.Opening, "punctuation.opening", (target, text) => target.Opening = text), row, 1);
+            Place(Field(style.Closing, "punctuation.closing", (target, text) => target.Closing = text), row, 2);
+            var spaces = new ComboBox();
+            for (var count = 0; count <= AppSettings.MaxLeadingSpaces; count++) spaces.Items.Add(count.ToString(CultureInfo.InvariantCulture));
+            spaces.SelectedIndex = style.LeadingSpaces;
+            System.Windows.Automation.AutomationProperties.SetName(spaces, $"{title} {NativeCore.Tr("punctuation.leadingSpaces")}");
+            spaces.SelectionChanged += (_, _) => AppSettings.UpdatePunctuation(current => current.PunctuationFor(kind).LeadingSpaces = Math.Max(spaces.SelectedIndex, 0));
+            Place(spaces, row, 3);
+            Place(Field(style.Trigger, "punctuation.trigger", (target, text) => target.Trigger = text), row, 4);
+        }
+        panel.Children.Add(table);
+
+        TextBlock Hint(string key) => new() { Text = NativeCore.Tr(key), TextWrapping = TextWrapping.Wrap, Opacity = 0.7, Margin = new Thickness(0, 4, 0, 14) };
+        CheckBox Toggle(string key, bool value, Action<AppSettings, bool> apply)
+        {
+            var box = new CheckBox { Content = NativeCore.Tr(key), IsChecked = value, Margin = new Thickness(0, 0, 0, 6) };
+            box.Click += (_, _) => AppSettings.UpdatePunctuation(current => apply(current, box.IsChecked == true));
+            return box;
+        }
+        panel.Children.Add(Hint("punctuation.closingHint"));
+        panel.Children.Add(Toggle("punctuation.triggersEnabled", settings.PunctuationTriggersEnabled, (current, on) => current.PunctuationTriggersEnabled = on));
+        panel.Children.Add(Hint("punctuation.triggerHint"));
+
+        var shift = Choice(AppSettings.PunctuationKinds.Select(kind => (kind, NativeCore.Tr($"punctuation.short.{kind}")))
+                .Prepend(("", NativeCore.Tr("punctuation.off"))),
+            settings.PunctuationShiftTarget ?? "",
+            value => AppSettings.UpdatePunctuation(current => current.PunctuationShiftTarget = value.Length > 0 ? value : null));
+        shift.MinWidth = 120;
+        shift.Margin = new Thickness(12, 0, 0, 0);
+        var shiftRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 14) };
+        shiftRow.Children.Add(new TextBlock { Text = NativeCore.Tr("punctuation.doubleShift"), VerticalAlignment = VerticalAlignment.Center });
+        shiftRow.Children.Add(shift);
+        panel.Children.Add(shiftRow);
+        panel.Children.Add(Toggle("punctuation.closesOnReturn", settings.PunctuationClosesOnReturn, (current, on) => current.PunctuationClosesOnReturn = on));
+        return panel;
     }
 
     UIElement BuildGeneral()

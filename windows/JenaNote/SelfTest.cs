@@ -46,7 +46,8 @@ static class SelfTest
         try
         {
             var fileChecks = RunFileChecks(Check);
-            var window = new EditorWindow();
+            // Layout checks measure against this size, whatever the default window becomes.
+            var window = new EditorWindow { Width = 1100 };
             window.Show();
             while (!window.IsLoaded) await Task.Delay(20);
             await window.WhenReady();
@@ -98,11 +99,13 @@ static class SelfTest
             await RunExportChecks(window, Check);
             await RunPersistenceChecks(window, Check);
             await RunSettingsChecks(window, Check);
+            await RunPunctuationChecks(window, Check);
             await RunClosingChecks(Check);
             await RunSidebarChecks(window, recycled, Check);
             await RunReadingChecks(window, Check);
             await RunSourceChecks(window, Check);
             await RunAiChecks(window, report, Check);
+            await RunLocalAiChecks(window, Check);
             await RunWorkChecks(window, Check);
 
             var longDocument = results.GetProperty("longDocument");
@@ -523,6 +526,167 @@ static class SelfTest
         check("work: setup can start again", Kind(current) == "notInWork", Kind(current));
         await Task.Delay(1000);
         Directory.Delete(root, recursive: true);
+    }
+
+    static async Task RunLocalAiChecks(EditorWindow window, Action<string, bool, string> check)
+    {
+        var folder = Directory.CreateTempSubdirectory("jena-selftest-local-").FullName;
+        var saved = (AppSettings.Current.AiProvider, AppSettings.Current.AiLocalAddress, AppSettings.Current.AiPaths.GetValueOrDefault("local", ""));
+        static int FreePort()
+        {
+            var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            probe.Start();
+            var port = ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
+            probe.Stop();
+            return port;
+        }
+        async Task<string> Fails(Func<Task> action)
+        {
+            try
+            {
+                await action();
+                return "";
+            }
+            catch (AiFailure error)
+            {
+                return error.Message;
+            }
+        }
+
+        check("local: the provider list has it", NativeCore.AiProviders().Contains("\"local\""), "");
+        AppSettings.Update(settings => settings.AiProvider = "local");
+        check("local: the setting keeps it", AppSettings.Current.AiProvider == "local", AppSettings.Current.AiProvider);
+        var stored = Path.Combine(folder, "settings.json");
+        File.WriteAllText(stored, "{\"AiProvider\":\"local\",\"AiLocalAddress\":\"  \"}");
+        check("local: an empty address falls back to the default", AppSettings.Read(stored).AiLocalAddress == LocalAi.DefaultAddress, AppSettings.Read(stored).AiLocalAddress);
+
+        // Replies, as llama-server sends them.
+        var reply = LocalAi.Reply("{\"choices\":[{\"message\":{\"content\":\"답\",\"reasoning_content\":\"생각\"}}],\"usage\":{\"total_tokens\":12}}", 200);
+        check("local: the answer and its tokens are read", reply.Text == "답" && reply.Tokens == 12, $"{reply.Text} {reply.Tokens}");
+        var failed = await Fails(() => Task.FromResult(LocalAi.Reply("{\"error\":{\"message\":\"context too long\"}}", 400)));
+        check("local: a refused request says why", failed.StartsWith(NativeCore.Tr("ai.local.requestFailed")) && failed.Contains("context too long"), failed);
+        failed = await Fails(() => Task.FromResult(LocalAi.Reply("{\"choices\":[{\"message\":{\"content\":\"\",\"reasoning_content\":\"생각만\"}}]}", 200)));
+        check("local: reasoning alone is not an answer", failed == NativeCore.Tr("ai.invalidResponse"), failed);
+
+        // A server that was already running.
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        var lastBody = "";
+        var delay = TimeSpan.Zero;
+        var status = 200;
+        _ = Task.Run(() => FakeHttp.Serve(listener, (method, target, body) =>
+        {
+            if (target == "/health") return (200, "{\"status\":\"ok\"}");
+            lastBody = body;
+            Thread.Sleep(delay);
+            return status == 200
+                ? (200, "{\"choices\":[{\"message\":{\"content\":\"안녕\"}}],\"usage\":{\"total_tokens\":12}}")
+                : (status, "{\"error\":{\"message\":\"boom\"}}");
+        }, TimeSpan.FromMinutes(5)));
+        AppSettings.Update(settings => settings.AiLocalAddress = $"http://127.0.0.1:{port}");
+
+        var answer = await AiService.SendAsync("local", "질문입니다", null, AiService.DefaultTimeout, CancellationToken.None);
+        check("local: a request reaches the server", answer.Text == "안녕" && answer.Tokens == 12, $"{answer.Text} {answer.Tokens}");
+        using (var sent = JsonDocument.Parse(lastBody))
+        {
+            var root = sent.RootElement;
+            check("local: the prompt goes as one chat message", root.GetProperty("messages")[0].GetProperty("content").GetString() == "질문입니다"
+                && !root.GetProperty("stream").GetBoolean() && !root.TryGetProperty("model", out _), lastBody);
+        }
+        await AiService.SendAsync("local", "모델", "my-model", AiService.DefaultTimeout, CancellationToken.None);
+        check("local: a chosen model is named", lastBody.Contains("\"model\":\"my-model\""), lastBody);
+        status = 500;
+        failed = await Fails(() => AiService.SendAsync("local", "x", null, AiService.DefaultTimeout, CancellationToken.None));
+        check("local: a server error is shown", failed.Contains(NativeCore.Tr("ai.local.requestFailed")) && failed.Contains("boom"), failed);
+        status = 200;
+
+        var timeout = LocalAi.RequestTimeout;
+        LocalAi.RequestTimeout = TimeSpan.FromMilliseconds(500);
+        delay = TimeSpan.FromSeconds(2);
+        failed = await Fails(() => AiService.SendAsync("local", "x", null, TimeSpan.Zero, CancellationToken.None));
+        check("local: a slow answer times out", failed == NativeCore.Tr("ai.local.timeout"), failed);
+        LocalAi.RequestTimeout = timeout;
+        await Task.Delay(2000);
+        using (var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(300)))
+        {
+            failed = await Fails(() => AiService.SendAsync("local", "x", null, AiService.DefaultTimeout, stop.Token));
+        }
+        check("local: stopping a request cancels it", failed == NativeCore.Tr("ai.cancelled"), failed);
+        await Task.Delay(2000);
+        delay = TimeSpan.Zero;
+
+        var metadata = await AiService.LoadMetadataAsync("local", CancellationToken.None);
+        check("local: there is no model list to load", metadata.StartsWith('{'), metadata);
+        await LocalAiServer.StartAsync();
+        check("local: a running server is used as it is", LocalAiServer.Current.Kind == LocalAiServer.Kind.Running && !LocalAiServer.Current.Owned && !LocalAiServer.OwnsProcess,
+            LocalAiServer.Describe());
+        check("local: it says it was already running", LocalAiServer.Describe() == NativeCore.Tr("ai.local.external"), LocalAiServer.Describe());
+        listener.Stop();
+        failed = await Fails(() => AiService.SendAsync("local", "x", null, AiService.DefaultTimeout, CancellationToken.None));
+        check("local: no server says so", failed == NativeCore.Tr("ai.local.notRunning"), failed);
+        await LocalAiServer.RefreshAsync();
+        check("local: a server that went away shows as stopped", LocalAiServer.Current.Kind == LocalAiServer.Kind.Stopped, LocalAiServer.Describe());
+        AppSettings.Update(settings => settings.AiLocalAddress = "ftp://127.0.0.1");
+        failed = await Fails(() => AiService.SendAsync("local", "x", null, AiService.DefaultTimeout, CancellationToken.None));
+        check("local: a wrong address says so", failed == NativeCore.Tr("ai.local.invalidAddress"), failed);
+
+        // A server this app starts, through a script as authors usually write one.
+        LocalAiServer.PollInterval = TimeSpan.FromMilliseconds(200);
+        AppSettings.Update(settings =>
+        {
+            settings.AiLocalAddress = $"http://127.0.0.1:{FreePort()}";
+            settings.AiPaths["local"] = "";
+        });
+        await LocalAiServer.StartAsync();
+        check("local: running needs a launch location", LocalAiServer.Current.Kind == LocalAiServer.Kind.Failed && LocalAiServer.Describe() == NativeCore.Tr("ai.local.noExecutable"), LocalAiServer.Describe());
+
+        var script = Path.Combine(folder, "start server.cmd");
+        File.WriteAllText(script, $"@echo off\r\necho port %PORT%\r\n\"{Environment.ProcessPath}\"\r\n");
+        AppSettings.Update(settings => settings.AiPaths["local"] = script);
+        Environment.SetEnvironmentVariable("JENANOTE_FAKE_CLI", "llamaServer");
+        await LocalAiServer.StartAsync();
+        check("local: the model loads first", LocalAiServer.Current.Kind == LocalAiServer.Kind.Starting && LocalAiServer.Describe().StartsWith(NativeCore.Tr("ai.local.starting").Split("%@")[0]),
+            LocalAiServer.Describe());
+        check("local: the server becomes ready", await Eventually(() => LocalAiServer.Current is { Kind: LocalAiServer.Kind.Running, Owned: true }, 20000), LocalAiServer.Describe());
+        answer = await AiService.SendAsync("local", "질문", null, AiService.DefaultTimeout, CancellationToken.None);
+        check("local: the started server answers", answer.Text.StartsWith("LOCAL_OK"), answer.Text);
+        var log = File.ReadAllText(LocalAiServer.LogPath);
+        check("local: the server's output goes to a log", log.Contains("fake llama-server listening") && log.Contains("port "), log);
+        LocalAiServer.Stop();
+        check("local: stopping it stops it", await Eventually(() => LocalAiServer.Current.Kind == LocalAiServer.Kind.Stopped, 10000), LocalAiServer.Describe());
+        check("local: nothing the script started keeps running", !await LocalAi.IsHealthyAsync(), "");
+
+        Environment.SetEnvironmentVariable("JENANOTE_FAKE_CLI", "llamaExit");
+        AppSettings.Update(settings => settings.AiPaths["local"] = Environment.ProcessPath!);
+        await LocalAiServer.StartAsync();
+        check("local: a server that ends shows why", await Eventually(() => LocalAiServer.Current.Kind == LocalAiServer.Kind.Failed, 10000)
+            && LocalAiServer.Describe().StartsWith(NativeCore.Tr("ai.local.exited")) && LocalAiServer.Describe().Contains("missing.gguf"), LocalAiServer.Describe());
+
+        Environment.SetEnvironmentVariable("JENANOTE_FAKE_CLI", "sleep");
+        var limit = LocalAiServer.StartupLimit;
+        LocalAiServer.StartupLimit = TimeSpan.FromSeconds(1);
+        await LocalAiServer.StartAsync();
+        check("local: a server that never gets ready is stopped", await Eventually(() => LocalAiServer.Current.Kind == LocalAiServer.Kind.Failed, 10000)
+            && LocalAiServer.Describe() == NativeCore.Tr("ai.local.startTimeout"), LocalAiServer.Describe());
+        check("local: and its process ends", await Eventually(() => !LocalAiServer.OwnsProcess, 10000), "");
+        LocalAiServer.StartupLimit = limit;
+        Environment.SetEnvironmentVariable("JENANOTE_FAKE_CLI", null);
+
+        var settingsWindow = SettingsWindow.Present(window);
+        settingsWindow.ShowAi();
+        check("local: the settings window shows the local provider", settingsWindow.IsVisible, "");
+        settingsWindow.Close();
+
+        LocalAiServer.PollInterval = TimeSpan.FromSeconds(1);
+        AppSettings.Update(settings =>
+        {
+            settings.AiProvider = saved.AiProvider;
+            settings.AiLocalAddress = saved.AiLocalAddress;
+            settings.AiPaths["local"] = saved.Item3;
+        });
+        await Task.Delay(300);
+        Directory.Delete(folder, recursive: true);
     }
 
     static async Task RunAiChecks(EditorWindow window, StringBuilder report, Action<string, bool, string> check)
@@ -1068,6 +1232,88 @@ static class SelfTest
             settings.PaperColor = null;
             settings.ColorMode = "system";
         });
+        EditorWindow.Open(WriteFixture(folder, "끝.md", "끝\n"), window);
+        await Task.Delay(150);
+        Directory.Delete(folder, recursive: true);
+    }
+
+    static async Task RunPunctuationChecks(EditorWindow window, Action<string, bool, string> check)
+    {
+        void Report(JsonElement steps)
+        {
+            foreach (var step in steps.GetProperty("checks").EnumerateArray())
+                check("punctuation: " + step.GetProperty("name").GetString(), step.GetProperty("ok").GetBoolean(), step.GetProperty("detail").ToString());
+        }
+
+        Report(await ProofStep(window, "punctuation"));
+        foreach (var step in (await ProofStep(window, "toolbar")).GetProperty("checks").EnumerateArray())
+            check("toolbar: " + step.GetProperty("name").GetString(), step.GetProperty("ok").GetBoolean(), step.GetProperty("detail").ToString());
+
+        // Stored values stay within what the app can use, and the defaults match macOS.
+        var folder = Directory.CreateTempSubdirectory("jena-selftest-punctuation-").FullName;
+        var fresh = new AppSettings();
+        check("punctuation: defaults match macOS", fresh.PunctuationFor("dialogue").Opening == "\"" && fresh.PunctuationFor("quotation").Trigger == "'''"
+            && fresh.PunctuationFor("thought").Trigger == "///" && !fresh.PunctuationTriggersEnabled && !fresh.PunctuationClosesOnReturn && fresh.PunctuationShiftTarget == null, "");
+        var path = Path.Combine(folder, "settings.json");
+        File.WriteAllText(path, "{\"Punctuation\":{\"dialogue\":{\"Opening\":\"— \",\"Closing\":null,\"LeadingSpaces\":9,\"Trigger\":\"::\"},\"other\":{}},\"PunctuationShiftTarget\":\"nope\"}");
+        var odd = AppSettings.Read(path);
+        var dialogue = odd.PunctuationFor("dialogue");
+        check("punctuation: odd stored values are corrected", dialogue.Opening == "— " && dialogue.Closing == "" && dialogue.LeadingSpaces == 2 && dialogue.Trigger == "::"
+            && odd.PunctuationFor("thought").Opening == "'" && !odd.Punctuation.ContainsKey("other") && odd.PunctuationShiftTarget == null,
+            $"{dialogue.Opening}|{dialogue.Closing}|{dialogue.LeadingSpaces}|{string.Join(",", odd.Punctuation.Keys)}|{odd.PunctuationShiftTarget}");
+
+        // A change reaches the open page without reloading it, and is saved.
+        AppSettings.UpdatePunctuation(settings =>
+        {
+            settings.PunctuationFor("dialogue").Opening = "「";
+            settings.PunctuationFor("thought").LeadingSpaces = 2;
+            settings.PunctuationTriggersEnabled = true;
+            settings.PunctuationShiftTarget = "quotation";
+        });
+        await Task.Delay(100);
+        Report(await ProofStep(window, "punctuationSettings"));
+        var stored = AppSettings.Read(Path.Combine(AppSettings.Folder, "settings.json"));
+        check("punctuation: changes are saved", stored.PunctuationFor("dialogue").Opening == "「" && stored.PunctuationTriggersEnabled && stored.PunctuationShiftTarget == "quotation", "");
+        AppSettings.UpdatePunctuation(settings =>
+        {
+            settings.Punctuation = new Dictionary<string, PunctuationStyle>();
+            settings.PunctuationTriggersEnabled = false;
+            settings.PunctuationShiftTarget = null;
+        });
+        check("punctuation: resetting gives the defaults back", AppSettings.Current.PunctuationFor("dialogue").Opening == "\"", "");
+
+        // The Format menu shows the shortcut and follows the page.
+        EditorWindow.Open(WriteFixture(folder, "대사.md", "앞\n"), window);
+        await Task.Delay(150);
+        var item = window.PunctuationMenuItem("dialogue");
+        check("punctuation: the menu shows the shortcut", item.InputGestureText == "Ctrl+1" && window.PunctuationMenuItem("thought").InputGestureText == "Ctrl+3", item.InputGestureText);
+        window.TogglePunctuation("dialogue");
+        check("punctuation: the menu shows a mark that is on", await Eventually(() => item.IsChecked && window.ActivePunctuation.SequenceEqual(new[] { "dialogue" })),
+            string.Join(",", window.ActivePunctuation));
+        var text = await window.CurrentTextAsync();
+        check("punctuation: the menu writes into the document", text == "\"앞\n", text);
+        window.TogglePunctuation("dialogue");
+        check("punctuation: the menu shows it off again", await Eventually(() => !item.IsChecked), "");
+
+        await window.ToggleSourceAsync();
+        check("punctuation: the source view disables the menu", !item.IsEnabled, "");
+        await window.ToggleSourceAsync();
+        check("punctuation: the menu returns after the source view", item.IsEnabled, "");
+
+        // The language rebuilds the menu with the state it had.
+        window.TogglePunctuation("quotation");
+        await Eventually(() => window.ActivePunctuation.Count == 1);
+        AppSettings.Update(settings => settings.Language = "en");
+        check("punctuation: the menu is translated", window.PunctuationMenuItem("quotation").Header as string == "Quotation Mark", window.PunctuationMenuItem("quotation").Header?.ToString() ?? "");
+        check("punctuation: a rebuilt menu keeps the state", window.PunctuationMenuItem("quotation").IsChecked, "");
+        AppSettings.Update(settings => settings.Language = "ko");
+
+        var settingsWindow = SettingsWindow.Present(window);
+        var tabs = (System.Windows.Controls.TabControl)settingsWindow.Content;
+        var headers = tabs.Items.Cast<System.Windows.Controls.TabItem>().Select(tab => tab.Header?.ToString()).ToList();
+        check("punctuation: the settings have a marks tab before AI", headers.Count == 4 && headers[2] == NativeCore.Tr("settings.tab.punctuation") && headers[3] == "AI", string.Join(",", headers));
+        settingsWindow.Close();
+
         EditorWindow.Open(WriteFixture(folder, "끝.md", "끝\n"), window);
         await Task.Delay(150);
         Directory.Delete(folder, recursive: true);

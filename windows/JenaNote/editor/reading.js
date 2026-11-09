@@ -618,6 +618,7 @@ function goToOffset(offset) {
 function closePopovers() {
   appearancePopover.hidden = true;
   bookmarkPopover.hidden = true;
+  closeToolbarMenu();
 }
 
 function placePopover(popover, anchor) {
@@ -1015,36 +1016,6 @@ function toolbarButton(label, onClick, id) {
   return button;
 }
 
-function appendReadingToolbar(toolbar) {
-  const separator = () => {
-    const element = document.createElement('span');
-    element.className = 'separator';
-    return element;
-  };
-  toolbar.append(separator());
-  toolbar.append(toolbarButton(strings['reader.scroll'] ?? '', () => runReadingCommand('scroll'), 'toolbar-scroll'));
-  toolbar.append(toolbarButton(strings['reader.paged'] ?? '', () => runReadingCommand('paged'), 'toolbar-paged'));
-  toolbar.append(toolbarButton(strings['toolbar.appearance'] ?? '', () => runReadingCommand('appearance'), 'toolbar-appearance'));
-  const source = toolbarButton(strings['source.title'] ?? '', () => post({ type: 'command', name: 'toggleSource' }), 'toolbar-source');
-  source.title = strings['source.hint'] ?? '';
-  toolbar.append(source);
-  toolbar.append(separator());
-  toolbar.append(toolbarButton('−', () => changeReading({ bodySize: Math.max(8, reading.bodySize - 1) }), 'toolbar-size-down'));
-  const size = document.createElement('span');
-  size.id = 'toolbar-size';
-  size.title = strings['reader.fontSize'] ?? '';
-  toolbar.append(size);
-  toolbar.append(toolbarButton('+', () => changeReading({ bodySize: Math.min(30, reading.bodySize + 1) }), 'toolbar-size-up'));
-  toolbar.append(separator());
-  toolbar.append(toolbarButton(strings['reader.bookmark.toggle'] ?? '', () => runReadingCommand('bookmarkToggle'), 'toolbar-bookmark'));
-  toolbar.append(toolbarButton(strings['reader.bookmark.list'] ?? '', () => runReadingCommand('bookmarkList'), 'toolbar-bookmark-list'));
-  toolbar.append(separator());
-  const ai = toolbarButton('AI', aiToggle, 'toolbar-ai');
-  ai.title = strings['ai.title'] ?? '';
-  toolbar.append(ai);
-  updateReadingToolbar();
-}
-
 function updateReadingToolbar() {
   document.getElementById('toolbar-scroll')?.classList.toggle('on', !isPaged());
   document.getElementById('toolbar-paged')?.classList.toggle('on', isPaged());
@@ -1165,7 +1136,7 @@ document.addEventListener('keyup', event => {
 
 document.addEventListener('mousedown', event => {
   const inside = appearancePopover.contains(event.target) || bookmarkPopover.contains(event.target);
-  const toggles = ['toolbar-appearance', 'toolbar-bookmark-list'].includes(event.target.id);
+  const toggles = ['toolbar-appearance', 'toolbar-bookmark-list'].includes(event.target.closest?.('button')?.id);
   if (!inside && !toggles) closePopovers();
 });
 

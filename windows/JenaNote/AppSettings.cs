@@ -44,6 +44,33 @@ sealed partial class AppSettings
     /// <summary>Executable chosen by hand, by provider. Credentials stay with each CLI.</summary>
     public Dictionary<string, string> AiPaths { get; set; } = new();
     public Dictionary<string, string> AiModels { get; set; } = new();
+    /// <summary>Where the local (llama.cpp) server listens.</summary>
+    public string AiLocalAddress { get; set; } = LocalAi.DefaultAddress;
+    /// <summary>Marks by kind: "dialogue", "quotation" and "thought".</summary>
+    public Dictionary<string, PunctuationStyle> Punctuation { get; set; } = new();
+    public bool PunctuationTriggersEnabled { get; set; }
+    public bool PunctuationClosesOnReturn { get; set; }
+    /// <summary>The kind that double Shift toggles, or null when it is off.</summary>
+    public string? PunctuationShiftTarget { get; set; }
+
+    /// <summary>The style for a kind, adding the default when settings were never saved.</summary>
+    public PunctuationStyle PunctuationFor(string kind)
+    {
+        Punctuation ??= new Dictionary<string, PunctuationStyle>();
+        if (!Punctuation.TryGetValue(kind, out var style) || style == null) Punctuation[kind] = style = DefaultPunctuation(kind);
+        return style;
+    }
+
+    public static readonly string[] PunctuationKinds = { "dialogue", "quotation", "thought" };
+    public const int MaxLeadingSpaces = 2;
+
+    /// <summary>Each author sets their own marks. These match the macOS defaults.</summary>
+    public static PunctuationStyle DefaultPunctuation(string kind) => kind switch
+    {
+        "dialogue" => new PunctuationStyle { Opening = "\"", Closing = "\"", Trigger = ";;;" },
+        "quotation" => new PunctuationStyle { Opening = "'", Closing = "'", Trigger = "'''" },
+        _ => new PunctuationStyle { Opening = "'", Closing = "'", Trigger = "///" },
+    };
 
     public static string Folder { get; set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JenaNote");
@@ -85,6 +112,21 @@ sealed partial class AppSettings
         ApplyToApp();
         SaveQuietly();
         Changed?.Invoke();
+    }
+
+    /// <summary>Raised after a punctuation setting changes. Windows only pass it to their page.</summary>
+    public static event Action? PunctuationChanged;
+
+    /// <summary>
+    /// Saves a punctuation change, typed one character at a time in the settings window, without
+    /// rebuilding the menus and the page layout of every window as `Update` does.
+    /// </summary>
+    public static void UpdatePunctuation(Action<AppSettings> change)
+    {
+        change(Current);
+        Current.Normalized();
+        SaveQuietly();
+        PunctuationChanged?.Invoke();
     }
 
     /// <summary>A change made in the page. Only the named values change, and only known names count.</summary>
@@ -151,9 +193,21 @@ sealed partial class AppSettings
         ReadingMarginLeft = ClampNumber(ReadingMarginLeft, 0, 5000, 0);
         ReadingMarginRight = ClampNumber(ReadingMarginRight, 0, 5000, 0);
         if (PaperSize == null || !ReadingFaces.IsPaper(PaperSize)) PaperSize = "automatic";
-        if (AiProvider is not ("claude" or "codex" or "gemini" or "grok")) AiProvider = "claude";
+        if (AiProvider is not ("claude" or "codex" or "gemini" or "grok" or "local")) AiProvider = "claude";
+        AiLocalAddress = string.IsNullOrWhiteSpace(AiLocalAddress) ? LocalAi.DefaultAddress : AiLocalAddress.Trim();
         AiPaths ??= new Dictionary<string, string>();
         AiModels ??= new Dictionary<string, string>();
+        var punctuation = Punctuation ?? new Dictionary<string, PunctuationStyle>();
+        Punctuation = PunctuationKinds.ToDictionary(kind => kind, kind =>
+        {
+            if (!punctuation.TryGetValue(kind, out var style) || style == null) return DefaultPunctuation(kind);
+            style.Opening ??= "";
+            style.Closing ??= "";
+            style.Trigger ??= "";
+            style.LeadingSpaces = Math.Clamp(style.LeadingSpaces, 0, MaxLeadingSpaces);
+            return style;
+        });
+        if (PunctuationShiftTarget != null && !PunctuationKinds.Contains(PunctuationShiftTarget)) PunctuationShiftTarget = null;
         // As on macOS, letter spacing moves in whole percents.
         LetterSpacing = Math.Round(ClampNumber(LetterSpacing, MinLetterSpacing, MaxLetterSpacing, 0));
         return this;
@@ -184,5 +238,17 @@ sealed partial class AppSettings
             _ => ThemeMode.System,
         };
 #pragma warning restore WPF0001
+        Palette.Apply();
     }
+}
+
+/// <summary>One kind of mark. With no closing mark, turning it off inserts nothing, as with a dash.</summary>
+sealed class PunctuationStyle
+{
+    public string Opening { get; set; } = "";
+    public string Closing { get; set; } = "";
+    /// <summary>Spaces before the opening mark only, from 0 to 2.</summary>
+    public int LeadingSpaces { get; set; }
+    /// <summary>Characters that toggle the mark when typed. Fewer than two do nothing.</summary>
+    public string Trigger { get; set; } = "";
 }

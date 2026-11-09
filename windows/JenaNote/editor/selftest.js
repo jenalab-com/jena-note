@@ -187,6 +187,9 @@
       findClose();
       placeCaret(root.children[2], 0);
       findOpen(false);
+      check('a closed search starts empty, as on macOS', findInput.value === '' && findCount.textContent === '', findInput.value);
+      findInput.value = 'abc';
+      findInput.dispatchEvent(new Event('input'));
       check('a search starts from the caret', findCount.textContent === '3/4', findCount.textContent);
 
       findInput.value = 'a.c(';
@@ -220,7 +223,8 @@
       findInput.dispatchEvent(new Event('input'));
       const current = findMatches[findCurrent].range.toString();
       findClose();
-      check('closing selects the match', getSelection().toString() === current && findBar.hidden, getSelection().toString());
+      check('closing selects the match', getSelection().toString() === current && !findIsOpen(), getSelection().toString());
+      check('closing clears the field', findInput.value === '' && findCount.textContent === '' && !findField.classList.contains('has-text'));
       check('closing clears the highlights', !CSS.highlights.has('find') && !CSS.highlights.has('find-current'));
       render([]);
     },
@@ -528,7 +532,7 @@
       check('commands leave the document alone', JSON.stringify(readBlocks()) === blocks && reading.mode === 'scroll' && bookmarks.length === 0);
       check('commands leave the source alone', sourceText.textContent === shown);
       check('only its own button works', document.getElementById('toolbar-bold')?.disabled !== false
-        && [...document.querySelectorAll('#toolbar button')].every(button => button.disabled === !['toolbar-source', 'toolbar-ai'].includes(button.id)));
+        && [...document.querySelectorAll('#toolbar button')].every(button => button.disabled === !['toolbar-source', 'toolbar-ai', 'toolbar-more', 'find-close'].includes(button.id)));
 
       // Select All takes the source and nothing behind it.
       sourceText.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true, cancelable: true }));
@@ -538,7 +542,7 @@
 
       // Find works, replace does not.
       findOpen(true);
-      check('replace stays closed', replaceRow.hidden && !findBar.hidden);
+      check('replace stays closed', replaceRow.hidden && findIsOpen());
       findInput.value = '**';
       findInput.dispatchEvent(new Event('input'));
       check('find sees the markup', findMatches.length === 2, findMatches.length);
@@ -555,7 +559,7 @@
     async sourceHidden(check) {
       check('the source view is gone', !sourceActive && sourceView.hidden);
       check('keys go back to the editor', document.activeElement === root, document.activeElement?.id);
-      check('an open search follows back', !findBar.hidden && findMatches.length === 1 && root.contains(findMatches[0].range.startContainer), findMatches.length);
+      check('an open search follows back', findIsOpen() && findMatches.length === 1 && root.contains(findMatches[0].range.startContainer), findMatches.length);
       findClose();
       check('every button works again', [...document.querySelectorAll('#toolbar button')].every(button => !button.disabled));
     },
@@ -887,6 +891,7 @@
       check('the reading place comes back', Math.abs(restored - SCROLL_READ_OFFSET) < 60, restored);
       showAppearance();
       check('the appearance panel fills', appearancePopover.querySelectorAll('.appearance-row').length === 7 && !appearancePopover.hidden, appearancePopover.children.length);
+      check('text size stays out of the panel', ![...appearancePopover.querySelectorAll('.appearance-row')].some(row => row.textContent.includes(`${reading.bodySize}pt`)));
       closePopovers();
       readingPath = saved;
       bookmarks = [];
@@ -911,8 +916,10 @@
       check('paper color reaches the page', paper === 'rgb(16, 32, 48)', paper);
     },
     async toolbarEnglish(check) {
-      const first = document.querySelector('#toolbar button')?.textContent;
-      check('toolbar follows the language', first === 'Bold', first);
+      const bold = document.getElementById('toolbar-bold')?.title;
+      check('toolbar follows the language', bold === 'Bold (Ctrl+B)', bold);
+      const heading = document.querySelector('#toolbar-heading span')?.textContent;
+      check('the paragraph style follows the language', heading === strings['menu.format.body'] && heading !== '본문', heading);
       check('popover follows the language', document.getElementById('proof-apply').textContent !== '적용', document.getElementById('proof-apply').textContent);
     },
     async dark(check) {
@@ -1007,6 +1014,333 @@
       render([]);
       clearTimeout(proofTimer);
     },
+    async punctuation(check) {
+      const savedSettings = punctuationSettings;
+      const defaults = JSON.parse(JSON.stringify(PUNCTUATION_DEFAULTS));
+      const use = (change = {}) => {
+        punctuationSettings = { styles: JSON.parse(JSON.stringify(defaults)), triggers: false, closesOnReturn: false, shiftTarget: null, ...change };
+      };
+      const style = (kind, change) => Object.assign(punctuationSettings.styles[kind], change);
+      const fresh = change => {
+        use(change);
+        emptyDoc();
+        punctuationReset();
+      };
+      const line = () => root.firstElementChild.textContent;
+      const offset = () => {
+        const selection = getSelection();
+        return punctuationTextOffset(root.firstElementChild, selection.anchorNode, selection.anchorOffset);
+      };
+      // Typing goes through `beforeinput` first, as a key does. The browser does not raise it for commands.
+      const key = data => {
+        const event = new InputEvent('beforeinput', { inputType: 'insertText', data, bubbles: true, cancelable: true });
+        if (root.dispatchEvent(event)) exec('insertText', data);
+      };
+      const keys = value => { for (const character of value) key(character); };
+      const toggle = kind => punctuationToggle(kind, 'key');
+
+      fresh();
+      toggle('dialogue');
+      check('turning on inserts only the opening mark', line() === '"' && offset() === 1 && punctuationActive.join() === 'dialogue', `${line()} ${offset()}`);
+      check('the toolbar shows it on', document.getElementById('toolbar-punctuation-dialogue').classList.contains('on'));
+      keys('안녕');
+      toggle('dialogue');
+      check('turning off closes at the caret', line() === '"안녕"' && offset() === 4 && punctuationActive.length === 0, `${line()} ${offset()}`);
+      check('the toolbar shows it off', !document.getElementById('toolbar-punctuation-dialogue').classList.contains('on'));
+
+      fresh();
+      style('dialogue', { leadingSpaces: 2 });
+      toggle('dialogue'); keys('네'); toggle('dialogue');
+      check('leading spaces come before the opening mark only', line() === '  "네"', JSON.stringify(line()));
+      check('leading spaces are saved as spaces', readBlocks()[0].runs?.[0]?.text === '  "네"', JSON.stringify(readBlocks()));
+
+      fresh();
+      style('dialogue', { opening: '— ', closing: '' });
+      toggle('dialogue'); keys('네'); toggle('dialogue');
+      check('an empty closing mark just turns off', line() === '— 네' && punctuationActive.length === 0, line());
+
+      fresh();
+      toggle('dialogue'); keys('그가 '); toggle('quotation'); keys('가라'); toggle('quotation'); keys('고 했어.'); toggle('dialogue');
+      check('marks nest independently', line() === `"그가 '가라'고 했어."`, line());
+
+      fresh();
+      keys('가나다');
+      select(root.firstElementChild, 1, 2);
+      toggle('dialogue');
+      check('a selection is wrapped without turning on', line() === '가"나"다' && offset() === 4 && getSelection().isCollapsed && punctuationActive.length === 0, `${line()} ${offset()}`);
+      exec('undo');
+      check('wrapping undoes in one step', line() === '가나다', line());
+
+      fresh();
+      render([{ type: 'paragraph', runs: [text('가'), { text: '나', bold: true }, text('다')] }]);
+      style('dialogue', { leadingSpaces: 1 });
+      select(root.firstElementChild, 1, 2);
+      toggle('dialogue');
+      const wrapped = readBlocks()[0].runs;
+      check('wrapping keeps formatting inside', line() === '가 "나"다' && wrapped.some(run => run.bold && run.text.includes('나')), JSON.stringify(wrapped));
+      check('the caret goes after the closing mark', offset() === 5, offset());
+      exec('undo');
+      check('wrapping formatted text undoes in one step', line() === '가나다' && readBlocks()[0].runs.some(run => run.bold && run.text === '나'), `${line()} ${JSON.stringify(readBlocks()[0].runs)}`);
+
+      fresh();
+      render([{ type: 'paragraph', runs: [text('첫 줄')] }, { type: 'paragraph', runs: [text('둘째')] }]);
+      const across = document.createRange();
+      across.setStart(root.children[0].firstChild, 2);
+      across.setEnd(root.children[1].firstChild, 2);
+      punctuationSelect(across);
+      toggle('dialogue');
+      check('a selection across lines is wrapped at both ends', root.children[0].textContent === '첫 "줄' && root.children[1].textContent === '둘째"', root.textContent);
+
+      fresh();
+      toggle('dialogue');
+      punctuationReset();
+      check('reset turns off without closing', line() === '"' && punctuationActive.length === 0, line());
+
+      fresh();
+      keys('가');
+      toggle('dialogue');
+      exec('undo');
+      check('undo takes the mark back alone', line() === '가', JSON.stringify(line()));
+      fresh();
+      toggle('dialogue');
+      keys('나');
+      exec('undo');
+      check('typing after a mark undoes alone', line() === '"', JSON.stringify(line()));
+
+      // Typed sequences
+      fresh();
+      keys(';;;');
+      check('a sequence is off by default', line() === ';;;', line());
+      fresh({ triggers: true });
+      keys('앞 ;;;');
+      check('a sequence becomes the opening mark', line() === '앞 "' && punctuationActive.join() === 'dialogue', line());
+      keys('네;;;뒤');
+      check('the same sequence closes it', line() === '앞 "네"뒤' && punctuationActive.length === 0, line());
+      fresh({ triggers: true });
+      keys('앞;;;');
+      exec('undo');
+      check('undo brings the typed sequence back', line() === '앞;;', JSON.stringify(line()));
+      fresh({ triggers: true });
+      style('thought', { trigger: '//', opening: '「', closing: '」' });
+      keys('//생각//');
+      check('a custom sequence', line() === '「생각」', line());
+      fresh({ triggers: true });
+      style('dialogue', { trigger: ';' });
+      keys(';');
+      check('a one character sequence is ignored', line() === ';' && punctuationActive.length === 0, line());
+      fresh({ triggers: true });
+      key(';;;');
+      check('pasted text does not trigger', line() === ';;;', line());
+      fresh({ triggers: true });
+      render([{ type: 'codeBlock', lines: [';;'], language: null }]);
+      placeCaret(root.firstElementChild.firstChild, 2);
+      key(';');
+      check('a sequence does nothing in a code block', root.firstElementChild.textContent.startsWith(';;;') && punctuationActive.length === 0, root.firstElementChild.textContent);
+      fresh({ triggers: true });
+      render([{ type: 'paragraph', runs: [{ text: ';;', code: true }] }]);
+      placeCaret(root.querySelector('code').firstChild, 2);
+      key(';');
+      check('a sequence does nothing in inline code', line() === ';;;' && punctuationActive.length === 0, line());
+      fresh({ triggers: true });
+      render([{ type: 'paragraph', runs: [{ text: '앞;', bold: true }, text(';')] }]);
+      caretAtEnd(root.firstElementChild);
+      key(';');
+      check('a sequence counts across formatting', line() === '앞"' && punctuationActive.join() === 'dialogue', line());
+
+      // Return
+      fresh();
+      toggle('dialogue'); keys('네'); enter();
+      check('return keeps a mark open by default', root.children[0].textContent === '"네' && punctuationActive.join() === 'dialogue', root.textContent);
+      fresh({ closesOnReturn: true });
+      style('quotation', { opening: '「', closing: '」' });
+      toggle('dialogue'); toggle('quotation'); keys('네'); enter();
+      check('return closes the inner mark first when on', root.children[0].textContent === '"「네」"' && root.children.length === 2 && punctuationActive.length === 0, root.textContent);
+
+      // Double Shift
+      punctuationShiftInterrupt();
+      check('double shift fires on the second press',
+        !punctuationShiftChanged(true, 0) && !punctuationShiftChanged(false, 100) && punctuationShiftChanged(true, 300));
+      punctuationShiftChanged(true, 0); punctuationShiftChanged(false, 100);
+      check('a slow second press does not fire', !punctuationShiftChanged(true, 1000));
+      punctuationShiftInterrupt();
+      punctuationShiftChanged(true, 0); punctuationShiftChanged(false, 800);
+      check('a held shift does not fire', !punctuationShiftChanged(true, 900));
+      punctuationShiftInterrupt();
+      punctuationShiftChanged(true, 0); punctuationShiftChanged(false, 100); punctuationShiftInterrupt();
+      check('an interruption cancels', !punctuationShiftChanged(true, 200));
+      punctuationShiftInterrupt();
+      const shift = (type, extra = {}) => root.dispatchEvent(new KeyboardEvent(type, { key: 'Shift', code: 'ShiftLeft', bubbles: true, cancelable: true, ...extra }));
+      const doubleShift = (down = { shiftKey: true }) => { shift('keydown', down); shift('keyup'); shift('keydown', down); shift('keyup'); };
+      fresh();
+      doubleShift();
+      check('double shift does nothing until it is chosen', line() === '', line());
+      fresh({ shiftTarget: 'thought' });
+      doubleShift();
+      check('double shift toggles the chosen mark', line() === "'" && punctuationActive.join() === 'thought', line());
+      fresh({ shiftTarget: 'thought' });
+      doubleShift({ key: 'Process', keyCode: 229 });
+      check('double shift works while a syllable is composed', line() === "'", line());
+      fresh({ shiftTarget: 'thought' });
+      shift('keydown', { shiftKey: true }); shift('keyup');
+      root.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', code: 'KeyA', bubbles: true }));
+      shift('keydown', { shiftKey: true }); shift('keyup');
+      check('a key between the presses cancels', line() === '', line());
+
+      // Where the command comes from
+      fresh();
+      press('1', { ctrlKey: true });
+      check('ctrl+1 toggles dialogue', line() === '"' && punctuationActive.join() === 'dialogue', line());
+      press('2', { ctrlKey: true });
+      press('3', { ctrlKey: true });
+      check('ctrl+2 and ctrl+3 toggle the others', line() === `"''` && punctuationActive.join() === 'dialogue,quotation,thought', line());
+
+      fresh();
+      keys('본문');
+      findOpen(false);
+      findInput.dispatchEvent(new KeyboardEvent('keydown', { key: '1', ctrlKey: true, bubbles: true, cancelable: true }));
+      punctuationToggle('dialogue', 'menu');
+      check('a menu shortcut leaves the find field alone', line() === '본문' && document.activeElement === findInput && punctuationActive.length === 0, `${line()} ${document.activeElement?.id}`);
+      punctuationToggle('dialogue', 'menu', true);
+      check('the menu reaches the document when the page had no focus', line() === '본문"' && document.activeElement === root, `${line()} ${document.activeElement?.id}`);
+      punctuationReset();
+      findOpen(false);
+      document.getElementById('toolbar-punctuation-quotation').click();
+      check('a toolbar button writes where the author was', line() === "본문\"'" && document.activeElement === root, line());
+      findClose();
+
+      fresh();
+      showSource('원문');
+      punctuationToggle('dialogue', 'toolbar');
+      check('the source view takes no marks', line() === '' && punctuationActive.length === 0, line());
+      check('the source view disables the buttons', document.getElementById('toolbar-punctuation-dialogue').disabled);
+      hideSource();
+      toggle('dialogue');
+      showSource('원문');
+      check('the source view turns marks off', punctuationActive.length === 0);
+      hideSource();
+
+      fresh();
+      toggle('dialogue');
+      loadDocument({ blocks: [{ type: 'paragraph', runs: [text('새 문서')] }] });
+      check('a new document starts with marks off', punctuationActive.length === 0 && line() === '새 문서', line());
+
+      fresh();
+      plainMode = true;
+      toggle('dialogue'); keys('네'); toggle('dialogue');
+      check('marks work in plain text', readPlainText() === '"네"\n', JSON.stringify(readPlainText()));
+      plainMode = false;
+
+      punctuationSettings = savedSettings;
+      punctuationReset();
+      render([]);
+    },
+    punctuationSettings(check) {
+      check('settings reach the page', punctuationSettings.styles.dialogue.opening === '「' && punctuationSettings.triggers === true
+        && punctuationSettings.shiftTarget === 'quotation' && punctuationSettings.styles.thought.leadingSpaces === 2, JSON.stringify(punctuationSettings));
+      const button = document.getElementById('toolbar-punctuation-dialogue');
+      check('the toolbar names the marks', button.textContent === strings['punctuation.short.dialogue'] && button.title.includes('Ctrl+1'), `${button.textContent} ${button.title}`);
+    },
+    toolbar(check) {
+      const toolbar = document.getElementById('toolbar');
+      check('the toolbar is one row', toolbar.getBoundingClientRect().height < 50 || innerWidth < 1000, `${toolbar.getBoundingClientRect().height} at ${innerWidth}`);
+      const iconOnly = [...toolbar.querySelectorAll('button.tool:not(.labeled)')];
+      check('icon buttons say what they do', iconOnly.length > 10 && iconOnly.every(button => button.title && button.getAttribute('aria-label')),
+        iconOnly.filter(button => !button.title).map(button => button.id).join(','));
+      check('every icon has a shape', [...toolbar.querySelectorAll('svg.icon')].every(svg => svg.childElementCount > 0));
+      // The macOS order: find, replace, mode, view settings, source, style, size, bold, italic, code,
+      // lists, insert, marks, color, then bookmarks, proofreading and AI at the right.
+      const macOrder = ['toolbar-replace', 'toolbar-scroll', 'toolbar-paged', 'toolbar-appearance', 'toolbar-source',
+        'toolbar-heading', 'toolbar-size-down', 'toolbar-size-up', 'toolbar-bold', 'toolbar-italic', 'toolbar-code', 'toolbar-lists',
+        'toolbar-insert', 'toolbar-punctuation-dialogue', 'toolbar-punctuation-quotation', 'toolbar-punctuation-thought', 'toolbar-color',
+        'toolbar-bookmark', 'toolbar-bookmark-list', 'toolbar-proof', 'toolbar-ai', 'toolbar-more'];
+      const order = [...toolbar.querySelectorAll('button[id^="toolbar-"]')].map(button => button.id);
+      check('the toolbar follows the macOS order', JSON.stringify(order) === JSON.stringify(macOrder), order.join(','));
+      // A narrow window moves tools into the » menu instead of a second row, as NSToolbar does.
+      toolbar.style.width = '620px';
+      fitToolbar();
+      const more = document.getElementById('toolbar-more');
+      const hidden = [...toolbar.querySelectorAll('button.overflowed')].map(button => button.id);
+      check('a narrow toolbar stays one row', toolbar.getBoundingClientRect().height < 50 && toolbar.scrollWidth <= toolbar.clientWidth, toolbar.getBoundingClientRect().height);
+      check('what does not fit goes into the more menu', !more.hidden && hidden.includes('toolbar-proof') && !hidden.includes('toolbar-ai'), hidden.join(','));
+      more.click();
+      const names = [...toolbarMenu.querySelectorAll('button span')].map(span => span.textContent);
+      check('the more menu lists the hidden tools', !toolbarMenu.hidden && names.includes(tip('proof.button')), names.join(','));
+      closeToolbarMenu();
+      toolbar.style.width = '';
+      fitToolbar();
+      check('a wide toolbar shows everything again', more.hidden && toolbar.querySelectorAll('button.overflowed').length === 0 || innerWidth < 1100);
+      check('find is a field at the start, as on macOS', toolbar.firstElementChild.firstElementChild === findField && findField.contains(findInput)
+        && findInput.placeholder === strings['toolbar.find'], findInput.placeholder);
+
+      // The replace panel hangs from the field.
+      render([{ type: 'paragraph', runs: [text('가나 가나 가나')] }]);
+      placeCaret(root.firstElementChild, 0);
+      findInput.focus();
+      findInput.value = '가나';
+      findInput.dispatchEvent(new InputEvent('input', { bubbles: true }));
+      check('typing in the field finds at once', findIsOpen() && findMatches.length === 3 && findCount.textContent === '1/3' && findField.classList.contains('has-text'), findCount.textContent);
+      findInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      check('enter moves to the next match', findCount.textContent === '2/3', findCount.textContent);
+      const toggle = document.getElementById('toolbar-replace');
+      toggle.click();
+      const field = findField.getBoundingClientRect();
+      const panel = replaceRow.getBoundingClientRect();
+      check('the replace toggle opens the panel under the field', !replaceRow.hidden && toggle.classList.contains('on')
+        && Math.abs(panel.left - field.left) < 2 && panel.top >= field.bottom && panel.top - field.bottom < 10, `${panel.left} ${field.left} ${panel.top} ${field.bottom}`);
+      check('with a query the replacement is typed next', document.activeElement === replaceInput, document.activeElement?.id);
+      replaceInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      check('escape in the panel closes only the panel', replaceRow.hidden && !toggle.classList.contains('on') && findIsOpen() && document.activeElement === findInput && findMatches.length === 3);
+      toggle.click();
+      toggle.click();
+      check('the toggle closes the panel again', replaceRow.hidden && findIsOpen());
+      document.getElementById('find-close').click();
+      check('the clear button ends the search', !findIsOpen() && findInput.value === '' && findMatches.length === 0 && !CSS.highlights.has('find'));
+      render([]);
+      check('text size reads minus and plus', document.getElementById('toolbar-size-down').textContent === '−' && document.getElementById('toolbar-size-up').textContent === '+'
+        && document.getElementById('toolbar-size').textContent === `${reading.bodySize}pt`, document.getElementById('toolbar-size').textContent);
+      const before = reading.bodySize;
+      document.getElementById('toolbar-size-up').click();
+      check('the size buttons change the text size', reading.bodySize === Math.min(30, before + 1) && document.getElementById('toolbar-size').textContent === `${reading.bodySize}pt`, reading.bodySize);
+      document.getElementById('toolbar-size-down').click();
+
+      render([{ type: 'heading', level: 2, runs: [text('제목')] }, { type: 'paragraph', runs: [{ text: '굵게', bold: true }] }]);
+      root.focus();
+      placeCaret(root.firstElementChild.firstChild, 1);
+      updateToolbarState();
+      const heading = () => document.querySelector('#toolbar-heading span').textContent;
+      check('the paragraph style follows the caret', heading() === strings['menu.format.h2'], heading());
+      placeCaret(root.children[1].querySelector('b').firstChild, 1);
+      updateToolbarState();
+      check('the style returns to body text', heading() === strings['menu.format.body'], heading());
+      check('bold shows on bold text', document.getElementById('toolbar-bold').classList.contains('on'));
+
+      document.getElementById('toolbar-heading').click();
+      const items = [...toolbarMenu.querySelectorAll('button')];
+      check('the style menu opens under its button', !toolbarMenu.hidden && items.length === 4 && items[0].classList.contains('on'), items.map(item => item.textContent).join(','));
+      items[1].click();
+      check('choosing a style applies it', root.children[1].tagName === 'H1' && toolbarMenu.hidden, root.children[1].tagName);
+      document.getElementById('toolbar-heading').click();
+      toolbarMenu.querySelectorAll('button')[1].click();
+      check('choosing the same style keeps it', root.children[1].tagName === 'H1', root.children[1].tagName);
+
+      document.getElementById('toolbar-lists').click();
+      check('the list menu has four entries', toolbarMenu.querySelectorAll('button').length === 4);
+      toolbarMenu.querySelectorAll('button')[1].click();
+      check('a list entry applies', root.children[1].tagName === 'DD', root.children[1].tagName);
+      document.getElementById('toolbar-insert').click();
+      check('the insert menu opens', !toolbarMenu.hidden && toolbarMenu.querySelectorAll('button').length === 2);
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      check('escape closes the menu', toolbarMenu.hidden && !document.getElementById('toolbar-insert').classList.contains('open'));
+      document.getElementById('toolbar-insert').click();
+      document.getElementById('toolbar-insert').click();
+      check('a second click closes the menu', toolbarMenu.hidden);
+      document.getElementById('toolbar-appearance').click();
+      check('the view settings open from the icon', !appearancePopover.hidden);
+      document.getElementById('toolbar-appearance').querySelector('svg').dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      check('a press on the icon keeps the panel open', !appearancePopover.hidden);
+      closePopovers();
+      render([]);
+    },
   };
 
   window.chrome.webview.addEventListener('message', async event => {
@@ -1048,7 +1382,7 @@
     const readBack = readBlocks();
     const readMs = Math.round(performance.now() - started);
     const longOk = readBack.length === long.length;
-    findBar.hidden = false;
+    findActive = true;
     findInput.value = '그';
     started = performance.now();
     findSearch();

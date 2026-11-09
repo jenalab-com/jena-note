@@ -34,6 +34,10 @@ sealed class EditorView : WebView2
         "ai.quotaHint", "ai.geminiQuotaHint", "ai.editConflict", "ai.attachmentConflict", "ai.editTooLarge", "doc.aiApplied", "doc.untitled",
         "ai.index.sources", "ai.work.row.off", "ai.work.row.settingsButton", "ai.work.row.saveFirst", "ai.work.row.disabled",
         "ai.work.row.enableButton", "ai.work.row.corrupt", "ai.work.row.resetButton",
+        "toolbar.lists", "toolbar.insert", "toolbar.more", "toolbar.textColor", "menu.format.body", "menu.format.h1", "menu.format.h2", "menu.format.h3",
+        "menu.format.ul", "menu.format.ol", "menu.format.quote", "menu.format.code", "reader.fontDown", "reader.fontUp",
+        "menu.format.punctuation.dialogue", "menu.format.punctuation.quotation", "menu.format.punctuation.thought",
+        "punctuation.short.dialogue", "punctuation.short.quotation", "punctuation.short.thought",
         "proof.button", "proof.original", "proof.suggestion", "proof.apply", "proof.select", "proof.unchanged", "dictionary.add",
     };
 
@@ -60,6 +64,8 @@ sealed class EditorView : WebView2
     public event Action<int, int>? CountsChanged;
     /// <summary>Raised with a command name from a keyboard shortcut inside the editor.</summary>
     public event Action<string>? CommandRequested;
+    /// <summary>Raised with the marks that are on, in the order they were turned on.</summary>
+    public event Action<string[]>? PunctuationChanged;
     /// <summary>Self test results as raw JSON.</summary>
     public event Action<JsonElement>? SelfTestFinished;
 
@@ -136,6 +142,35 @@ sealed class EditorView : WebView2
             fonts = ReadingFaces.Available(),
             paperSizes = ReadingFaces.PaperSizes(),
         });
+        SendPunctuationSettings();
+    }
+
+    public void SendPunctuationSettings()
+    {
+        if (CoreWebView2 == null) return;
+        var settings = AppSettings.Current;
+        Send(new
+        {
+            type = "punctuationSettings",
+            styles = AppSettings.PunctuationKinds.ToDictionary(kind => kind, kind =>
+            {
+                var style = settings.PunctuationFor(kind);
+                return new { opening = style.Opening, closing = style.Closing, leadingSpaces = style.LeadingSpaces, trigger = style.Trigger };
+            }),
+            triggers = settings.PunctuationTriggersEnabled,
+            closesOnReturn = settings.PunctuationClosesOnReturn,
+            shiftTarget = settings.PunctuationShiftTarget,
+        });
+    }
+
+    /// <summary>
+    /// Turns a mark on or off from the menu. `force` sends it to the document even when the page
+    /// has a field focused, because the focus was outside the page.
+    /// </summary>
+    public void TogglePunctuation(string kind, bool force)
+    {
+        Focus();
+        Send(new { type = "punctuation", kind, force });
     }
 
     void Send(object message) => CoreWebView2.PostWebMessageAsString(JsonSerializer.Serialize(message));
@@ -301,6 +336,9 @@ sealed class EditorView : WebView2
                 break;
             case "bookmarks":
                 ReadingStore.SetBookmarks(message.GetProperty("path").GetString()!, JsonNode.Parse(message.GetProperty("list").GetRawText())!.AsArray());
+                break;
+            case "punctuationState":
+                PunctuationChanged?.Invoke(message.GetProperty("active").EnumerateArray().Select(item => item.GetString() ?? "").ToArray());
                 break;
             case "counts":
                 CountsChanged?.Invoke(message.GetProperty("noSpaces").GetInt32(), message.GetProperty("withSpaces").GetInt32());

@@ -244,7 +244,7 @@ static class AiProcess
         }
     }
 
-    sealed class ProcessJob : IDisposable
+    internal sealed class ProcessJob : IDisposable
     {
         const int ExtendedLimitInformation = 9;
         const uint KillOnJobClose = 0x2000;
@@ -351,6 +351,7 @@ static class AiService
     /// <summary>Sends one prompt from a private, empty folder, never the author's note folder.</summary>
     public static async Task<AiAnswer> SendAsync(string provider, string prompt, string? model, TimeSpan timeout, CancellationToken cancel)
     {
+        if (provider == "local") return await LocalAi.SendAsync(prompt, model, timeout, cancel).ConfigureAwait(false);
         var executable = AiExecutable.Locate(provider) ?? throw new AiFailure(NativeCore.Tr("ai.notInstalled"));
         var directory = Path.Combine(Path.GetTempPath(), "JenaNote-AI-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -409,6 +410,8 @@ static class AiService
 
     public static async Task<string> LoadMetadataAsync(string provider, CancellationToken cancel)
     {
+        // A local server has one model and no account, so there is nothing to list.
+        if (provider == "local") return NativeCore.AiMetadataPlain(provider, "");
         var executable = AiExecutable.Locate(provider) ?? throw new AiFailure(NativeCore.Tr("ai.notInstalled"));
         var folder = Path.GetTempPath();
         if (provider == "grok")
@@ -595,7 +598,8 @@ sealed class AiChatHost(EditorView view)
         {
             view.Post(new { type = "aiProgress", id, text = NativeCore.Tr("ai.index.searching") });
             using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancel);
-            limit.CancelAfter(TimeSpan.FromSeconds(240));
+            // Each search round on a local model can take as long as a whole request.
+            limit.CancelAfter(provider == "local" ? LocalAi.RequestTimeout * 4 : TimeSpan.FromSeconds(240));
             var step = await Task.Run(() => NativeCore.WorkSessionStart(handle), cancel);
             while (true)
             {

@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
 
@@ -21,12 +22,15 @@ sealed class EditorWindow : Window
     (int NoSpaces, int WithSpaces) counts;
     bool showingSource;
     MenuItem? sourceMenuItem;
+    readonly Dictionary<string, MenuItem> punctuationMenuItems = new();
+    string[] punctuationActive = Array.Empty<string>();
 
     /// <summary>For tests, so they leave the author's clipboard alone.</summary>
     public static Action<string>? ClipboardForTest { get; set; }
     readonly ColumnDefinition sidebarColumn = new();
     readonly ColumnDefinition splitterColumn = new() { Width = GridLength.Auto };
-    readonly GridSplitter splitter = new() { Width = 4, HorizontalAlignment = HorizontalAlignment.Stretch, ResizeBehavior = GridResizeBehavior.PreviousAndNext };
+    readonly GridSplitter splitter = new() { Width = 4, HorizontalAlignment = HorizontalAlignment.Stretch, ResizeBehavior = GridResizeBehavior.PreviousAndNext, Background = Brushes.Transparent };
+    readonly Border sidebarHost = new() { BorderThickness = new Thickness(0, 0, 1, 0) };
     string? filePath;
     bool plainText;
     int currentRevision;
@@ -60,27 +64,39 @@ sealed class EditorWindow : Window
         recoveryId = recoveredId ?? Guid.NewGuid().ToString("N");
         autosaveTimer.Tick += async (_, _) => await AutosaveTickAsync();
         recoveryTimer.Tick += async (_, _) => await RecoveryTickAsync();
-        Width = 1100;
+        // Wide enough for the whole toolbar beside the sidebar, within the screen.
+        Width = Math.Min(1280, SystemParameters.WorkArea.Width - 40);
         Height = 800;
         MinWidth = 480;
         MinHeight = 320;
 
         var layout = new DockPanel();
+        SetResourceReference(BackgroundProperty, Palette.Bar);
+        Palette.PaintTitleBar(this);
+        menu.SetResourceReference(BackgroundProperty, Palette.Bar);
+        menu.Padding = new Thickness(4, 2, 4, 2);
         FillMenu();
         AddShortcuts();
         DockPanel.SetDock(menu, Dock.Top);
         layout.Children.Add(menu);
-        DockPanel.SetDock(statusCounts, Dock.Bottom);
-        layout.Children.Add(statusCounts);
+        var status = new Border { BorderThickness = new Thickness(0, 1, 0, 0), Child = statusCounts };
+        status.SetResourceReference(Border.BorderBrushProperty, Palette.Line);
+        statusCounts.SetResourceReference(TextBlock.ForegroundProperty, Palette.Muted);
+        statusCounts.Opacity = 1;
+        DockPanel.SetDock(status, Dock.Bottom);
+        layout.Children.Add(status);
         sidebar = new SidebarPanel(this);
+        sidebarHost.Child = sidebar;
+        sidebarHost.SetResourceReference(Border.BorderBrushProperty, Palette.Line);
+        sidebarHost.SetResourceReference(Border.BackgroundProperty, Palette.Sidebar);
         var body = new Grid();
         body.ColumnDefinitions.Add(sidebarColumn);
         body.ColumnDefinitions.Add(splitterColumn);
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 240 });
-        Grid.SetColumn(sidebar, 0);
+        Grid.SetColumn(sidebarHost, 0);
         Grid.SetColumn(splitter, 1);
         Grid.SetColumn(editor, 2);
-        body.Children.Add(sidebar);
+        body.Children.Add(sidebarHost);
         body.Children.Add(splitter);
         body.Children.Add(editor);
         layout.Children.Add(body);
@@ -104,6 +120,11 @@ sealed class EditorWindow : Window
             StartTimers();
         };
         editor.CommandRequested += RunCommand;
+        editor.PunctuationChanged += active =>
+        {
+            punctuationActive = active;
+            UpdatePunctuationMenuItems();
+        };
         editor.CountsChanged += (noSpaces, withSpaces) =>
         {
             counts = (noSpaces, withSpaces);
@@ -120,9 +141,12 @@ sealed class EditorWindow : Window
         Closed += (_, _) => WorkIndex.Changed -= workChanged;
         Action settingsChanged = ApplySettings;
         AppSettings.Changed += settingsChanged;
+        Action punctuationChanged = editor.SendPunctuationSettings;
+        AppSettings.PunctuationChanged += punctuationChanged;
         Closed += (_, _) =>
         {
             AppSettings.Changed -= settingsChanged;
+            AppSettings.PunctuationChanged -= punctuationChanged;
             DictionaryWindow.Changed -= dictionaryChanged;
             editor.CancelAi();
             autosaveTimer.Stop();
@@ -263,12 +287,42 @@ sealed class EditorWindow : Window
             Item("menu.format.ol", "", () => editor.Run("ol")),
             Item("menu.format.quote", "", () => editor.Run("quote")),
             new Separator(),
+            PunctuationItem("dialogue", 1),
+            PunctuationItem("quotation", 2),
+            PunctuationItem("thought", 3),
+            new Separator(),
             Item("menu.format.link", "", () => editor.Run("link")),
             Item("menu.format.textColor", "", () => editor.Run("color")),
             new Separator(),
             Item("proof.button", "", () => editor.Run("proofSelection")),
             Item("dictionary.title", "", () => DictionaryWindow.Present(this, filePath, ""))));
     }
+
+    MenuItem PunctuationItem(string kind, int number)
+    {
+        var item = new MenuItem { Header = NativeCore.Tr($"menu.format.punctuation.{kind}"), InputGestureText = $"Ctrl+{number}" };
+        item.Click += (_, _) => TogglePunctuation(kind);
+        punctuationMenuItems[kind] = item;
+        UpdatePunctuationMenuItems();
+        return item;
+    }
+
+    /// <summary>The mark goes where the author writes. A field inside the page keeps its own typing.</summary>
+    public void TogglePunctuation(string kind) => editor.TogglePunctuation(kind, force: !editor.IsKeyboardFocusWithin);
+
+    void UpdatePunctuationMenuItems()
+    {
+        foreach (var (kind, item) in punctuationMenuItems)
+        {
+            item.IsChecked = punctuationActive.Contains(kind);
+            item.IsEnabled = !showingSource;
+        }
+    }
+
+    public IReadOnlyList<string> ActivePunctuation => punctuationActive;
+
+    /// <summary>For tests: the Format menu entry of a mark.</summary>
+    public MenuItem PunctuationMenuItem(string kind) => punctuationMenuItems[kind];
 
     void AddShortcuts()
     {
@@ -288,6 +342,9 @@ sealed class EditorWindow : Window
         InputBindings.Add(new KeyBinding(new RelayCommand(() => editor.ReadingCommand("fontDown")), Key.OemMinus, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(new RelayCommand(() => RunCommand("toggleSidebar")), Key.OemBackslash, ModifierKeys.Control));
         InputBindings.Add(new KeyBinding(new RelayCommand(() => RunCommand("toggleSidebar")), Key.Oem5, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(new RelayCommand(() => TogglePunctuation("dialogue")), Key.D1, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(new RelayCommand(() => TogglePunctuation("quotation")), Key.D2, ModifierKeys.Control));
+        InputBindings.Add(new KeyBinding(new RelayCommand(() => TogglePunctuation("thought")), Key.D3, ModifierKeys.Control));
     }
 
     sealed class RelayCommand(Action action) : ICommand
@@ -598,6 +655,7 @@ sealed class EditorWindow : Window
     void UpdateSourceMenuItem()
     {
         if (sourceMenuItem != null) sourceMenuItem.IsChecked = showingSource;
+        UpdatePunctuationMenuItems();
     }
 
     async Task RefreshSourceAsync()
@@ -747,8 +805,8 @@ sealed class EditorWindow : Window
     void ApplySidebarVisibility()
     {
         var visible = AppSettings.Current.SidebarVisible;
-        sidebar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        splitter.Visibility = sidebar.Visibility;
+        sidebarHost.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        splitter.Visibility = sidebarHost.Visibility;
         sidebarColumn.MinWidth = visible ? 140 : 0;
         sidebarColumn.Width = visible ? new GridLength(AppSettings.Current.SidebarWidth) : new GridLength(0);
     }

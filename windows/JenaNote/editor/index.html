@@ -7,19 +7,15 @@
 </head>
 <body>
 <div id="toolbar" role="toolbar"></div>
-<div id="find-bar" hidden>
-  <div class="find-row">
-    <input id="find-input" type="text" autocomplete="off" spellcheck="false">
-    <span id="find-count"></span>
-    <button type="button" id="find-previous" tabindex="-1">&#8593;</button>
-    <button type="button" id="find-next" tabindex="-1">&#8595;</button>
-    <button type="button" id="find-close" tabindex="-1">&#215;</button>
-  </div>
-  <div class="find-row" id="replace-row" hidden>
-    <input id="replace-input" type="text" autocomplete="off" spellcheck="false">
-    <button type="button" id="replace-one"></button>
-    <button type="button" id="replace-all"></button>
-  </div>
+<div id="find-field" role="search">
+  <input id="find-input" type="text" autocomplete="off" spellcheck="false">
+  <span id="find-count"></span>
+  <button type="button" id="find-close" tabindex="-1">&#215;</button>
+</div>
+<div id="replace-panel" class="popover" hidden>
+  <input id="replace-input" type="text" autocomplete="off" spellcheck="false">
+  <button type="button" id="replace-one"></button>
+  <button type="button" id="replace-all"></button>
 </div>
 <div id="workspace">
 <div id="stage">
@@ -118,6 +114,9 @@
 <script src="find.js"></script>
 <script src="source.js"></script>
 <script src="ai.js"></script>
+<script src="punctuation.js"></script>
+<script src="icons.js"></script>
+<script src="toolbar.js"></script>
 <script src="start.js"></script>
 </body>
 </html>
