@@ -40,6 +40,10 @@ sealed partial class AppSettings
     public double ReadingMarginLeft { get; set; }
     public double ReadingMarginRight { get; set; }
     public string PaperSize { get; set; } = "automatic";
+    public string AiProvider { get; set; } = "claude";
+    /// <summary>Executable chosen by hand, by provider. Credentials stay with each CLI.</summary>
+    public Dictionary<string, string> AiPaths { get; set; } = new();
+    public Dictionary<string, string> AiModels { get; set; } = new();
 
     public static string Folder { get; set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "JenaNote");
@@ -103,6 +107,7 @@ sealed partial class AppSettings
                     case "paper": settings.PaperSize = value.Value.GetString() ?? "automatic"; break;
                     case "bodySize": settings.BodySize = value.Value.GetDouble(); break;
                     case "letterSpacing": settings.LetterSpacing = value.Value.GetDouble(); break;
+                    case "aiModel": settings.AiModels[settings.AiProvider] = (value.Value.GetString() ?? "").Trim(); break;
                 }
             }
         });
@@ -146,6 +151,9 @@ sealed partial class AppSettings
         ReadingMarginLeft = ClampNumber(ReadingMarginLeft, 0, 5000, 0);
         ReadingMarginRight = ClampNumber(ReadingMarginRight, 0, 5000, 0);
         if (PaperSize == null || !ReadingFaces.IsPaper(PaperSize)) PaperSize = "automatic";
+        if (AiProvider is not ("claude" or "codex" or "gemini" or "grok")) AiProvider = "claude";
+        AiPaths ??= new Dictionary<string, string>();
+        AiModels ??= new Dictionary<string, string>();
         // As on macOS, letter spacing moves in whole percents.
         LetterSpacing = Math.Round(ClampNumber(LetterSpacing, MinLetterSpacing, MaxLetterSpacing, 0));
         return this;

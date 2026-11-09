@@ -74,7 +74,83 @@ body.plain #toolbar { display: none; }
 #toolbar button.on { background: var(--hover); box-shadow: inset 0 -2px 0 var(--link); }
 #toolbar-size { align-self: center; min-width: 36px; font-size: 13px; text-align: center; }
 
-#stage { flex: 1; min-height: 0; position: relative; display: flex; overflow: hidden; }
+#workspace { flex: 1; min-height: 0; display: flex; }
+#stage { flex: 1; min-width: 0; position: relative; display: flex; overflow: hidden; }
+
+#ai-splitter { flex: none; width: 5px; border-left: 1px solid var(--line); cursor: ew-resize; }
+#ai-splitter[hidden], #ai-panel[hidden] { display: none; }
+#ai-panel {
+  flex: none;
+  box-sizing: border-box;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  gap: 8px;
+  background: var(--surface);
+  font-size: 13px;
+}
+#ai-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 600; }
+#ai-document { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#ai-settings, #ai-usage, #ai-usage-reload { flex: none; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font-size: 14px; }
+#ai-settings:hover, #ai-usage:hover, #ai-usage-reload:hover { background: var(--hover); color: var(--text); }
+#ai-work {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+#ai-work:disabled { opacity: 0.7; }
+#ai-work-dot { flex: none; width: 8px; height: 8px; border-radius: 4px; background: #8e8e93; }
+#ai-work-dot.ok { background: #34c759; }
+#ai-work-dot.busy { background: #0a84ff; }
+#ai-work-dot.bad { background: #ff3b30; }
+#ai-work-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#ai-work-button { flex: none; color: var(--link); }
+#ai-transcript { flex: 1; min-height: 0; overflow: auto; }
+.ai-message { margin: 0 0 10px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.ai-user { margin-left: 24px; padding: 6px 10px; border-radius: 10px; background: var(--hover); }
+.ai-status { color: var(--muted); font-size: 12px; }
+.ai-markdown p, .ai-markdown blockquote, .ai-markdown pre, .ai-markdown dt, .ai-markdown dd { margin: 0 0 6px; }
+.ai-markdown h1, .ai-markdown h2, .ai-markdown h3 { margin: 8px 0 4px; font-size: 14px; }
+.ai-markdown blockquote { padding-left: 10px; border-left: 3px solid var(--line); color: var(--muted); }
+.ai-markdown dt { position: relative; padding-left: 16px; font-weight: normal; }
+.ai-markdown dd { position: relative; padding-left: 20px; }
+.ai-markdown dt::before { content: "\2022"; position: absolute; left: 3px; }
+.ai-markdown dd::before { content: attr(data-index) "."; position: absolute; left: 0; }
+.ai-markdown pre, .ai-markdown code { background: var(--code); font: 12px Consolas, "Malgun Gothic", monospace; }
+.ai-markdown pre { padding: 8px; overflow: auto; white-space: pre-wrap; }
+.ai-markdown table { width: 100%; border-collapse: collapse; }
+.ai-markdown th, .ai-markdown td { padding: 3px 5px; border: 1px solid var(--line); text-align: left; }
+.ai-markdown a { color: var(--link); }
+.ai-markdown hr { border: 0; border-top: 1px solid var(--line); }
+.ai-image-label { color: var(--muted); }
+#ai-loading { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+#ai-loading[hidden] { display: none; }
+.ai-progress { width: 48px; height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--line), var(--link), var(--line)); background-size: 200% 100%; animation: ai-progress 1.2s linear infinite; }
+@keyframes ai-progress { from { background-position: 200% 0; } to { background-position: 0 0; } }
+#ai-composer { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 14px; background: var(--hover); }
+#ai-selection { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+#ai-selection[hidden] { display: none; }
+#ai-input { box-sizing: border-box; width: 100%; max-height: 160px; padding: 2px; border: 0; outline: none; resize: vertical; background: transparent; color: var(--text); font: inherit; }
+#ai-options { display: flex; align-items: center; gap: 4px; }
+#ai-model { flex: 1; min-width: 44px; font: inherit; font-size: 11px; }
+#ai-mode button { height: 24px; min-width: 0; padding: 0 6px; font-size: 11px; }
+#ai-send { flex: none; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 13px; background: var(--link); color: #fff; font-size: 14px; }
+#ai-send:disabled { opacity: 0.4; }
+#ai-footer { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 10px; }
+#ai-usage-status { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#ai-usage-popover { width: 278px; padding: 12px; color: var(--muted); font-size: 11px; }
+#ai-usage-popover > * { margin-bottom: 8px; }
+#ai-usage-refresh { font: inherit; }
+::highlight(ai-selection) { background-color: rgba(10, 102, 194, 0.22); }
 #scroller { flex: 1; min-width: 0; position: relative; overflow: auto; background: var(--paper, var(--surface)); }
 /* Only paged view needs this box. In scroll view the text sits directly in the scroller. */
 #page-clip { display: contents; }

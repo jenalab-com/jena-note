@@ -1,12 +1,6 @@
 import Foundation
 import Darwin
 
-struct AIProcessOutput {
-    let status: Int32
-    let stdout: String
-    let stderr: String
-}
-
 /// Each request owns a process group, including CLI launcher children. All pipe reads are
 /// nonblocking: a descendant retaining a pipe cannot prevent cancellation or completion.
 final class AIProcess {
@@ -74,17 +68,8 @@ final class AIProcess {
         posix_spawnattr_setpgroup(&attributes, 0)
         var environment = ProcessInfo.processInfo.environment
         environment["PATH"] = ([executable.deletingLastPathComponent().path] + AISettings.searchDirectories).joined(separator: ":")
-        environment["NO_COLOR"] = "1"
-        environment["GEMINI_CLI_NO_RELAUNCH"] = "1"
-        environment["GROK_DISABLE_AUTOUPDATER"] = "1"
-        environment["GROK_MEMORY"] = "0"
-        // Avoid importing unrelated Claude/Cursor automation into a writing request.
-        for vendor in ["CLAUDE", "CURSOR", "CODEX"] {
-            for kind in ["HOOKS", "MCPS", "AGENTS", "RULES", "SKILLS"] {
-                environment["GROK_\(vendor)_\(kind)_ENABLED"] = "0"
-            }
-        }
-        environment.removeValue(forKey: "CLAUDECODE")
+        environment.merge(AICommand.environment) { _, shared in shared }
+        for key in AICommand.removedEnvironment { environment.removeValue(forKey: key) }
         environment.merge(environmentOverrides) { _, override in override }
         var argv = ([executable.path] + arguments).map { strdup($0) } + [nil]
         var env = environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
@@ -152,10 +137,4 @@ final class AIProcess {
     private func posixError(_ code: Int32 = errno) -> NSError {
         NSError(domain: NSPOSIXErrorDomain, code: Int(code))
     }
-}
-
-/// Used only by read-only metadata handshakes; receive runs on the process worker queue.
-protocol AIProcessExchange: AnyObject {
-    var isComplete: Bool { get }
-    func receive(_ line: String) -> String?
 }

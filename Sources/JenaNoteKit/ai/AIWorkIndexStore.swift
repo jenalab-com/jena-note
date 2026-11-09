@@ -122,18 +122,7 @@ final class AIWorkIndexStore {
     }
 
     private func restoreSummaries(into fresh: inout AIWorkIndex, retryExcerpts: Bool = false) {
-        var cached: [String: AIIndexedPassage] = [:]
-        for passage in index.passages where !passage.summary.isEmpty {
-            if retryExcerpts && passage.summaryOrigin == .excerpt { continue }
-            cached[passage.cacheKey] = passage
-        }
-        for i in fresh.passages.indices {
-            if let saved = cached[fresh.passages[i].cacheKey] {
-                fresh.passages[i].summary = saved.summary
-                fresh.passages[i].summaryOrigin = saved.summaryOrigin
-                fresh.passages[i].summaryIssue = saved.summaryIssue
-            }
-        }
+        fresh.restoreSummaries(from: index, retryExcerpts: retryExcerpts)
     }
 
     func schedule(context: AIWorkContext) {

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
@@ -101,6 +102,8 @@ static class SelfTest
             await RunSidebarChecks(window, recycled, Check);
             await RunReadingChecks(window, Check);
             await RunSourceChecks(window, Check);
+            await RunAiChecks(window, report, Check);
+            await RunWorkChecks(window, Check);
 
             var longDocument = results.GetProperty("longDocument");
             Check("a long document survives a round trip", longDocument.GetProperty("ok").GetBoolean());
@@ -383,6 +386,332 @@ static class SelfTest
         var written = File.ReadAllText(file);
         check("reading settings do not reach the file", written.Contains("**쓴글굵게** 글") && written.Contains("둘째"), written);
         AppSettings.Update(settings => { settings.ReadingWeight = "regular"; settings.ReadingMode = "scroll"; settings.ReadingFont = "serif"; });
+    }
+
+    static async Task RunWorkChecks(EditorWindow window, Action<string, bool, string> check)
+    {
+        void Report(JsonElement steps)
+        {
+            foreach (var step in steps.GetProperty("checks").EnumerateArray())
+                check("work: " + step.GetProperty("name").GetString(), step.GetProperty("ok").GetBoolean(), step.GetProperty("detail").ToString());
+        }
+        var root = Directory.CreateTempSubdirectory("jena-selftest-work-").FullName;
+        Directory.CreateDirectory(Path.Combine(root, "설정"));
+        Directory.CreateDirectory(Path.Combine(root, "원고"));
+        WriteFixture(Path.Combine(root, "설정"), "인물.md", "리에느는 빵을 좋아한다.\n");
+        WriteFixture(Path.Combine(root, "설정"), "뺄것.md", "빠질 글\n");
+        var first = WriteFixture(Path.Combine(root, "원고"), "1화.md", "첫째 화 내용\n");
+        var current = WriteFixture(Path.Combine(root, "원고"), "2화.md", "둘째 화 지금 내용\n");
+        WriteFixture(Path.Combine(root, "원고"), "10화.md", "미래비밀 열째 화\n");
+        var outside = WriteFixture(Directory.CreateTempSubdirectory("jena-selftest-nowork-").FullName, "메모.md", "메모\n");
+
+        string Kind(string path)
+        {
+            using var status = JsonDocument.Parse(NativeCore.WorkStatus(path));
+            return status.RootElement.GetProperty("kind").GetString()!;
+        }
+        check("work: a folder without a context is no work", Kind(current) == "notInWork", Kind(current));
+
+        // First setup: suggested from the folder names, and not written until it has a source.
+        await window.OpenFromSidebarAsync(current, null, 0);
+        await Task.Delay(200);
+        var setup = WorkContextWindow.Present(window, current, 2);
+        check("work: setup suggests the parent as root", setup.Root == root && setup.IsProvisional, $"{setup.Root} {setup.IsProvisional}");
+        var configFile = Path.Combine(root, ".jenanote", "context.json");
+        using (var suggested = JsonDocument.Parse(setup.ConfigJson))
+        {
+            var sources = suggested.RootElement.GetProperty("settingsSources");
+            check("work: setup finds the settings folder", sources.GetArrayLength() == 1 && sources[0].GetString() == "설정", setup.ConfigJson);
+            check("work: setup finds the writing folder", suggested.RootElement.GetProperty("writingFolder").GetString() == "원고", setup.ConfigJson);
+        }
+        check("work: nothing is written yet", !File.Exists(configFile), "");
+        setup.CommitPendingChanges();
+        check("work: closing saves a setup that is valid as suggested", File.Exists(configFile) && !setup.IsProvisional, setup.Rejection ?? "");
+        setup.Apply(new { op = "setTitle", title = "내 작품" });
+        check("work: a title change is saved", JsonNode.Parse(File.ReadAllText(configFile))!["title"]!.GetValue<string>() == "내 작품", File.ReadAllText(configFile));
+        check("work: it is a work now", Kind(current) is "indexed" or "disabled", Kind(current));
+
+        // Edits
+        var parent = Path.GetDirectoryName(root)!;
+        setup.Apply(new { op = "setRoot", path = parent });
+        var movedFile = Path.Combine(parent, ".jenanote", "context.json");
+        check("work: the root can move up", setup.Root == parent && File.Exists(movedFile) && !File.Exists(configFile) && Kind(current) != "notInWork", setup.Rejection ?? setup.Root);
+        setup.Apply(new { op = "setRoot", path = root });
+        check("work: the root comes back with its paths", setup.Root == root && File.Exists(configFile) && !File.Exists(movedFile) && JsonNode.Parse(setup.ConfigJson)!["settingsSources"]![0]!.GetValue<string>() == "설정", setup.ConfigJson);
+        if (Directory.Exists(Path.Combine(parent, ".jenanote")) && !Directory.EnumerateFileSystemEntries(Path.Combine(parent, ".jenanote")).Any()) Directory.Delete(Path.Combine(parent, ".jenanote"));
+        setup.Apply(new { op = "addSource", path = Path.GetTempPath() });
+        check("work: a source outside the work is refused", setup.Rejection != null, setup.ConfigJson);
+        setup.Apply(new { op = "setEnabled", on = false });
+        check("work: switching off is kept", Kind(current) == "disabled", Kind(current));
+        setup.Apply(new { op = "setEnabled", on = true });
+        check("work: switching on works", Kind(current) == "indexed", Kind(current));
+        setup.Apply(new { op = "toggleInclude", path = "설정/뺄것.md" });
+        check("work: a file can be left out", JsonNode.Parse(setup.ConfigJson)!["excludedSettings"]![0]!.GetValue<string>() == "설정/뺄것.md", setup.ConfigJson);
+        var description = NativeCore.WorkWindowDescribe(setup.Root, setup.ConfigJson, current);
+        using (var info = JsonDocument.Parse(description))
+        {
+            check("work: the window lists both settings files", info.RootElement.GetProperty("files").GetArrayLength() == 2, description);
+            check("work: one is left out", info.RootElement.GetProperty("included").GetInt32() == 1, description);
+            var previous = info.RootElement.GetProperty("previous");
+            check("work: only earlier episodes are listed", previous.GetArrayLength() == 1 && previous[0].GetProperty("path").GetString() == "원고/1화.md", description);
+        }
+        setup.Close();
+
+        // The index: excerpts on Windows, and whatever a Mac summarized stays.
+        await WorkIndex.PrepareAsync(current);
+        var indexFile = Path.Combine(root, ".jenanote", "work-index.json");
+        bool IndexHolds(string words) => JsonNode.Parse(File.ReadAllText(indexFile))!["passages"]!.AsArray()
+            .Any(item => item!["summary"]!.GetValue<string>().Contains(words) || item["text"]!.GetValue<string>().Contains(words));
+        check("work: the index is written beside the context", File.Exists(indexFile), "");
+        var indexText = File.ReadAllText(indexFile);
+        check("work: passages are excerpts here", indexText.Contains("\"summaryOrigin\":\"excerpt\"") && indexText.Contains("ai.index.localUnavailable"), indexText[..Math.Min(300, indexText.Length)]);
+        var index = JsonNode.Parse(indexText)!;
+        var settingPassage = index["passages"]!.AsArray().First(item => item!["path"]!.GetValue<string>() == "설정/인물.md")!;
+        settingPassage["summary"] = "맥에서 만든 요약";
+        settingPassage["summaryOrigin"] = "apple";
+        File.WriteAllText(indexFile, index.ToJsonString());
+        var beforeOpen = File.GetLastWriteTimeUtc(indexFile);
+        await WorkIndex.PrepareAsync(current);
+        check("work: a summary from a Mac survives", IndexHolds("맥에서 만든 요약"), "");
+        check("work: an unchanged work is not written again", File.GetLastWriteTimeUtc(indexFile) == beforeOpen, "");
+        File.AppendAllText(first, "추가된 줄\n");
+        await WorkIndex.PrepareAsync(current);
+        check("work: a changed file is indexed again", IndexHolds("추가된 줄"), "");
+        check("work: its neighbors keep their summaries", IndexHolds("맥에서 만든 요약"), "");
+
+        // The whole request, with a fake CLI that answers with what it was sent.
+        AppSettings.Update(settings =>
+        {
+            settings.AiProvider = "claude";
+            settings.AiPaths["claude"] = Environment.ProcessPath!;
+            settings.AiModels["claude"] = "";
+        });
+        Environment.SetEnvironmentVariable("JENANOTE_FAKE_CLI", "echo");
+        await window.OpenFromSidebarAsync(current, null, 0);
+        await Task.Delay(1100);
+        Report(await ProofStep(window, "workAsk"));
+        await Task.Delay(2500);
+        Report(await ProofStep(window, "workSee"));
+
+        // A work too large to read whole: the CLI chooses, in rounds, and only from what is eligible.
+        for (var number = 11; number < 50; number++) WriteFixture(Path.Combine(root, "원고"), $"1-{number}화.md", $"앞선 화 {number}\n" + new string('글', 700) + "\n");
+        await WorkIndex.PrepareAsync(current);
+        Environment.SetEnvironmentVariable("JENANOTE_FAKE_CLI", "reply");
+        Environment.SetEnvironmentVariable("JENANOTE_FAKE_REPLY", "{\"done\":true}");
+        Report(await ProofStep(window, "workAskLarge"));
+        await Task.Delay(3500);
+        Report(await ProofStep(window, "workSeeLarge"));
+        Environment.SetEnvironmentVariable("JENANOTE_FAKE_REPLY", "못 읽는 대답");
+        Report(await ProofStep(window, "workAskBad"));
+        await Task.Delay(2000);
+        Report(await ProofStep(window, "workSeeBad"));
+        Environment.SetEnvironmentVariable("JENANOTE_FAKE_REPLY", null);
+
+        // A document outside any work asks the plain way and says the row is off.
+        await window.OpenFromSidebarAsync(outside, null, 0);
+        await Task.Delay(300);
+        Report(await ProofStep(window, "workRowOff"));
+        Report(await ProofStep(window, "workClose"));
+        Environment.SetEnvironmentVariable("JENANOTE_FAKE_CLI", null);
+        AppSettings.Update(settings => settings.AiPaths.Clear());
+
+        // A damaged context is set aside, never overwritten.
+        File.WriteAllText(configFile, "not json");
+        check("work: a damaged context says so", Kind(current) == "corrupt", Kind(current));
+        NativeCore.WorkSetCorruptAside(current);
+        check("work: it moves aside", File.ReadAllText(configFile + ".bak") == "not json" && !File.Exists(configFile), "");
+        check("work: setup can start again", Kind(current) == "notInWork", Kind(current));
+        await Task.Delay(1000);
+        Directory.Delete(root, recursive: true);
+    }
+
+    static async Task RunAiChecks(EditorWindow window, StringBuilder report, Action<string, bool, string> check)
+    {
+        void Report(JsonElement steps)
+        {
+            foreach (var step in steps.GetProperty("checks").EnumerateArray())
+                check("ai: " + step.GetProperty("name").GetString(), step.GetProperty("ok").GetBoolean(), step.GetProperty("detail").ToString());
+        }
+        static void Mode(string mode) => Environment.SetEnvironmentVariable("JENANOTE_FAKE_CLI", mode);
+        Report(await ProofStep(window, "aiRevisions"));
+
+        var folder = Directory.CreateTempSubdirectory("jena-selftest-ai-").FullName;
+        var pidFile = Path.Combine(folder, "pid.txt");
+        Environment.SetEnvironmentVariable("JENANOTE_FAKE_PID", pidFile);
+        AppSettings.Update(settings =>
+        {
+            settings.AiProvider = "claude";
+            settings.AiPaths["claude"] = Environment.ProcessPath!;
+            settings.AiModels["claude"] = "";
+        });
+
+        // The process runner, directly.
+        var none = TimeSpan.FromSeconds(30);
+        static bool Running(int pid)
+        {
+            try
+            {
+                return !Process.GetProcessById(pid).HasExited;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+        }
+        async Task<string> Fails(Func<Task> action)
+        {
+            try
+            {
+                await action();
+                return "";
+            }
+            catch (Exception error) when (error is AiFailure or AiFailureWithTokens)
+            {
+                return error.Message;
+            }
+        }
+
+        Mode("echo");
+        var hangul = "한글 질문 😀 " + new string('가', 200_000);
+        var echoed = await AiService.SendAsync("claude", hangul, null, none, CancellationToken.None);
+        check("ai: a long Korean prompt goes in and comes back whole", echoed.Text == hangul, echoed.Text.Length.ToString());
+        check("ai: tokens come from the answer", echoed.Tokens == 7, echoed.Tokens?.ToString() ?? "");
+
+        Mode("args");
+        var odd = "모델 \"따옴표\" & | ; %PATH% 끝";
+        var argsAnswer = await AiService.SendAsync("claude", "p", odd, none, CancellationToken.None);
+        var passed = JsonSerializer.Deserialize<string[]>(argsAnswer.Text)!;
+        check("ai: a model name stays one argument", passed[Array.IndexOf(passed, "--model") + 1] == odd, argsAnswer.Text);
+        check("ai: an empty argument survives", passed[Array.IndexOf(passed, "--tools") + 1] == "", argsAnswer.Text);
+        check("ai: tools stay off", passed.Contains("--safe-mode") && passed.Contains("--strict-mcp-config"), argsAnswer.Text);
+
+        Mode("fail");
+        var failed = await Fails(() => AiService.SendAsync("claude", "p", null, none, CancellationToken.None));
+        check("ai: a failing CLI reports its error", failed.Contains("bad login"), failed);
+
+        Mode("hang");
+        var slow = Stopwatch.StartNew();
+        var timedOut = await Fails(() => AiService.SendAsync("claude", "p", null, TimeSpan.FromMilliseconds(600), CancellationToken.None));
+        check("ai: a hung CLI times out", timedOut == NativeCore.Tr("ai.timeout") && slow.ElapsedMilliseconds < 8000, $"{timedOut} {slow.ElapsedMilliseconds}");
+
+        Mode("flood");
+        var flooded = await Fails(() => AiService.SendAsync("claude", "p", null, none, CancellationToken.None));
+        check("ai: endless output is cut off", flooded == NativeCore.Tr("ai.outputTooLarge"), flooded);
+
+        Mode("childHolds");
+        slow.Restart();
+        var held = await AiService.SendAsync("claude", "p", null, none, CancellationToken.None);
+        check("ai: a child keeping the pipe open does not hold the answer", held.Text == "done" && slow.ElapsedMilliseconds < 8000, $"{held.Text} {slow.ElapsedMilliseconds}");
+        var heldChild = int.Parse(File.ReadAllText(pidFile));
+        await Eventually(() => !Running(heldChild));
+        check("ai: that child ends with the request", !Running(heldChild), heldChild.ToString());
+
+        Mode("childHangs");
+        File.Delete(pidFile);
+        using (var cancel = new CancellationTokenSource())
+        {
+            var running = Fails(() => AiService.SendAsync("claude", "p", null, none, cancel.Token));
+            await Eventually(() => File.Exists(pidFile) && new FileInfo(pidFile).Length > 0);
+            var child = int.Parse(File.ReadAllText(pidFile));
+            check("ai: the child was running", Running(child), child.ToString());
+            cancel.Cancel();
+            var stopped = await running;
+            check("ai: stopping reports it", stopped == NativeCore.Tr("ai.cancelled"), stopped);
+            await Eventually(() => !Running(child));
+            check("ai: stopping ends descendants", !Running(child), child.ToString());
+        }
+
+        Mode("metadata");
+        using (var loaded = JsonDocument.Parse(await AiService.LoadMetadataAsync("claude", CancellationToken.None)))
+        {
+            var root = loaded.RootElement;
+            check("ai: models arrive", root.GetProperty("models")[0].GetProperty("id").GetString() == "opus", root.GetRawText());
+            check("ai: usage arrives", root.GetProperty("usageAvailable").GetBoolean() && root.GetProperty("quotas")[0].GetProperty("percent").GetDouble() == 25, root.GetRawText());
+        }
+        Mode("probe");
+        check("ai: the connection check passes", (await AiService.CheckAsync("claude", CancellationToken.None)).Connected, "");
+        check("ai: a checked connection is remembered", AiService.IsVerified("claude", AiExecutable.Locate("claude")!), "");
+        Mode("echo");
+        check("ai: a wrong answer fails the check", !(await AiService.CheckAsync("claude", CancellationToken.None)).Connected, "");
+        check("ai: a failed check forgets it", !AiService.IsVerified("claude", AiExecutable.Locate("claude")!), "");
+
+        await Task.Delay(200);
+        var leftover = Directory.GetDirectories(Path.GetTempPath(), "JenaNote-AI-*").Length;
+        check("ai: request folders are removed, even after a kill", leftover == 0, leftover.ToString());
+
+        // Finding and starting
+        var shimFolder = Path.Combine(folder, "npm");
+        var script = Path.Combine(shimFolder, "node_modules", "@x", "cli", "index.js");
+        Directory.CreateDirectory(Path.GetDirectoryName(script)!);
+        File.WriteAllText(script, "");
+        File.WriteAllText(Path.Combine(shimFolder, "node.exe"), "");
+        var shim = Path.Combine(shimFolder, "cli.cmd");
+        File.WriteAllText(shim, "@ECHO off\r\nGOTO start\r\n:find_dp0\r\nSET dp0=%~dp0\r\nEXIT /b\r\n:start\r\nSETLOCAL\r\nCALL :find_dp0\r\n\r\nIF EXIST \"%dp0%\\node.exe\" (\r\n  SET \"_prog=%dp0%\\node.exe\"\r\n) ELSE (\r\n  SET \"_prog=node\"\r\n)\r\n\r\nendLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & \"%_prog%\"  \"%dp0%\\node_modules\\@x\\cli\\index.js\" %*\r\n");
+        var resolved = AiExecutable.Resolve(shim);
+        check("ai: an npm launcher runs its program directly", resolved.File == Path.Combine(shimFolder, "node.exe") && resolved.Prefix.SequenceEqual(new[] { script }), $"{resolved.File} {string.Join(',', resolved.Prefix)}");
+        check("ai: an exe runs as it is", AiExecutable.Resolve(Environment.ProcessPath!).Prefix.Length == 0, "");
+        var unknown = Path.Combine(shimFolder, "mystery.cmd");
+        File.WriteAllText(unknown, "@echo off\r\nsomething %*\r\n");
+        check("ai: another batch file is refused", await Fails(() => Task.FromResult(AiExecutable.Resolve(unknown))) == NativeCore.Tr("doc.aiShimUnsupported"), "");
+        var other = Path.Combine(shimFolder, "tool.ps1");
+        File.WriteAllText(other, "");
+        check("ai: other file types are refused", await Fails(() => Task.FromResult(AiExecutable.Resolve(other))) == NativeCore.Tr("doc.aiShimUnsupported"), "");
+        AppSettings.Update(settings => settings.AiPaths["gemini"] = Path.Combine(folder, "none.exe"));
+        check("ai: a wrong path counts as not installed", AiExecutable.Locate("gemini") == null, "");
+        AppSettings.Update(settings => settings.AiPaths.Remove("gemini"));
+        check("ai: only confirmed installers run", AiService.InstallCommand("claude") != null && AiService.InstallCommand("grok") == null, "");
+        var oddSettings = Path.Combine(folder, "settings.json");
+        File.WriteAllText(oddSettings, "{\"AiProvider\":\"nope\",\"AiPaths\":null,\"AiModels\":null}");
+        var fallback = AppSettings.Read(oddSettings);
+        check("ai: odd settings fall back", fallback.AiProvider == "claude" && fallback.AiPaths.Count == 0 && fallback.AiModels.Count == 0, "");
+
+        // The panel, end to end with the fake CLI.
+        await Task.Delay(100);
+        Mode("echo");
+        Report(await ProofStep(window, "aiPanelOpen"));
+        async Task Ask(string askStep, string seeStep)
+        {
+            Report(await ProofStep(window, askStep));
+            await Task.Delay(1800);
+            Report(await ProofStep(window, seeStep));
+        }
+        await Ask("aiAskGuide", "aiSeeAnswer");
+        Mode("fail");
+        await Ask("aiAskFail", "aiSeeFailure");
+        Mode("reply");
+        Environment.SetEnvironmentVariable("JENANOTE_FAKE_REPLY", "{\"explanation\":\"설명입니다\",\"replacement\":\"굵은 글\"}");
+        await Ask("aiAskEdit", "aiSeeEdit");
+        await Ask("aiAskConflict", "aiSeeConflict");
+        Mode("hang");
+        Report(await ProofStep(window, "aiAskHang"));
+        await Task.Delay(300);
+        Report(await ProofStep(window, "aiStopHang"));
+        Report(await ProofStep(window, "aiSafety"));
+        Report(await ProofStep(window, "aiPanelClose"));
+        Environment.SetEnvironmentVariable("JENANOTE_FAKE_CLI", null);
+        Environment.SetEnvironmentVariable("JENANOTE_FAKE_REPLY", null);
+        Environment.SetEnvironmentVariable("JENANOTE_FAKE_PID", null);
+
+        // Only when asked for: one request to a real CLI, with no document in it.
+        var live = Environment.GetEnvironmentVariable("JENANOTE_LIVE_AI");
+        if (!string.IsNullOrEmpty(live))
+        {
+            AppSettings.Update(settings => { settings.AiProvider = live; settings.AiPaths.Remove(live); });
+            try
+            {
+                report.AppendLine($"live {live}: {AiExecutable.Locate(live)}");
+                using var loaded = JsonDocument.Parse(await AiService.LoadMetadataAsync(live, CancellationToken.None));
+                report.AppendLine($"live metadata: models {loaded.RootElement.GetProperty("models").GetArrayLength()}, usage {loaded.RootElement.GetProperty("usageAvailable")}");
+                var (connected, message) = await AiService.CheckAsync(live, CancellationToken.None);
+                report.AppendLine($"live check: {connected} {message.Replace('\n', ' ')}");
+            }
+            catch (Exception error) when (error is AiFailure or AiFailureWithTokens or IOException or InvalidOperationException)
+            {
+                report.AppendLine($"live failed: {error.Message}");
+            }
+        }
+        AppSettings.Update(settings => { settings.AiProvider = "claude"; settings.AiPaths.Clear(); });
+        Directory.Delete(folder, recursive: true);
     }
 
     static async Task RunSourceChecks(EditorWindow window, Action<string, bool, string> check)

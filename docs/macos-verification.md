@@ -58,6 +58,16 @@ bash Vendor/Kiwi/scripts/fetch-kiwi-model.sh
 - [ ] 파일 전체 검색이 동작한다
 - [ ] 맞춤법이 `내보내기`나 `내려받지` 같은 동사를 띄우라고 제안하지 않는다 (공유 맞춤법 엔진을 고쳤다)
 - [ ] 버전 이력에서 비교, 이름 붙이기, 복원이 동작하고 예전 백업도 보인다 (`DocumentBackupStore`를 옮겼다)
+- [ ] 설정 → AI → 재확인이 연결 확인으로 끝난다 (CLI 인자와 응답 읽기를 `AICommand`로 옮겼다)
+- [ ] AI 패널에 모델 목록과 사용률이 나온다 (`AIMetadata`를 옮겼다)
+- [ ] 가이드 질문에 답이 온다. 직접 수정이 본문에 적용되고 ⌘Z로 되돌려진다 (프롬프트를 `AIChatPrompt`로 옮겼다)
+- [ ] 응답을 기다리다 중지하면 CLI가 멈춘다 (`AIProcess`의 환경 변수를 `AICommand`에서 가져온다)
+- [ ] 작품 문맥을 켠 작품에서 질문하면 "확인한 원문" 목록이 나오고, 현재 화 이후 내용이 답에 섞이지 않는다 (탐색을 `AIWorkRetrievalSession`으로 옮겼다)
+- [ ] 작품 설정 파일을 열어 저장 전에 고친 내용이 AI 요청에 반영된다 (`AIWorkContextResolver.useOpenDocuments`를 앱 시작 때 연결한다)
+- [ ] 지난 화 탭의 인덱스 상태와 기기 내 요약 개수가 전과 같다 (`AIWorkIndex`를 옮겼다)
+- [ ] 작품을 다시 열어도 기기 내 요약을 처음부터 다시 만들지 않는다 (`AIWorkIndex.split`을 빠르게 고쳤다. 조각 ID가 같아야 한다)
+- [ ] 원문 탐색이 대소문자와 한글을 전처럼 찾는다 (검색을 `AIWorkSearchCorpus`로 바꿨다)
+- [ ] 설정 → AI → Local(llama.cpp)에서 실행·대화·중지가 전처럼 된다 (main의 `.local`을 공유 `AIProvider`로 옮겼다. Windows 공급자 목록에서는 뺐다)
 - [ ] AI 패널이 작품 문맥을 찾고, 작품 문맥 창을 열어 저장할 수 있다 (`AIWorkContext`를 옮겼다)
 
 ## 4. 저장 버그 재현

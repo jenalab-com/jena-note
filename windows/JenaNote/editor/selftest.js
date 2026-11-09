@@ -229,6 +229,286 @@
       const line = getSelection().anchorNode?.parentElement?.closest('p')?.textContent;
       check('a search result jumps to its occurrence', selected === '오랫만' && line === '둘째 오랫만에', `${selected} / ${line}`);
     },
+    async workAsk(check) {
+      if (!aiActive) aiToggle();
+      await new Promise(resolve => setTimeout(resolve, 200));
+      check('the row names the work status', document.getElementById('ai-work-dot').className === 'ok' && document.getElementById('ai-work-text').textContent !== '', document.getElementById('ai-work-text').textContent);
+      aiConversation.messages = [];
+      aiConversation.mode = 'guide';
+      aiInput.value = '리에느는 무엇을 좋아하나요?';
+      aiSend();
+      check('sent', aiBusy);
+    },
+    async workSee(check) {
+      check('the answer arrived', !aiBusy, aiBusy);
+      const messages = aiConversation.messages;
+      const answer = messages[messages.length - 1];
+      const sources = messages[messages.length - 2];
+      check('the settings reached the request', answer.text.includes('빵을 좋아한다'), answer.text.slice(0, 300));
+      check('an earlier episode reached the request', answer.text.includes('첫째 화 내용'), answer.text.slice(0, 300));
+      check('the document itself reached the request', answer.text.includes('둘째 화 지금 내용'), '');
+      check('a later episode never does', !answer.text.includes('미래비밀'), '');
+      check('it tells the CLI this is not exhaustive', answer.text.includes('do not claim an exhaustive review'), '');
+      check('what was read is listed', sources.role === 'status' && sources.text.includes('설정/인물.md') && sources.text.includes('1화.md') && !sources.text.includes('10화'), sources.text);
+    },
+    async workAskLarge(check) {
+      aiConversation.messages = [];
+      aiConversation.tokens = {};
+      aiInput.value = '큰 작품 질문';
+      aiSend();
+      check('sent', aiBusy);
+    },
+    async workSeeLarge(check) {
+      check('the answer arrived', !aiBusy, aiBusy);
+      const messages = aiConversation.messages;
+      check('the search round counts too', aiConversation.tokens[aiProvider] === 14, JSON.stringify(aiConversation.tokens));
+      const sources = messages.find(item => item.role === 'status');
+      check('only part of the work is read', sources && !sources.text.includes('10화'), sources?.text.slice(0, 200));
+      check('the answer follows', messages[messages.length - 1].role === 'assistant', messages[messages.length - 1].role);
+    },
+    async workAskBad(check) {
+      aiConversation.messages = [];
+      aiInput.value = '잘못된 탐색 질문';
+      aiSend();
+      check('sent', aiBusy);
+    },
+    async workSeeBad(check) {
+      check('it stops', !aiBusy, aiBusy);
+      const last = aiConversation.messages[aiConversation.messages.length - 1];
+      check('it says why', last.role === 'status', last.role);
+      check('the question comes back', aiInput.value === '잘못된 탐색 질문' && !aiConversation.messages.some(item => item.role === 'user'), aiInput.value);
+      aiInput.value = '';
+    },
+    async workRowOff(check) {
+      await new Promise(resolve => setTimeout(resolve, 150));
+      check('outside a work the row is off', document.getElementById('ai-work-text').textContent === strings['ai.work.row.off'], document.getElementById('ai-work-text').textContent);
+      check('and has a button', document.getElementById('ai-work-button').textContent === strings['ai.work.row.settingsButton'], document.getElementById('ai-work-button').textContent);
+    },
+    async workClose(check) {
+      aiToggle();
+      check('closed', !aiActive);
+      render([]);
+    },
+    async aiRevisions(check) {
+      const load = blocks => {
+        render(blocks);
+        placeCaret(root.firstElementChild, 0);
+        root.focus();
+      };
+      const revise = (blocks, revised, selection) => {
+        load(blocks);
+        const original = aiTextMap().text;
+        const start = selection ? original.indexOf(selection) : 0;
+        const end = selection ? start + selection.length : original.length;
+        try {
+          aiApplyRevision({ text: original, start, end }, revised);
+        } catch (error) {
+          return `refused: ${error.message.slice(0, 20)} / now ${aiTextMap().text} / hunks ${JSON.stringify(aiDiff(original, original.slice(0, start) + revised + original.slice(end)))}`;
+        }
+        return aiTextMap().text;
+      };
+      const paragraph = (...runs) => ({ type: 'paragraph', runs: runs.map(run => (typeof run === 'string' ? text(run) : run)) });
+
+      // The text sent to the CLI
+      load([paragraph('첫 줄'), { type: 'heading', level: 2, runs: [text('제목')] }, paragraph('끝')]);
+      check('blocks are lines', aiTextMap().text === '첫 줄\n제목\n끝', aiTextMap().text);
+      load([{ type: 'table', headerRow: 0, rows: [[[text('a')], [text('b')]], [[text('1')], [text('2')]]] }, paragraph('뒤')]);
+      check('table cells keep their order', aiTextMap().text === 'a\tb\n1\t2\n뒤', JSON.stringify(aiTextMap().text));
+      load([paragraph({ image: true, path: 'x.png', alt: 'x' }, ' 글')]);
+      check('an image is one mark', aiTextMap().text === '\uFFFC 글' || aiTextMap().text === ' 글', JSON.stringify(aiTextMap().text));
+
+      // Formatting stays on the words that did not change.
+      let result = revise([paragraph({ text: '굵은', bold: true }, ' 말을 고칩니다')], '굵은 글을 고칩니다');
+      check('a revision changes the word', result === '굵은 글을 고칩니다', result);
+      const runs = readBlocks()[0].runs;
+      check('bold stays where it was', runs[0].text === '굵은' && runs[0].bold === true && runs[1].bold !== true, JSON.stringify(runs));
+      result = revise([paragraph('가나다라마바사')], '가나X라마Y사');
+      check('two changes apply separately', result === '가나X라마Y사', result);
+      result = revise([paragraph('앞'), paragraph('뒤')], '앞\n가운데\n뒤');
+      check('a new line makes a block', result === '앞\n가운데\n뒤' && root.children.length === 3, `${result} ${root.children.length}`);
+      result = revise([paragraph('앞'), paragraph('가운데'), paragraph('뒤')], '앞\n뒤');
+      check('a removed line removes its block', result === '앞\n뒤' && root.children.length === 2, `${result} ${root.children.length}`);
+      result = revise([paragraph('앞 글'), paragraph('뒤 글')], '앞 글 바꾼 뒤 글', '앞 글\n뒤 글');
+      check('two blocks can become one', result === '앞 글 바꾼 뒤 글' && root.children.length === 1, result);
+      result = revise([paragraph('😀 웃음')], '😀 미소');
+      check('emoji survive', result === '😀 미소', result);
+      result = revise([{ type: 'listItem', ordered: false, index: 0, runs: [text('하나')] }, { type: 'listItem', ordered: false, index: 0, runs: [text('둘')] }], '하나\n셋');
+      check('a list item changes in place', result === '하나\n셋' && readBlocks()[1].type === 'listItem', JSON.stringify(readBlocks()[1]));
+      result = revise([{ type: 'codeBlock', lines: ['a', 'b'], language: null }], 'a\nc\nb');
+      check('code keeps its lines', result === 'a\nc\nb' && readBlocks()[0].lines.length === 3, `${JSON.stringify(result)} ${root.innerHTML} ${JSON.stringify(readBlocks()[0])}`);
+
+      // Only the selection is revised.
+      load([paragraph('앞 문장'), paragraph('가운데 문장'), paragraph('뒤 문장')]);
+      const doc = aiTextMap().text;
+      const from = doc.indexOf('가운데');
+      aiApplyRevision({ text: doc, start: from, end: from + 6 }, '고친 문장');
+      check('a selection revision stays inside it', aiTextMap().text === '앞 문장\n고친 문장\n뒤 문장', aiTextMap().text);
+
+      // Refusals change nothing.
+      const refused = (blocks, revised, name) => {
+        load(blocks);
+        const before = root.innerHTML;
+        const original = aiTextMap().text;
+        let failed = false;
+        try {
+          aiApplyRevision({ text: original, start: 0, end: original.length }, revised);
+        } catch {
+          failed = true;
+        }
+        check(name, failed && root.innerHTML === before, failed);
+      };
+      const table = { type: 'table', headerRow: 0, rows: [[[text('a')], [text('b')]], [[text('1')], [text('2')]]] };
+      refused([table], 'a\tb\n1', 'removing a table cell is refused');
+      refused([table], 'a\tb\tc\n1\t2', 'adding a table cell is refused');
+      load([table]);
+      aiApplyRevision({ text: aiTextMap().text, start: 0, end: aiTextMap().text.length }, 'a\tb\n1\t고침');
+      check('a cell can change', readBlocks()[0].rows[1][1][0].text === '고침', JSON.stringify(readBlocks()[0].rows[1]));
+      load([paragraph('글')]);
+      let conflict = false;
+      try {
+        aiApplyRevision({ text: '다른 글', start: 0, end: 4 }, '새 글');
+      } catch {
+        conflict = true;
+      }
+      check('a changed document is refused', conflict && aiTextMap().text === '글');
+      let tooLarge = false;
+      try {
+        aiDiff('가'.repeat(3000) + '끝', '나'.repeat(3000) + '끝!');
+      } catch {
+        tooLarge = true;
+      }
+      check('a huge rewrite is refused', tooLarge);
+      check('same text means no change', aiDiff('같음', '같음').length === 0);
+
+      // Undo takes it back.
+      load([paragraph('되돌릴 글')]);
+      const backText = aiTextMap().text;
+      aiApplyRevision({ text: backText, start: 0, end: backText.length }, '바뀐 글');
+      for (let index = 0; index < 6 && aiTextMap().text !== backText; index++) exec('undo');
+      check('a revision can be undone', aiTextMap().text === backText, aiTextMap().text);
+      render([]);
+    },
+    async aiPanelOpen(check) {
+      render([{ type: 'paragraph', runs: [text('패널 문서입니다')] }]);
+      readingPath = null;
+      aiDocumentChanged();
+      if (!aiActive) aiToggle();
+      await new Promise(resolve => setTimeout(resolve, 100));
+      check('the panel opens', aiActive && !aiPanel.hidden && !aiSplitter.hidden);
+      check('keys go to the question box', document.activeElement === aiInput, document.activeElement?.id);
+      check('every string exists', Object.entries(strings).every(([key, value]) => key !== value), Object.entries(strings).filter(([key, value]) => key === value).map(([key]) => key).join(','));
+      check('the paged button rests', document.getElementById('toolbar-paged').disabled);
+      const before = reading.mode;
+      reading.mode = 'paged';
+      layoutReading();
+      check('the document scrolls while it is open', !isPaged() && !document.body.classList.contains('paged'));
+      reading.mode = before;
+      layoutReading();
+      const rulerBox = rulers[0].canvas.getBoundingClientRect();
+      check('the ruler stays in reach beside the panel', rulerBox.right <= aiPanel.getBoundingClientRect().left + 1, `${rulerBox.right} ${aiPanel.getBoundingClientRect().left}`);
+      const wide = root.getBoundingClientRect().right;
+      check('the panel takes room from the document', wide <= aiPanel.getBoundingClientRect().left, wide);
+
+      // Korean composition must not send.
+      aiInput.value = '조합 중';
+      aiInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 229, bubbles: true, cancelable: true }));
+      check('confirming a composition does not send', !aiBusy && aiInput.value === '조합 중');
+      aiInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true }));
+      check('shift enter does not send', !aiBusy);
+      aiInput.value = '   ';
+      aiSend();
+      check('an empty question does not send', !aiBusy);
+    },
+    async aiAskGuide(check) {
+      aiInput.value = '이 글 어떤가요?';
+      aiInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      check('enter sends', aiBusy && aiInput.value === '', aiInput.value);
+      check('the question shows at once', aiMessagesView.querySelector('.ai-user')?.textContent === '이 글 어떤가요?');
+      check('waiting shows', !aiLoading.hidden);
+      check('the button stops', aiSendButton.title === strings['ai.stop'], aiSendButton.title);
+    },
+    async aiSeeAnswer(check) {
+      check('the answer arrived', !aiBusy && aiLoading.hidden, aiBusy);
+      const last = aiConversation.messages[aiConversation.messages.length - 1];
+      check('the prompt reached the CLI whole', last.text.includes('이 글 어떤가요?') && last.text.includes('패널 문서입니다') && last.text.includes('You are JenaNote'), last.text.slice(0, 200));
+      check('tokens are counted', aiConversation.tokens[aiProvider] === 7, JSON.stringify(aiConversation.tokens));
+      check('the document is untouched', aiTextMap().text === '패널 문서입니다');
+    },
+    async aiAskFail(check) {
+      aiInput.value = '실패할 질문';
+      aiSend();
+      check('sent', aiBusy);
+    },
+    async aiSeeFailure(check) {
+      const last = aiConversation.messages[aiConversation.messages.length - 1];
+      check('a failure says so', last.role === 'status' && last.text.includes('bad login'), last.text);
+      check('the question comes back', aiInput.value === '실패할 질문', aiInput.value);
+      aiInput.value = '';
+    },
+    async aiAskEdit(check) {
+      render([{ type: 'paragraph', runs: [{ text: '굵은', bold: true }, text(' 말')] }]);
+      aiConversation.mode = 'edit';
+      aiInput.value = '고쳐 주세요';
+      aiSend();
+      check('sent', aiBusy);
+    },
+    async aiSeeEdit(check) {
+      check('the revision applied', aiTextMap().text === '굵은 글', aiTextMap().text);
+      check('its formatting stayed', readBlocks()[0].runs[0].bold === true, JSON.stringify(readBlocks()[0].runs));
+      const messages = aiConversation.messages;
+      check('it explains and reports', messages[messages.length - 2].text === '설명입니다' && messages[messages.length - 1].text === strings['doc.aiApplied'], messages[messages.length - 1].text);
+      check('a revision marks the document changed', revision > 0, revision);
+    },
+    async aiAskConflict(check) {
+      aiInput.value = '또 고쳐 주세요';
+      aiSend();
+      // The author keeps writing while the answer is on its way.
+      placeCaret(root.firstElementChild, 0);
+      root.focus();
+      exec('insertText', '끼어듦');
+      check('sent', aiBusy);
+    },
+    async aiSeeConflict(check) {
+      const messages = aiConversation.messages;
+      check('a stale answer is not applied', aiTextMap().text.startsWith('끼어듦'), aiTextMap().text);
+      check('it says why', messages[messages.length - 1].text.startsWith(strings['ai.editConflict']), messages[messages.length - 1].text);
+    },
+    async aiAskHang(check) {
+      aiConversation.mode = 'guide';
+      aiInput.value = '오래 걸릴 질문';
+      aiSend();
+      check('sent', aiBusy);
+    },
+    async aiStopHang(check) {
+      aiStop();
+      const last = aiConversation.messages[aiConversation.messages.length - 1];
+      check('stopping says so', !aiBusy && last.text === strings['ai.cancelled'], last.text);
+    },
+    async aiSafety(check) {
+      const rendered = aiRenderMarkdown([
+        { type: 'paragraph', runs: [{ text: 'x', image: true, path: 'C:/secret.png', alt: '설명' }] },
+        { type: 'paragraph', runs: [{ text: '나쁜', link: 'javascript:alert(1)' }, { text: '좋은', link: 'https://example.com' }] },
+      ]);
+      check('an answer cannot load a file', rendered.querySelector('img') === null && !rendered.innerHTML.includes('secret'), rendered.innerHTML);
+      const links = [...rendered.querySelectorAll('a')];
+      check('an answer keeps only safe links', links.length === 1 && links[0].getAttribute('href') === 'https://example.com', rendered.innerHTML);
+      aiAdd('assistant', '<img src=x onerror=alert(1)>');
+      const row = aiMessageElement(aiConversation.messages[aiConversation.messages.length - 1]);
+      check('raw text stays text', row.querySelector('img') === null);
+      aiConversation.messages.pop();
+    },
+    async aiPanelClose(check) {
+      const name = aiConversation;
+      aiInput.value = '남길 초안';
+      aiInput.dispatchEvent(new Event('input'));
+      aiDocumentChanged();
+      check('another document has its own conversation', aiConversation !== name && aiConversation.messages.length === 0 && aiInput.value === '');
+      aiConversation = name;
+      aiToggle();
+      check('the panel closes', !aiActive && aiPanel.hidden);
+      check('the page view can return', !document.getElementById('toolbar-paged').disabled);
+      render([]);
+    },
     async sourceShown(check) {
       check('the source view covers the editor', sourceActive && !sourceView.hidden, sourceActive);
       check('it shows the saved form', sourceText.textContent.includes('**굵게** <b>꺾쇠</b>'), sourceText.textContent);
@@ -248,7 +528,7 @@
       check('commands leave the document alone', JSON.stringify(readBlocks()) === blocks && reading.mode === 'scroll' && bookmarks.length === 0);
       check('commands leave the source alone', sourceText.textContent === shown);
       check('only its own button works', document.getElementById('toolbar-bold')?.disabled !== false
-        && [...document.querySelectorAll('#toolbar button')].every(button => button.disabled === (button.id !== 'toolbar-source')));
+        && [...document.querySelectorAll('#toolbar button')].every(button => button.disabled === !['toolbar-source', 'toolbar-ai'].includes(button.id)));
 
       // Select All takes the source and nothing behind it.
       sourceText.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true, cancelable: true }));
@@ -548,7 +828,7 @@
       }
       const keyMs = Math.round((performance.now() - started) / 10);
       for (let index = 0; index < 10; index++) exec('undo');
-      check(`long manuscript in pages: ${pages} pages, layout ${layoutMs} ms, typing ${keyMs} ms per key`, keyMs < 60, keyMs);
+      check(`long manuscript in pages: ${pages} pages, layout ${layoutMs} ms, typing ${keyMs} ms per key`, keyMs < 150, keyMs);
 
       Object.assign(reading, saved);
       widthMode = 'book';

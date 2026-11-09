@@ -183,8 +183,10 @@ static class FolderWatch
 
     static void Note(object sender, FileSystemEventArgs e)
     {
-        // Saving writes a temporary dot file first. It says nothing the real name will not.
-        if (Path.GetFileName(e.Name ?? "").StartsWith('.')) return;
+        // Saving writes a temporary dot file first, and .jenanote holds a large index that a sync
+        // program keeps touching. Nothing in a dot folder is ever shown in the tree.
+        var parts = (e.Name ?? "").Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (parts.Any(part => part.StartsWith('.'))) return;
         Schedule();
     }
 

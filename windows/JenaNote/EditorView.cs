@@ -27,6 +27,13 @@ sealed class EditorView : WebView2
         "reader.font", "reader.weight", "reader.weight.light", "reader.weight.regular", "reader.weight.bold", "reader.lineSpacing",
         "reader.lineTight", "reader.lineNormal", "reader.lineWide", "reader.letterSpacing", "toolbar.zoom",
         "source.title", "source.hint", "source.description", "source.copyAll",
+        "ai.title", "ai.guide", "ai.edit", "ai.send", "ai.stop", "ai.waiting", "ai.selection", "ai.wholeEdit", "ai.wholeContext",
+        "ai.cancelled", "ai.composer.placeholder", "ai.composer.keyboard", "ai.settings", "ai.model", "ai.modelHint",
+        "ai.defaultModel", "ai.composer.customModel", "ai.composer.apply", "ai.accountUsage", "ai.conversationTokens",
+        "ai.conversationTokensHint", "ai.refreshUsage", "ai.loadingUsage", "ai.metadataUnavailable", "ai.quotaUnavailable",
+        "ai.quotaHint", "ai.geminiQuotaHint", "ai.editConflict", "ai.attachmentConflict", "ai.editTooLarge", "doc.aiApplied", "doc.untitled",
+        "ai.index.sources", "ai.work.row.off", "ai.work.row.settingsButton", "ai.work.row.saveFirst", "ai.work.row.disabled",
+        "ai.work.row.enableButton", "ai.work.row.corrupt", "ai.work.row.resetButton",
         "proof.button", "proof.original", "proof.suggestion", "proof.apply", "proof.select", "proof.unchanged", "dictionary.add",
     };
 
@@ -35,6 +42,7 @@ sealed class EditorView : WebView2
     readonly TaskCompletionSource pageReady = new();
     readonly Dictionary<int, TaskCompletionSource<JsonElement>> pendingContent = new();
     int nextRequest;
+    AiChatHost? aiChat;
 
     public string? DocumentFolder { get; set; }
 
@@ -124,12 +132,39 @@ sealed class EditorView : WebView2
                 marginRight = settings.ReadingMarginRight,
                 paper = settings.PaperSize,
             },
+            ai = new { provider = settings.AiProvider, model = settings.AiModels.GetValueOrDefault(settings.AiProvider, "") },
             fonts = ReadingFaces.Available(),
             paperSizes = ReadingFaces.PaperSizes(),
         });
     }
 
     void Send(object message) => CoreWebView2.PostWebMessageAsString(JsonSerializer.Serialize(message));
+
+    /// <summary>For requests that finish after a wait, when the window may have closed meanwhile.</summary>
+    public void Post(object message) => PostRaw(JsonSerializer.Serialize(message));
+
+    public void PostRaw(string json)
+    {
+        if (CoreWebView2 == null) return;
+        try
+        {
+            CoreWebView2.PostWebMessageAsString(json);
+        }
+        catch (Exception error) when (error is ObjectDisposedException or InvalidOperationException or System.Runtime.InteropServices.COMException)
+        {
+            Trace.TraceWarning("The page is gone: {0}", error.Message);
+        }
+    }
+
+    public void ToggleAi()
+    {
+        Focus();
+        Send(new { type = "aiToggle" });
+    }
+
+    public void CancelAi() => aiChat?.CancelAll();
+
+    public void RefreshWorkStatus() => aiChat?.SendWorkStatus();
 
     public void LoadMarkdown(string markdown)
     {
@@ -250,6 +285,13 @@ sealed class EditorView : WebView2
                 break;
             case "selftest":
                 SelfTestFinished?.Invoke(message);
+                break;
+            case "aiSend":
+            case "aiCancel":
+            case "aiMetadata":
+            case "aiWorkRefresh":
+                aiChat ??= new AiChatHost(this);
+                aiChat.Handle(message.GetProperty("type").GetString()!, message);
                 break;
             case "readingChange":
                 AppSettings.ApplyFromPage(message.GetProperty("values"));

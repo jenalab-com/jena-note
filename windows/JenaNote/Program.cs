@@ -25,6 +25,7 @@ static class Program
     [STAThread]
     static int Main(string[] args)
     {
+        if (FakeCli.Run(args) is { } fakeExit) return fakeExit;
         var app = new Application { ShutdownMode = ShutdownMode.OnLastWindowClose };
         NativeCore.ConfigureProofreading(Path.Combine(AppContext.BaseDirectory, "KiwiModel"));
 

@@ -1,32 +1,8 @@
 import Foundation
 
-enum AIProvider: String, CaseIterable, Codable {
-    case claude, codex, gemini, grok, local
-
-    var title: String {
-        switch self {
-        case .claude: return "Claude Code"
-        case .codex: return "Codex (GPT)"
-        case .gemini: return "Gemini CLI"
-        case .grok: return "Grok CLI"
-        case .local: return "Local (llama.cpp)"
-        }
-    }
-
+extension AIProvider {
     var environmentOverrides: [String: String] {
         self == .grok ? ["GROK_HOME": AISettings.grokProfile.path] : [:]
-    }
-
-    var documentation: URL {
-        let address: String
-        switch self {
-        case .claude: address = "https://code.claude.com/docs/en/setup"
-        case .codex: address = "https://developers.openai.com/codex/cli"
-        case .gemini: address = "https://geminicli.com/docs/get-started/installation/"
-        case .grok: address = "https://docs.x.ai/build/overview"
-        case .local: address = "https://github.com/ggml-org/llama.cpp"
-        }
-        return URL(string: address)!
     }
 
     var installCommand: String {
@@ -39,15 +15,6 @@ enum AIProvider: String, CaseIterable, Codable {
             let package = "@google/gemini-cli"
             let brew = "brew install gemini-cli"
             return "if command -v npm >/dev/null 2>&1; then npm install -g \(package); elif command -v brew >/dev/null 2>&1; then \(brew); else echo 'Install Node.js (https://nodejs.org) or Homebrew (https://brew.sh), then retry.'; exit 1; fi"
-        }
-    }
-
-    var loginArguments: [String] {
-        switch self {
-        case .claude: return ["auth", "login"]
-        case .codex: return ["login"]
-        case .grok: return ["login", "--oauth"]
-        case .gemini, .local: return []
         }
     }
 }
