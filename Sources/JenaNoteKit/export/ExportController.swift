@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 
 // MARK: - ExportController
 //
@@ -42,7 +43,7 @@ final class ExportController: NSObject, NSMenuItemValidation {
 
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "\(baseName).\(format.ext)"
-        panel.allowedFileTypes = [format.ext]   // 확장자 고정
+        panel.allowedContentTypes = [UTType(filenameExtension: format.ext) ?? .data]   // 확장자 고정
         panel.canCreateDirectories = true
 
         let complete: (NSApplication.ModalResponse) -> Void = { [weak self] response in

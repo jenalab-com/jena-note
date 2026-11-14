@@ -42,7 +42,7 @@ final class PunctuationWindowTests: XCTestCase {
 
     private func punctuationControl(_ window: NSWindow) throws -> NSSegmentedControl {
         let item = window.toolbar?.items.first { $0.itemIdentifier.rawValue == "punctuation" }
-        return try XCTUnwrap(item?.view as? NSSegmentedControl)
+        return try XCTUnwrap(item?.control as? NSSegmentedControl)
     }
 
     private func type(_ text: String, in view: NSTextView) {

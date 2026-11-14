@@ -70,8 +70,8 @@ final class AIWorkContextSourcesView: NSView, AIWorkContextRenderable, NSTableVi
         sourcesStack.spacing = 4
         emptyLabel.textColor = .secondaryLabelColor
 
-        let addFolder = NSButton(title: L10n.tr("ai.work.sources.addFolder"), target: self, action: #selector(addFolderClicked))
-        let addFile = NSButton(title: L10n.tr("ai.work.sources.addFile"), target: self, action: #selector(addFileClicked))
+        let addFolder = SettingsButton(title: L10n.tr("ai.work.sources.addFolder"), target: self, action: #selector(addFolderClicked), primary: false)
+        let addFile = SettingsButton(title: L10n.tr("ai.work.sources.addFile"), target: self, action: #selector(addFileClicked), primary: false)
         for button in [addFolder, addFile] {
             button.bezelStyle = .rounded
             button.controlSize = .small

@@ -189,9 +189,10 @@ final class WriterUtilitiesTests: XCTestCase {
         let settings = PreferencesWindowController()
         let window = try XCTUnwrap(settings.window)
         defer { window.close() }
-        let tabs = try XCTUnwrap(window.contentViewController as? NSTabViewController)
-        tabs.selectedTabViewItemIndex = 1
-        let view = try XCTUnwrap(tabs.tabViewItems[1].viewController?.view)
+        settings.select("ui")
+        XCTAssertEqual(settings.selectedPage, "ui")
+        let view = try XCTUnwrap(settings.pageView("ui"))
+        XCTAssertTrue(view.isDescendant(of: try XCTUnwrap(window.contentView)), "The chosen page is shown in the window")
         func descendants(_ node: NSView) -> [NSView] { node.subviews.flatMap { [$0] + descendants($0) } }
         let well = try XCTUnwrap(descendants(view).compactMap { $0 as? NSColorWell }.first)
         let editor = EditorViewController(); _ = editor.view

@@ -185,9 +185,10 @@ final class AIWorkIndexStore {
     }
 
     private func scan(context: AIWorkContext, token: UUID) {
-        DispatchQueue.global(qos: .utility).async {
+        // 바깥 클로저부터 약하게 잡아야 스캔 도중 스토어가 사라져도 붙잡지 않는다.
+        DispatchQueue.global(qos: .utility).async { [weak self] in
             let scan = Result { try AIWorkIndex.scan(context: context) }
-            DispatchQueue.main.async { [weak self] in
+            DispatchQueue.main.async {
                 guard let self, self.generation == token else { return }
                 switch scan {
                 case .failure(let error): self.finish(.failure(error))

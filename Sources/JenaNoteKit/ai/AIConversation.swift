@@ -13,8 +13,12 @@ enum AIChatMode: Int {
 final class AIConversation {
     var messages: [AIChatMessage] = []
     var tokenUsage: [AIProvider: Int] = [:]
+    /// AI 별 마지막 요청의 컨텍스트 사용량 — 모델 선택 옆 파이 그래프
+    var contextUsage: [AIProvider: AIContextUsage] = [:]
     var draft = ""
     var mode: AIChatMode = .guide
+    /// 채팅 권한 — 문서 반영 방식(mode)도 함께 정한다.
+    var permission: AIPermission = .approval { didSet { mode = permission.chatMode } }
 }
 
 final class AIConversationStore {

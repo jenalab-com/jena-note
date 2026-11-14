@@ -53,14 +53,16 @@ macOS 기본 메모앱(텍스트 편집기, Notes)은 서식을 `.md`로 저장�
 ## 스크린샷
 
 <p align="center">
-  <img src="assets/01-editor.png" alt="사이드바 폴더 브라우저와 WYSIWYG 편집 화면" width="900">
+  <img src="assets/v2.1.0/01-editor.png" alt="사이드바 폴더 브라우저와 WYSIWYG 편집 화면" width="900">
 </p>
 
 | 맞춤법 교정 후보 | 양면 페이지 배치 |
 |---|---|
 | <img src="assets/02-proofreading.png" alt="교정 후보에 마우스를 올리면 나타나는 수정안 툴팁" width="440"> | <img src="assets/03-book.png" alt="소설 원고를 양면 페이지로 배치한 화면" width="440"> |
 | **보기 설정** | **AI 채팅** |
-| <img src="assets/04-view-settings.png" alt="문서 크기·폭·글꼴·굵기·행간을 고르는 보기 설정" width="440"> | <img src="assets/05-ai-chat.png" alt="문서별 AI 채팅의 가이드 응답" width="440"> |
+| <img src="assets/04-view-settings.png" alt="문서 크기·폭·글꼴·굵기·행간을 고르는 보기 설정" width="440"> | <img src="assets/v2.1.0/05-ai-chat.png" alt="문서별 AI 채팅의 가이드 응답" width="440"> |
+
+<p align="center"><img src="assets/v2.1.0/06-settings.png" alt="JenaNote 2.1 settings" width="760"></p>
 
 ### 데모
 

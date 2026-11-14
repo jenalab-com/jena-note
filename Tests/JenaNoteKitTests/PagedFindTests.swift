@@ -73,14 +73,16 @@ final class PagedFindTests: XCTestCase {
 
     private func findField(_ window: NSWindow) throws -> DocumentFindField {
         let toolbar = try XCTUnwrap(window.toolbar)
-        return try XCTUnwrap(toolbar.items.compactMap { $0.view as? DocumentFindField }.first)
+        return try XCTUnwrap(toolbar.items.compactMap { $0.control as? DocumentFindField }.first)
     }
 
     func testHeaderStartsWithTheFindFieldAndHasNoFindButton() throws {
         let (doc, controller, window) = makeWindow()
         defer { close(doc, controller, window) }
         let toolbar = try XCTUnwrap(window.toolbar as? ReaderToolbar)
+        // 사이드바 경계 구분 항목은 보이지 않는 자리 표시라 순서 비교에서 뺀다.
         let ids = toolbar.toolbarDefaultItemIdentifiers(toolbar).map(\.rawValue)
+            .filter { !$0.hasPrefix("sidebarTrackingSeparator") }
 
         XCTAssertEqual(ids.first, "documentFind", "검색창은 헤더 맨 왼쪽에 있다")
         XCTAssertFalse(ids.contains("find"), "돋보기 버튼은 없어졌다")
@@ -325,7 +327,9 @@ final class PagedFindTests: XCTestCase {
         let (doc, controller, window) = makeWindow()
         defer { close(doc, controller, window) }
         let toolbar = try XCTUnwrap(window.toolbar as? ReaderToolbar)
+        // 사이드바 경계 구분 항목은 보이지 않는 자리 표시라 순서 비교에서 뺀다.
         let ids = toolbar.toolbarDefaultItemIdentifiers(toolbar).map(\.rawValue)
+            .filter { !$0.hasPrefix("sidebarTrackingSeparator") }
         XCTAssertEqual(Array(ids.prefix(2)), ["documentFind", "documentReplaceToggle"], "화살표는 검색창 바로 옆이다")
 
         controller.showDocumentReplace(nil)

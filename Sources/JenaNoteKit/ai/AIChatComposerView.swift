@@ -11,7 +11,7 @@ final class AIChatSurface: NSView {
     override func draw(_ dirtyRect: NSRect) {
         (isComposer ? NSColor.labelColor.withAlphaComponent(0.06) : NSColor.windowBackgroundColor).setFill()
         if isComposer { NSBezierPath(roundedRect: bounds, xRadius: 20, yRadius: 20).fill() }
-        else { dirtyRect.fill() }
+        else { bounds.intersection(dirtyRect).fill() } // 자기 영역 밖(clipsToBounds=false)은 칠하지 않는다
     }
     override func viewDidChangeEffectiveAppearance() { super.viewDidChangeEffectiveAppearance(); needsDisplay = true }
 }
@@ -20,6 +20,8 @@ final class AIChatSurface: NSView {
 final class AIChatInputView: NSTextView {
     var onSubmit: (() -> Void)?
     var canSubmit: () -> Bool = { true }
+    /// 스킬 목록이 떠 있을 때 키(↑↓·Enter·Esc 등)를 먼저 받는다. true 면 여기서 끝.
+    var keyInterceptor: ((NSEvent) -> Bool)?
     var placeholder = L10n.tr("ai.composer.placeholder")
 
     static func shouldSubmit(keyCode: UInt16, modifiers: NSEvent.ModifierFlags, hasMarkedText: Bool) -> Bool {
@@ -28,6 +30,8 @@ final class AIChatInputView: NSTextView {
     }
 
     override func keyDown(with event: NSEvent) {
+        // 한글 조합 중에는 Enter·Esc 가 조합을 끝내는 데 쓰이므로 가로채지 않는다.
+        if !hasMarkedText(), keyInterceptor?(event) == true { return }
         let returnKey = event.keyCode == 36 || event.keyCode == 76
         if returnKey, !hasMarkedText(), event.modifierFlags.contains(.shift),
            event.modifierFlags.intersection([.command, .control, .option]).isEmpty {

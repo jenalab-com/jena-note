@@ -6,6 +6,9 @@ class EditorWindowController: NSWindowController {
 
     private(set) var sidebarVC: SidebarViewController!
     private(set) var editorVC: EditorViewController!
+    /// 바깥 split — 왼쪽 사이드바(창 전체 높이) + 오른쪽 콘텐츠 열.
+    private var rootSplitVC: NSSplitViewController!
+    /// 콘텐츠 열 안쪽 split — 작업 영역(에디터/리더/소스) + AI 패널. 헤더(툴바) 아래에 놓인다.
     private var splitVC: NSSplitViewController!
     let statusBar = StatusBarView()
     private var lastNotifiedMissingURL: URL?
@@ -35,7 +38,7 @@ class EditorWindowController: NSWindowController {
     private var swapCounter = 0
     var documentLoadingView: DocumentLoadingView?
     var documentLoadingDelay: DispatchWorkItem?
-    /// 사이드바 오른쪽의 문서 영역.
+    /// 콘텐츠 열의 문서 영역 (AI 패널이 열려 있으면 그 패널).
     var documentPaneView: NSView? { splitVC?.splitViewItems.last?.viewController.view }
 
     // MARK: - Unified document layout
@@ -57,18 +60,25 @@ class EditorWindowController: NSWindowController {
     convenience init() {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 980, height: 640),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.minSize = NSSize(width: 640, height: 360)
         window.titlebarAppearsTransparent = false
+        // 사이드바는 신호등 줄까지 올라가고, 툴바(헤더)는 콘텐츠 열 위에만 놓인다.
+        window.toolbarStyle = .unified
+        // 문서 이름은 사이드바 선택·AI 패널에 이미 보인다 — 헤더는 도구만 둔다.
+        window.titleVisibility = .hidden
         window.center()
 
         self.init(window: window)
 
         let sidebar = SidebarViewController()
         let editor = EditorViewController()
+
+        let root = NSSplitViewController()
+        root.splitView.dividerStyle = .thin
 
         let split = NSSplitViewController()
         split.splitView.dividerStyle = .thin
@@ -84,19 +94,20 @@ class EditorWindowController: NSWindowController {
         let editorItem = NSSplitViewItem(viewController: editor)
         editorItem.minimumThickness = 360
 
-        split.addSplitViewItem(sidebarItem)
         split.addSplitViewItem(editorItem)
+        root.addSplitViewItem(sidebarItem)
 
         self.sidebarVC = sidebar
         self.editorVC = editor
         editor.hostWindowController = self
         self.splitVC = split
+        self.rootSplitVC = root
         _ = editor.view
         editor.textView.punctuation = punctuationController
         punctuationController.finishComposition = { [weak self] in self?.readerVC?.finishComposition() }
         punctuationController.onChange = { [weak self] _ in self?.updatePunctuationToolbar() }
 
-        setupContentLayout(window: window, split: split)
+        setupContentLayout(window: window, root: root, split: split)
         setupToolbar(for: window)
         editorVC.setReadingLayout(true)
         editorVC.onPositionChanged = { [weak self] offset in
@@ -128,36 +139,45 @@ class EditorWindowController: NSWindowController {
         NotificationCenter.default.removeObserver(self)
     }
 
-    // MARK: - Content Layout (윈도우 하단 상태바)
+    // MARK: - Content Layout
 
-    /// split 뷰(위) + 상태바(아래 고정)를 컨테이너에 형제로 담아 윈도우 콘텐츠로 둔다.
-    /// jena-image 의 검증된 패턴 — `addChild(split)` 로 split VC 를 컨테이너 VC 의 자식으로
-    /// 등록해야 사이드바-타이틀바 통합이 유지된다. (이 등록을 빠뜨리면 통합이 깨진다.)
-    private func setupContentLayout(window: NSWindow, split: NSSplitViewController) {
-        let container = NSView()
-
+    /// 창 레이아웃: [사이드바 | 콘텐츠 열]. 콘텐츠 열은 위에서부터 헤더(툴바) → 작업 영역 → 상태바.
+    /// 바깥 split 을 창의 contentViewController 로 직접 두어야 사이드바가 타이틀바 영역까지
+    /// 올라가는 통합이 유지된다. 콘텐츠 열의 작업 영역은 창의 contentLayoutGuide(툴바 아래)에 맞춘다.
+    private func setupContentLayout(window: NSWindow, root: NSSplitViewController, split: NSSplitViewController) {
+        let column = ContentColumnView()
         split.view.translatesAutoresizingMaskIntoConstraints = false
         statusBar.translatesAutoresizingMaskIntoConstraints = false
+        column.addSubview(split.view)
+        column.addSubview(statusBar)
 
-        container.addSubview(split.view)
-        container.addSubview(statusBar)
+        let columnVC = NSViewController()
+        columnVC.view = column
+        columnVC.addChild(split)
 
-        NSLayoutConstraint.activate([
-            split.view.topAnchor.constraint(equalTo: container.topAnchor),
-            split.view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            split.view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+        let columnItem = NSSplitViewItem(viewController: columnVC)
+        columnItem.minimumThickness = 360
+        root.addSplitViewItem(columnItem)
+
+        window.contentViewController = root
+
+        var constraints: [NSLayoutConstraint] = [
+            split.view.leadingAnchor.constraint(equalTo: column.leadingAnchor),
+            split.view.trailingAnchor.constraint(equalTo: column.trailingAnchor),
             split.view.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
 
-            statusBar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            statusBar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            statusBar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            statusBar.leadingAnchor.constraint(equalTo: column.leadingAnchor),
+            statusBar.trailingAnchor.constraint(equalTo: column.trailingAnchor),
+            statusBar.bottomAnchor.constraint(equalTo: column.bottomAnchor),
             statusBar.heightAnchor.constraint(equalToConstant: StatusBarView.barHeight),
-        ])
-
-        let containerVC = NSViewController()
-        containerVC.view = container
-        containerVC.addChild(split)
-        window.contentViewController = containerVC
+        ]
+        if let guide = window.contentLayoutGuide as? NSLayoutGuide {
+            constraints.append(split.view.topAnchor.constraint(equalTo: guide.topAnchor))
+            sidebarVC.alignContentTop(to: guide)
+        } else {
+            constraints.append(split.view.topAnchor.constraint(equalTo: column.topAnchor))
+        }
+        NSLayoutConstraint.activate(constraints)
     }
 
     /// 텍스트로부터 글자수를 계산해 상태바를 갱신한다.
@@ -181,9 +201,11 @@ class EditorWindowController: NSWindowController {
         toolbar.documentFinder = documentFinder
         toolbar.onFindCancel = { [weak self] in self?.cancelDocumentFind() }
         toolbar.documentWindow = window
+        toolbar.sidebarSplitView = rootSplitVC.splitView
         documentFinder.onChange = { [weak toolbar] in toolbar?.updateFindCount(current: $0, total: $1) }
         window.toolbar = toolbar
         readerToolbar = toolbar
+        statusBar.setControls(toolbar.makeStatusBarControls())
         documentFindContextChanged()
     }
 
@@ -369,12 +391,12 @@ class EditorWindowController: NSWindowController {
     // MARK: - Sidebar Toggle
 
     @objc func toggleSidebar(_ sender: Any?) {
-        splitVC.toggleSidebar(sender)
+        rootSplitVC.toggleSidebar(sender)
     }
 
     /// 편집 > 파일에서 찾기 (⇧⌘F) — 사이드바를 펼치고 검색 필드에 포커스.
     @objc func findInFiles(_ sender: Any?) {
-        if let sidebarItem = splitVC.splitViewItems.first, sidebarItem.isCollapsed {
+        if let sidebarItem = rootSplitVC.splitViewItems.first, sidebarItem.isCollapsed {
             sidebarItem.animator().isCollapsed = false
         }
         sidebarVC.focusSearchField()
@@ -573,15 +595,14 @@ class EditorWindowController: NSWindowController {
     }
 
     private func swapRightPane(to vc: NSViewController) {
-        // 컨테이너로 감싸 contentViewController 캐스팅이 불가하므로 splitVC 를 직접 참조한다.
         guard let split = splitVC else { return }
-        // 우측(인덱스 1) item 교체. 좌측 사이드바는 유지.
-        if split.splitViewItems.count > 1 {
-            split.removeSplitViewItem(split.splitViewItems[1])
+        // 콘텐츠 열 안쪽 split 의 작업 영역(인덱스 0) 교체. 사이드바·AI 패널은 유지.
+        if !split.splitViewItems.isEmpty {
+            split.removeSplitViewItem(split.splitViewItems[0])
         }
         let item = NSSplitViewItem(viewController: vc)
         item.minimumThickness = 360
-        split.insertSplitViewItem(item, at: 1)
+        split.insertSplitViewItem(item, at: 0)
         documentFindContextChanged()
     }
 
@@ -840,6 +861,9 @@ extension EditorWindowController: SidebarFileOpener {
                 current.close()
             }
             newDoc.addWindowController(self)
+            // display:false 로 연 문서는 최근 목록에 남지 않는다 — 직접 남겨야
+            // 다음 실행 때 마지막으로 보던 문서가 열리고, 파일 > 최근 항목에도 보인다.
+            NSDocumentController.shared.noteNewRecentDocument(newDoc)
 
             self.editorVC.loadDocumentContent()
             if let jump = self.pendingSearchJump {
@@ -900,5 +924,14 @@ extension EditorWindowController: NSMenuItemValidation {
         default:
             return true
         }
+    }
+}
+
+/// 콘텐츠 열 바탕 — 반투명 헤더(툴바) 뒤로 비치는 영역까지 문서 바탕색으로 채운다.
+private final class ContentColumnView: NSView {
+    override var isOpaque: Bool { true }
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.textBackgroundColor.setFill()
+        bounds.intersection(dirtyRect).fill() // 자기 영역 밖(clipsToBounds=false)은 칠하지 않는다
     }
 }

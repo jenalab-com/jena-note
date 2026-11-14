@@ -1,8 +1,9 @@
 import AppKit
+import ImageIO
 
-/// 이미지 탭 전용 NSOutlineView — 이미지 행 위에 마우스를 올리면
+/// 이미지 트리용 NSOutlineView (우측 사이드바로 옮길 예정 — 지금은 쓰는 곳이 없다) — 이미지 행 위에 마우스를 올리면
 /// 최대 100px 미리보기를 NSPopover로 띄운다. (우측 문서 화면은 건드리지 않는다)
-final class ImagePreviewOutlineView: NSOutlineView {
+final class ImagePreviewOutlineView: SidebarOutlineView {
 
     private let popover: NSPopover = {
         let p = NSPopover()
@@ -48,7 +49,7 @@ final class ImagePreviewOutlineView: NSOutlineView {
 
     private func previewImage(for url: URL) -> NSImage? {
         if let cached = previewCache[url.path] { return cached }
-        guard let img = SidebarViewController.downsampledImage(at: url, maxPixel: 100) else { return nil }
+        guard let img = Self.downsampledImage(at: url, maxPixel: 100) else { return nil }
         previewCache[url.path] = img
         return img
     }
@@ -74,5 +75,17 @@ final class ImagePreviewOutlineView: NSOutlineView {
     private func hidePreview() {
         hoveredRow = -1
         if popover.isShown { popover.performClose(nil) }
+    }
+
+    /// ImageIO로 최대 변 maxPixel 이하 썸네일을 만든다 (메모리 절약).
+    static func downsampledImage(at url: URL, maxPixel: CGFloat) -> NSImage? {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let opts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+            kCGImageSourceCreateThumbnailWithTransform: true
+        ]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return nil }
+        return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
     }
 }

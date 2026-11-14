@@ -9,22 +9,23 @@ class ReaderToolbar: NSToolbar {
     private let formatItems = FormatToolbar(identifier: .init("FormatItemFactory"))
     private var isSourceActive = false
     private weak var sourceButton: NSButton?
+    private weak var appearanceButton: NSButton?
     private var appearancePopover: NSPopover?
     private weak var headingControl: NSPopUpButton?
     private weak var widthControl: NSSegmentedControl?
-    private static let itemSource = NSToolbarItem.Identifier("markdownSource")
-    private static let itemAppearance = NSToolbarItem.Identifier("appearance")
     private static let itemHeading = NSToolbarItem.Identifier("heading")
     private static let itemFontSize = NSToolbarItem.Identifier("documentFontSize")
     private static let itemFontDown = NSToolbarItem.Identifier("readerFontDown")
     private static let itemFontUp   = NSToolbarItem.Identifier("readerFontUp")
     private weak var fontSizeControl: NumberStepControl?
     private weak var zoomLabel: NSTextField?
-    private static let itemLists = NSToolbarItem.Identifier("lists")
-    private static let itemInsert = NSToolbarItem.Identifier("insert")
+    private static let itemOrderedList = NSToolbarItem.Identifier("orderedList")
+    private static let itemBulletList = NSToolbarItem.Identifier("bulletList")
+    private static let itemRule = NSToolbarItem.Identifier("insertRule")
+    private static let itemImage = NSToolbarItem.Identifier("insertImage")
+    private static let itemLink = NSToolbarItem.Identifier("insertLink")
     private static let itemPunctuation = NSToolbarItem.Identifier("punctuation")
     private weak var punctuationControl: NSSegmentedControl?
-    private static let itemProofreading = NSToolbarItem.Identifier("proofreadSelection")
     private static let itemFind = NSToolbarItem.Identifier("documentFind")
     private static let itemReplaceToggle = NSToolbarItem.Identifier("documentReplaceToggle")
     weak var documentFinder: DocumentFinder?
@@ -34,28 +35,29 @@ class ReaderToolbar: NSToolbar {
     private weak var replaceToggle: NSButton?
     private(set) var replacePanel: DocumentReplacePanel?
     private var replacePanelObservers: [NSObjectProtocol] = []
-    private weak var proofreadingButton: NSButton?
     private var hasSelectedText = false
 
     func updateSelection(hasSelectedText: Bool) {
         self.hasSelectedText = hasSelectedText
         formatItems.updateSelection(hasSelectedText: hasSelectedText && !isSourceActive)
-        proofreadingButton?.isEnabled = hasSelectedText && !isSourceActive
     }
 
     func setSourceActive(_ active: Bool) {
         isSourceActive = active
         if active { closeReplacePanel() }
         sourceButton?.state = active ? .on : .off
+        updateStatusButtonTint(sourceButton)
+        appearanceButton?.isEnabled = !active
         for item in items {
-            let allowed = [Self.itemSource, Self.itemAI, Self.itemFind].contains(item.itemIdentifier)
-            (item.view as? NSControl)?.isEnabled = !active || allowed
+            let allowed = [Self.itemAI, Self.itemFind].contains(item.itemIdentifier)
+            (item.control as? NSControl)?.isEnabled = !active || allowed
         }
         fontSizeControl?.isEnabled = !active
         pageModeControl?.setEnabled(!active, forSegment: 0)
         pageModeControl?.setEnabled(!active && !isAIActive, forSegment: 1)
         if active { formatItems.updateSelection(hasSelectedText: false) }
-        proofreadingButton?.isEnabled = hasSelectedText && !active
+        bookmarkButton?.isEnabled = !active
+        bookmarkListButton?.isEnabled = !active
     }
 
     func updatePunctuation(active: [PunctuationKind]) {
@@ -72,17 +74,19 @@ class ReaderToolbar: NSToolbar {
     }
     var isAIActive = false
     private static let itemAI = NSToolbarItem.Identifier("aiChat")
+    /// 사이드바 경계를 따라가는 구분 — 이 뒤의 항목들은 콘텐츠 열(헤더) 위에만 놓인다.
+    private static let itemSidebarTracking = NSToolbarItem.Identifier("sidebarTrackingSeparator.jena")
+    /// 사이드바 | 콘텐츠 열을 나누는 바깥 split. 툴바를 창에 붙이기 전에 지정한다.
+    weak var sidebarSplitView: NSSplitView?
 
-    private static let itemMode  = NSToolbarItem.Identifier("readerPageMode")
     private static let itemFontFamily = NSToolbarItem.Identifier("readerFontFamily")
     private static let itemFontWeight = NSToolbarItem.Identifier("readerFontWeight")
     private static let itemLineSpacing = NSToolbarItem.Identifier("readerLineSpacing")
     private static let itemWidth = NSToolbarItem.Identifier("readerWidth")
-    private static let itemBookmark = NSToolbarItem.Identifier("readerBookmark")
-    private static let itemBookmarkList = NSToolbarItem.Identifier("readerBookmarkList")
 
     /// 책갈피 토글 버튼 — 현재 화면에 책갈피가 있는지에 따라 아이콘이 채워진다.
     private weak var bookmarkButton: NSButton?
+    private weak var bookmarkListButton: NSButton?
 
     /// 스크롤/페이징 세그먼트 — 코드가 조판을 바꿨을 때 선택 상태를 맞춰준다.
     private weak var pageModeControl: NSSegmentedControl?
@@ -109,7 +113,7 @@ class ReaderToolbar: NSToolbar {
     /// 지금 보이는 화면에 책갈피가 있는지를 아이콘에 반영한다.
     func updateBookmarkState(active: Bool) {
         let symbol = active ? "bookmark.fill" : "bookmark"
-        let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
+        let config = NSImage.SymbolConfiguration(pointSize: Self.statusSymbolSize, weight: .regular)
         bookmarkButton?.image = NSImage(systemSymbolName: symbol,
                                         accessibilityDescription: L10n.tr("reader.bookmark.toggle"))?
             .withSymbolConfiguration(config)
@@ -191,8 +195,7 @@ class ReaderToolbar: NSToolbar {
     }
 
     private static func replaceToggleImage(open: Bool) -> NSImage? {
-        NSImage(systemSymbolName: open ? "chevron.up" : "chevron.down",
-                accessibilityDescription: L10n.tr("find.replace"))
+        HeaderStyle.symbol(open ? "chevron.up" : "chevron.down", label: L10n.tr("find.replace"))
     }
 
     /// 책갈피 목록 팝오버를 붙일 기준 뷰.
@@ -202,11 +205,14 @@ class ReaderToolbar: NSToolbar {
 extension ReaderToolbar: NSToolbarDelegate {
 
     func toolbarDefaultItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [ReaderToolbar.itemFind, ReaderToolbar.itemReplaceToggle, ReaderToolbar.itemMode, ReaderToolbar.itemAppearance, ReaderToolbar.itemSource, .space,
-         ReaderToolbar.itemHeading, ReaderToolbar.itemFontSize, .init("bold"), .init("italic"), .init("inlineCode"),
-         ReaderToolbar.itemLists, ReaderToolbar.itemInsert, ReaderToolbar.itemPunctuation, .init("textColor"),
-         .flexibleSpace, ReaderToolbar.itemBookmark, ReaderToolbar.itemBookmarkList,
-         ReaderToolbar.itemProofreading, ReaderToolbar.itemAI]
+        [ReaderToolbar.itemSidebarTracking,
+         ReaderToolbar.itemFind, ReaderToolbar.itemReplaceToggle, .space,
+         ReaderToolbar.itemHeading, ReaderToolbar.itemFontSize, Self.divider(1),
+         .init("bold"), .init("italic"), .init("textColor"), Self.divider(2),
+         ReaderToolbar.itemOrderedList, ReaderToolbar.itemBulletList, Self.divider(3),
+         .init("inlineCode"), ReaderToolbar.itemPunctuation, Self.divider(4),
+         ReaderToolbar.itemRule, ReaderToolbar.itemImage, ReaderToolbar.itemLink,
+         .flexibleSpace, ReaderToolbar.itemAI]
     }
 
     func toolbarAllowedItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -216,7 +222,29 @@ extension ReaderToolbar: NSToolbarDelegate {
     func toolbar(_ toolbar: NSToolbar,
                  itemForItemIdentifier id: NSToolbarItem.Identifier,
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
+        let item = makeItem(id, willBeInsertedIntoToolbar: flag)
+        // 헤더 컨트롤은 직접 그린다 — 시스템이 일부 항목 뒤에만 까는 유리 캡슐을 빼 모두 같은 결로 보이게.
+        if let item, let control = item.view, id != Self.itemSidebarTracking {
+            item.isBordered = false
+            item.view = id == Self.itemFind ? HeaderFieldContainer(control) : HeaderItemContainer(control)
+        }
+        return item
+    }
+
+    /// 헤더 묶음 사이 구분선 — 같은 식별자는 툴바에 한 번만 들어가므로 번호를 붙인다.
+    static func divider(_ index: Int) -> NSToolbarItem.Identifier { .init("headerDivider.\(index)") }
+
+    private func makeItem(_ id: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
+        if id.rawValue.hasPrefix("headerDivider.") {
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.view = HeaderDivider()
+            item.label = ""
+            return item
+        }
         switch id {
+        case ReaderToolbar.itemSidebarTracking:
+            guard let splitView = sidebarSplitView else { return nil }
+            return NSTrackingSeparatorToolbarItem(identifier: id, splitView: splitView, dividerIndex: 0)
         case ReaderToolbar.itemFind:
             let item = NSToolbarItem(itemIdentifier: id)
             item.label = L10n.tr("toolbar.find")
@@ -233,54 +261,22 @@ extension ReaderToolbar: NSToolbarDelegate {
             item.label = L10n.tr("find.replace")
             item.toolTip = item.label
             item.visibilityPriority = .high
-            let button = NSButton(image: Self.replaceToggleImage(open: false) ?? NSImage(),
-                                  target: self, action: #selector(toggleReplacePanel(_:)))
+            let button = HeaderButton(image: Self.replaceToggleImage(open: false), label: item.label,
+                                      target: self, action: #selector(toggleReplacePanel(_:)))
             button.toolTip = item.label
             button.isEnabled = !isSourceActive
             replaceToggle = button
             item.view = button
             return item
-        case ReaderToolbar.itemProofreading:
-            let item = NSToolbarItem(itemIdentifier: id)
-            item.label = L10n.tr("proof.title")
-            item.toolTip = item.label
-            let button = NSButton(title: L10n.tr("proof.button"), target: target,
-                                  action: #selector(EditorWindowController.proofreadSelection(_:)))
-            button.toolTip = item.label
-            button.isEnabled = hasSelectedText && !isSourceActive
-            proofreadingButton = button
-            item.view = button
-            let menu = NSMenuItem(title: item.label, action: button.action, keyEquivalent: "")
-            menu.target = target
-            item.menuFormRepresentation = menu
-            return item
-        case ReaderToolbar.itemSource:
-            let item = NSToolbarItem(itemIdentifier: id)
-            item.label = L10n.tr("source.title")
-            item.toolTip = L10n.tr("source.hint")
-            let button = NSButton(title: item.label, target: target,
-                                  action: #selector(EditorWindowController.showMarkdownSource(_:)))
-            button.toolTip = item.toolTip
-            button.setButtonType(.pushOnPushOff)
-            button.state = isSourceActive ? .on : .off
-            sourceButton = button
-            item.view = button
-            let menu = NSMenuItem(title: item.label, action: button.action, keyEquivalent: "")
-            menu.target = target
-            item.menuFormRepresentation = menu
-            return item
         case ReaderToolbar.itemAI:
             let item = NSToolbarItem(itemIdentifier: id)
             item.visibilityPriority = .high
             item.label = L10n.tr("ai.title")
-            item.view = NSButton(title: "AI", target: target, action: #selector(EditorWindowController.toggleAI(_:)))
+            item.view = HeaderButton(image: HeaderStyle.letters("AI", font: .systemFont(ofSize: 13, weight: .semibold),
+                                                                label: L10n.tr("ai.title")),
+                                     label: "AI", target: target, action: #selector(EditorWindowController.toggleAI(_:)))
+            item.view?.toolTip = L10n.tr("ai.title")
             item.toolTip = L10n.tr("ai.title")
-            return item
-        case ReaderToolbar.itemAppearance:
-            let item = NSToolbarItem(itemIdentifier: id)
-            item.label = L10n.tr("toolbar.appearance")
-            item.view = NSButton(title: item.label, target: self, action: #selector(showAppearance(_:)))
-            item.toolTip = item.label
             return item
         case ReaderToolbar.itemFontSize:
             let item = NSToolbarItem(itemIdentifier: id)
@@ -308,61 +304,37 @@ extension ReaderToolbar: NSToolbarDelegate {
             ], pullsDown: false)
             headingControl = item.view as? NSPopUpButton
             return item
-        case ReaderToolbar.itemLists:
-            return menuItem(id, label: L10n.tr("toolbar.lists"), entries: [
-                (L10n.tr("menu.format.ul"), #selector(EditorViewController.toggleUnorderedList)),
-                (L10n.tr("menu.format.ol"), #selector(EditorViewController.toggleOrderedList)),
-                (L10n.tr("menu.format.quote"), #selector(EditorViewController.toggleBlockquote))
-            ])
-        case ReaderToolbar.itemInsert:
-            return menuItem(id, label: L10n.tr("toolbar.insert"), entries: [
-                (L10n.tr("menu.format.link"), #selector(EditorViewController.insertLink)),
-                (L10n.tr("toolbar.image"), #selector(EditorViewController.insertImage)),
-                (L10n.tr("toolbar.rule"), #selector(EditorViewController.insertHorizontalRule))
-            ])
+        case ReaderToolbar.itemOrderedList:
+            return formatIconItem(id, label: L10n.tr("menu.format.ol"), symbol: "list.number",
+                                  action: #selector(EditorViewController.toggleOrderedList))
+        case ReaderToolbar.itemBulletList:
+            return formatIconItem(id, label: L10n.tr("menu.format.ul"), symbol: "list.bullet",
+                                  action: #selector(EditorViewController.toggleUnorderedList))
+        case ReaderToolbar.itemRule:
+            return formatIconItem(id, label: L10n.tr("toolbar.rule"), symbol: "minus",
+                                  action: #selector(EditorViewController.insertHorizontalRule))
+        case ReaderToolbar.itemImage:
+            return formatIconItem(id, label: L10n.tr("toolbar.image"), symbol: "photo",
+                                  action: #selector(EditorViewController.insertImage))
+        case ReaderToolbar.itemLink:
+            return formatIconItem(id, label: L10n.tr("menu.format.link"), symbol: "link",
+                                  action: #selector(EditorViewController.insertLink))
         case ReaderToolbar.itemPunctuation:
             let item = NSToolbarItem(itemIdentifier: id)
             item.label = L10n.tr("settings.tab.punctuation")
             item.visibilityPriority = .high
             let kinds = PunctuationKind.allCases
-            let control = NSSegmentedControl(labels: kinds.map(\.shortTitle), trackingMode: .selectAny, target: target,
-                                             action: #selector(EditorWindowController.punctuationSegmentChanged(_:)))
+            let control = HeaderSegmentedControl(labels: kinds.map { _ in "" }, trackingMode: .selectAny, target: target,
+                                                 action: #selector(EditorWindowController.punctuationSegmentChanged(_:)))
             for (index, kind) in kinds.enumerated() {
+                control.setImage(HeaderStyle.symbol(kind.toolbarSymbol, label: kind.menuTitle), forSegment: index)
+                control.setImageScaling(.scaleNone, forSegment: index)
+                control.setWidth(HeaderStyle.height, forSegment: index)
                 control.setToolTip("\(kind.menuTitle) (\(kind.shortcutLabel))", forSegment: index)
             }
             control.isEnabled = !isSourceActive
             punctuationControl = control
             item.view = control
-            return item
-        case ReaderToolbar.itemBookmark:
-            let item = iconItem(id, label: L10n.tr("reader.bookmark.toggle"), symbol: "bookmark",
-                                action: #selector(EditorWindowController.toggleBookmark(_:)))
-            bookmarkButton = item.view as? NSButton
-            return item
-        case ReaderToolbar.itemBookmarkList:
-            return iconItem(id, label: L10n.tr("reader.bookmark.list"), symbol: "list.bullet",
-                            action: #selector(EditorWindowController.showBookmarkList(_:)))
-        case ReaderToolbar.itemMode:
-            let item = NSToolbarItem(itemIdentifier: id)
-            item.label = L10n.tr("reader.pageMode")
-            item.toolTip = L10n.tr("reader.pageMode")
-            let seg = NSSegmentedControl(frame: NSRect(x: 0, y: 0, width: 120, height: 26))
-            seg.segmentCount = 2
-            seg.setLabel(L10n.tr("reader.scroll"), forSegment: 0)
-            seg.setLabel(L10n.tr("reader.paged"), forSegment: 1)
-            seg.trackingMode = .selectOne
-            seg.selectedSegment = (SettingsManager.shared.readingPageMode == .paged) ? 1 : 0
-            // NSSegmentedControl in NSToolbarItem.view does not reliably traverse
-            // the responder chain when target is nil on macOS — bind directly to
-            // the window controller via ReaderToolbar.target (same fix as FormatToolbar).
-            seg.target = target
-            seg.action = #selector(EditorWindowController.changeReaderPageMode(_:))
-            seg.translatesAutoresizingMaskIntoConstraints = false
-            seg.widthAnchor.constraint(equalToConstant: 120).isActive = true
-            seg.heightAnchor.constraint(equalToConstant: 26).isActive = true
-            item.view = seg
-            pageModeControl = seg
-            setAIActive(isAIActive)
             return item
         case ReaderToolbar.itemWidth:
             return segmentItem(id, label: L10n.tr("reader.width"),
@@ -395,7 +367,8 @@ extension ReaderToolbar: NSToolbarDelegate {
         let item = NSToolbarItem(itemIdentifier: id)
         item.label = label
         item.toolTip = label
-        let popup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 70, height: 26), pullsDown: pullsDown)
+        let popup = JenaPopUpButton(frame: NSRect(x: 0, y: 0, width: 64, height: HeaderStyle.height), pullsDown: pullsDown)
+        popup.font = .systemFont(ofSize: 13, weight: .medium)
         if pullsDown { popup.addItem(withTitle: label) }
         for (title, action) in entries {
             popup.addItem(withTitle: title)
@@ -418,7 +391,7 @@ extension ReaderToolbar: NSToolbarDelegate {
         stack.spacing = 12
         stack.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
         for id in [Self.itemWidth, Self.itemFontFamily, Self.itemFontWeight, Self.itemLineSpacing] {
-            guard let item = toolbar(self, itemForItemIdentifier: id, willBeInsertedIntoToolbar: false),
+            guard let item = makeItem(id, willBeInsertedIntoToolbar: false),
                   let control = item.view else { continue }
             let label = NSTextField(labelWithString: item.label)
             label.font = .systemFont(ofSize: 12)
@@ -454,7 +427,7 @@ extension ReaderToolbar: NSToolbarDelegate {
         zoomLabel = percent
         updateZoomLabel()
         for id in [Self.itemFontDown, Self.itemFontUp] {
-            if let control = toolbar(self, itemForItemIdentifier: id, willBeInsertedIntoToolbar: false)?.view {
+            if let control = makeItem(id, willBeInsertedIntoToolbar: false)?.view {
                 zoom.addArrangedSubview(control)
             }
             if id == Self.itemFontDown { zoom.addArrangedSubview(percent) }
@@ -522,6 +495,85 @@ extension ReaderToolbar: NSToolbarDelegate {
         seg.widthAnchor.constraint(equalToConstant: width).isActive = true
         seg.heightAnchor.constraint(equalToConstant: 26).isActive = true
         item.view = seg
+        return item
+    }
+
+    // MARK: - 하단 바 컨트롤 (스크롤·페이징 / 보기 설정 / 원문 보기)
+
+    /// 하단 바 아이콘 크기 — 처음 7pt 에서 2/3 키운 12pt.
+    static let statusSymbolSize: CGFloat = 12
+
+    /// 하단 바 글자 수 왼쪽에 놓을 컨트롤. 상태 동기화는 계속 이 툴바가 맡는다.
+    func makeStatusBarControls() -> [NSView] {
+        // 헤더와 같은 결의 아이콘 묶음 — 칸 26pt
+        let seg = HeaderSegmentedControl()
+        seg.segmentCount = 2
+        seg.cellSize = 26
+        for (index, (symbol, key)) in [("scroll", "reader.scroll"), ("book", "reader.paged")].enumerated() {
+            seg.setImage(Self.statusSymbol(symbol, label: L10n.tr(key)), forSegment: index)
+            seg.setImageScaling(.scaleNone, forSegment: index)
+            seg.setWidth(26, forSegment: index)
+            seg.setToolTip(L10n.tr(key), forSegment: index)
+        }
+        seg.trackingMode = .selectOne
+        seg.selectedSegment = (SettingsManager.shared.readingPageMode == .paged) ? 1 : 0
+        // 세그먼트는 책임 체인을 안 타므로 target 에 직접 바인딩한다.
+        seg.target = target
+        seg.action = #selector(EditorWindowController.changeReaderPageMode(_:))
+        seg.setAccessibilityLabel(L10n.tr("reader.pageMode"))
+        pageModeControl = seg
+        setAIActive(isAIActive)
+
+        let appearance = statusButton(symbol: "textformat", label: L10n.tr("toolbar.appearance"),
+                                      target: self, action: #selector(showAppearance(_:)))
+        appearance.isEnabled = !isSourceActive
+        appearanceButton = appearance
+
+        let source = statusButton(symbol: "chevron.left.forwardslash.chevron.right", label: L10n.tr("source.title"),
+                                  target: target, action: #selector(EditorWindowController.showMarkdownSource(_:)))
+        source.toolTip = L10n.tr("source.hint")
+        source.setButtonType(.pushOnPushOff)
+        source.state = isSourceActive ? .on : .off
+        sourceButton = source
+        updateStatusButtonTint(source)
+
+        let bookmark = statusButton(symbol: "bookmark", label: L10n.tr("reader.bookmark.toggle"),
+                                    target: target, action: #selector(EditorWindowController.toggleBookmark(_:)))
+        bookmark.isEnabled = !isSourceActive
+        bookmarkButton = bookmark
+        let bookmarkList = statusButton(symbol: "list.bullet.rectangle", label: L10n.tr("reader.bookmark.list"),
+                                        target: target, action: #selector(EditorWindowController.showBookmarkList(_:)))
+        bookmarkList.isEnabled = !isSourceActive
+        bookmarkListButton = bookmarkList
+        return [seg, appearance, source, bookmark, bookmarkList]
+    }
+
+    private static func statusSymbol(_ name: String, label: String) -> NSImage? {
+        NSImage(systemSymbolName: name, accessibilityDescription: label)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: statusSymbolSize, weight: .regular))
+    }
+
+    /// 테두리 없는 작은 아이콘 버튼. title 은 접근성 이름으로만 남긴다.
+    private func statusButton(symbol: String, label: String, target: AnyObject?, action: Selector) -> NSButton {
+        // 헤더 아이콘 버튼과 같은 결(hover·켜짐 배경), 크기만 26
+        HeaderButton(image: Self.statusSymbol(symbol, label: label), label: label, target: target, action: action, size: 26)
+    }
+
+    /// 켜진 토글(원문 보기)은 진하게, 꺼지면 보조 색.
+    private func updateStatusButtonTint(_ button: NSButton?) {
+        button?.contentTintColor = button?.state == .on ? .labelColor : .secondaryLabelColor
+    }
+
+    /// 서식 아이콘 버튼 — 동작은 편집기(formatTarget)로 보낸다. 넘침 메뉴에서도 쓸 수 있게 메뉴 형태를 둔다.
+    private func formatIconItem(_ id: NSToolbarItem.Identifier, label: String,
+                                symbol: String, action: Selector) -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: id)
+        item.label = label; item.toolTip = label
+        item.view = HeaderButton(image: HeaderStyle.symbol(symbol, label: label), label: label,
+                                 target: formatTarget, action: action)
+        let menu = NSMenuItem(title: label, action: action, keyEquivalent: "")
+        menu.target = formatTarget
+        item.menuFormRepresentation = menu
         return item
     }
 

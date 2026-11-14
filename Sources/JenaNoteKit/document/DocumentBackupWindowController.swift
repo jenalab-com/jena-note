@@ -2,12 +2,12 @@ import AppKit
 
 final class DocumentBackupWindowController: NSWindowController {
     private weak var documentToRestore: MarkdownDocument?
-    private let picker = NSPopUpButton()
+    private let picker = JenaPopUpButton(frame: .zero, pullsDown: false)
     private let preview = NSTextView()
     private let comparisonView = DocumentHistoryComparisonView()
     private let previewScroll = NSScrollView()
-    private let restore = NSButton()
-    private let compare = NSButton(checkboxWithTitle: L10n.tr("history.compare"), target: nil, action: nil)
+    private let restore = SettingsButton(title: L10n.tr("backup.restore"), target: nil, action: nil, primary: true)
+    private let compare = NSSwitch()
     private var entries: [DocumentBackupStore.Snapshot] = []
 
     init(document: MarkdownDocument) {
@@ -17,15 +17,39 @@ final class DocumentBackupWindowController: NSWindowController {
         window.isReleasedWhenClosed = false
         window.title = L10n.tr("backup.title") + " · " + document.displayName
         super.init(window: window)
-        let hint = NSTextField(wrappingLabelWithString: L10n.tr("backup.hint"))
-        hint.textColor = .secondaryLabelColor
+        SettingsText.applyToolWindowChrome(window)
+        let content = window.contentView!
+
+        // 제목 — 어느 문서의 백업인지 바로 보이게
+        let heading = SettingsText.heading(L10n.tr("backup.title"))
+        let documentName = SettingsText.section(document.displayName)
+        let hint = SettingsText.note(L10n.tr("backup.hint"))
+
+        // 버전 고르기 + 비교 스위치
         picker.target = self; picker.action = #selector(selectionChanged)
+        picker.isFilled = true
+        picker.font = .systemFont(ofSize: 13)
+        picker.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        picker.widthAnchor.constraint(greaterThanOrEqualToConstant: 280).isActive = true
+        compare.target = self; compare.action = #selector(selectionChanged)
+        compare.setAccessibilityLabel(L10n.tr("history.compare"))
+        let compareLabel = NSTextField(labelWithString: L10n.tr("history.compare"))
+        compareLabel.font = .systemFont(ofSize: 13)
+        let chooser = NSStackView(views: [picker, compareLabel, compare])
+        chooser.spacing = 10
+        chooser.alignment = .centerY
+        chooser.setCustomSpacing(18, after: picker)
+
+        // 미리보기 / 비교 — 둥근 카드 안
         preview.isEditable = false; preview.isRichText = false
         preview.font = .systemFont(ofSize: 13)
+        preview.drawsBackground = false
+        preview.textContainerInset = NSSize(width: 12, height: 12)
         preview.isVerticallyResizable = true
         preview.autoresizingMask = [.width]
         preview.textContainer?.widthTracksTextView = true
         let scroll = previewScroll
+        scroll.drawsBackground = false
         let body = NSView()
         for view in [scroll, comparisonView] {
             view.translatesAutoresizingMaskIntoConstraints = false
@@ -39,24 +63,34 @@ final class DocumentBackupWindowController: NSWindowController {
         }
         comparisonView.isHidden = true
         scroll.documentView = preview; scroll.hasVerticalScroller = true
-        restore.title = L10n.tr("backup.restore")
+        let panel = SettingsPanelView(content: body)
+
+        // 동작 — 만들기·새로고침은 왼쪽, 되돌리기(주 동작)는 오른쪽
         restore.target = self; restore.action = #selector(restoreSelected)
-        compare.target = self; compare.action = #selector(selectionChanged)
-        let create = NSButton(title: L10n.tr("history.create"), target: self, action: #selector(createVersion))
-        let refresh = NSButton(title: L10n.tr("history.refresh"), target: self, action: #selector(reload))
-        let actions = NSStackView(views: [create, restore, refresh])
-        let stack = NSStackView(views: [hint, picker, compare, body, actions])
+        let create = SettingsButton(title: L10n.tr("history.create"), target: self, action: #selector(createVersion))
+        let refresh = SettingsButton(title: L10n.tr("history.refresh"), target: self, action: #selector(reload))
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .horizontal)
+        let actions = NSStackView(views: [create, refresh, spacer, restore])
+        actions.spacing = 8
+
+        let titleRow = NSStackView(views: [heading, documentName])
+        titleRow.alignment = .firstBaseline
+        titleRow.spacing = 10
+        let stack = NSStackView(views: [titleRow, hint, chooser, panel, actions])
         stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 12
+        stack.setCustomSpacing(6, after: titleRow)
+        stack.setCustomSpacing(16, after: hint)
         stack.translatesAutoresizingMaskIntoConstraints = false
-        window.contentView!.addSubview(stack)
+        content.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: window.contentView!.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(equalTo: window.contentView!.trailingAnchor, constant: -20),
-            stack.topAnchor.constraint(equalTo: window.contentView!.topAnchor, constant: 20),
-            stack.bottomAnchor.constraint(equalTo: window.contentView!.bottomAnchor, constant: -20),
-            body.heightAnchor.constraint(greaterThanOrEqualToConstant: 220)
+            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: SettingsStyle.contentInset),
+            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -SettingsStyle.contentInset),
+            stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 44),
+            stack.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -SettingsStyle.contentInset),
+            panel.heightAnchor.constraint(greaterThanOrEqualToConstant: 220)
         ])
-        for item in [hint, picker, body] { item.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true }
+        for item in [hint, chooser, panel, actions] as [NSView] { item.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true }
         reload()
     }
     @objc private func reload() {

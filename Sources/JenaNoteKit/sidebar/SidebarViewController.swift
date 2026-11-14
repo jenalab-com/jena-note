@@ -1,5 +1,4 @@
 import AppKit
-import ImageIO
 
 // MARK: - File-Open Protocol (loose coupling)
 
@@ -51,32 +50,20 @@ final class SidebarViewController: NSViewController {
     private var outlineView: NSOutlineView!
     private var scrollView: NSScrollView!
     private var headerView: NSView!
+    private var headerTopConstraint: NSLayoutConstraint?
     private var emptyStateView: NSView!
     private var addButton: NSButton!
     private var sortButton: NSButton!
+    private var sectionView: NSView!
+    private var sectionLabel: NSTextField!
     private var pendingRowClick: DispatchWorkItem?
     private var contextNode: SidebarNode?
     private var newDocumentButton: NSButton!
     private var newFolderButton: NSButton!
 
-    /// 폴더 / 이미지 탭 전환
-    private var tabControl: NSSegmentedControl!
-    /// 이미지 탭의 폴더+이미지 트리
-    private var imageScrollView: NSScrollView!
-    private var imageOutlineView: NSOutlineView!
-    private var imageEmptyLabel: NSTextField!
-
     private var roots: [SidebarNode] = []
     /// 펼침 상태 보존용 (URL 경로 기준)
     private var expandedPaths: Set<String> = []
-
-    /// 이미지 탭 트리의 루트 노드들 (폴더 + 이미지 파일, 이미지가 든 폴더만)
-    private var imageRoots: [SidebarNode] = []
-    /// 썸네일 캐시 (경로 기준)
-    private var thumbnailCache: [String: NSImage] = [:]
-
-    private enum Tab: Int { case folders = 0, images = 1 }
-    private var selectedTab: Tab = .folders
 
     private let store = FolderBookmarksStore.shared
     private let watcher = FolderWatcher.shared
@@ -100,19 +87,17 @@ final class SidebarViewController: NSViewController {
     // MARK: - View Lifecycle
 
     override func loadView() {
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 240, height: 600))
-        container.wantsLayer = true
+        let container = SidebarBackgroundView(frame: NSRect(x: 0, y: 0, width: 240, height: 600))
 
         setupHeader(in: container)
-        setupTab(in: container)
         setupSearchField(in: container)
+        setupSection(in: container)
         setupOutline(in: container)
-        setupImageList(in: container)
         setupEmptyState(in: container)
 
         view = container
-        updateTabVisibility()
         updateCreationButtons()
+        updateSectionLabel()
     }
 
     override func viewDidLoad() {
@@ -137,115 +122,61 @@ final class SidebarViewController: NSViewController {
 
     // MARK: - Setup
 
+    /// 상단 브랜드 헤더 — 블랙 로고 마크 + 앱 이름 + 폴더 등록(원형 +) 버튼.
     private func setupHeader(in container: NSView) {
         headerView = NSView()
         headerView.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(headerView)
 
-        let title = NSTextField(labelWithString: L10n.tr("sidebar.title"))
-        title.font = NSFont.systemFont(ofSize: 11, weight: .semibold)
-        title.textColor = NSColor.secondaryLabelColor
+        let logo = SidebarLogoView()
+        logo.translatesAutoresizingMaskIntoConstraints = false
+        logo.setAccessibilityElement(false)
+        headerView.addSubview(logo)
+
+        let appName = (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
+            .flatMap { $0.isEmpty ? nil : $0 } ?? "JenaNote"
+        let title = NSTextField(labelWithString: appName)
+        title.font = NSFont.systemFont(ofSize: 15, weight: .bold)
+        title.textColor = SidebarStyle.text
+        title.lineBreakMode = .byTruncatingTail
         title.translatesAutoresizingMaskIntoConstraints = false
         headerView.addSubview(title)
 
-        addButton = NSButton(frame: .zero)
-        addButton.image = NSImage(systemSymbolName: "plus", accessibilityDescription: L10n.tr("sidebar.add.tooltip"))
-        addButton.isBordered = false
-        addButton.bezelStyle = .inline
-        addButton.target = self
-        addButton.action = #selector(showAddFolderPanel(_:))
-        addButton.toolTip = L10n.tr("sidebar.add.tooltip")
-        addButton.translatesAutoresizingMaskIntoConstraints = false
+        addButton = SidebarIconButton(symbol: "plus", tooltip: L10n.tr("sidebar.add.tooltip"),
+                                      target: self, action: #selector(showAddFolderPanel(_:)))
+        (addButton as? SidebarIconButton)?.circled = true
         headerView.addSubview(addButton)
 
-        newDocumentButton = NSButton(frame: .zero)
-        newDocumentButton.image = NSImage(systemSymbolName: "doc.badge.plus", accessibilityDescription: L10n.tr("menu.file.new"))
-        newDocumentButton.isBordered = false
-        newDocumentButton.bezelStyle = .inline
-        newDocumentButton.target = self
-        newDocumentButton.action = #selector(createDocument(_:))
-        newDocumentButton.toolTip = L10n.tr("sidebar.create.document")
-        newDocumentButton.setAccessibilityLabel(L10n.tr("menu.file.new"))
-        newDocumentButton.translatesAutoresizingMaskIntoConstraints = false
-        headerView.addSubview(newDocumentButton)
+        let hairline = SidebarHairlineView()
+        hairline.translatesAutoresizingMaskIntoConstraints = false
+        headerView.addSubview(hairline)
 
-        newFolderButton = NSButton(frame: .zero)
-        newFolderButton.image = NSImage(systemSymbolName: "folder.badge.plus", accessibilityDescription: L10n.tr("sidebar.create.folder"))
-        newFolderButton.isBordered = false
-        newFolderButton.bezelStyle = .inline
-        newFolderButton.target = self
-        newFolderButton.action = #selector(createFolder(_:))
-        newFolderButton.toolTip = L10n.tr("sidebar.create.folder")
-        newFolderButton.translatesAutoresizingMaskIntoConstraints = false
-        headerView.addSubview(newFolderButton)
-
-        sortButton = NSButton(frame: .zero)
-        sortButton.image = NSImage(systemSymbolName: "arrow.up.arrow.down", accessibilityDescription: L10n.tr("sidebar.sort.tooltip"))
-        sortButton.isBordered = false
-        sortButton.bezelStyle = .inline
-        sortButton.target = self
-        sortButton.action = #selector(showSortMenu(_:))
-        sortButton.toolTip = L10n.tr("sidebar.sort.tooltip")
-        sortButton.translatesAutoresizingMaskIntoConstraints = false
-        headerView.addSubview(sortButton)
-
-        searchSpinner = NSProgressIndicator()
-        searchSpinner.style = .spinning
-        searchSpinner.controlSize = .small
-        searchSpinner.isDisplayedWhenStopped = false
-        searchSpinner.translatesAutoresizingMaskIntoConstraints = false
-        headerView.addSubview(searchSpinner)
-
+        let top = headerView.topAnchor.constraint(equalTo: container.topAnchor)
+        headerTopConstraint = top
         NSLayoutConstraint.activate([
-            headerView.topAnchor.constraint(equalTo: container.topAnchor),
+            top,
             headerView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             headerView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            headerView.heightAnchor.constraint(equalToConstant: 32),
+            headerView.heightAnchor.constraint(equalToConstant: 56),
 
-            title.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 12),
+            logo.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 16),
+            logo.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+            logo.widthAnchor.constraint(equalToConstant: 26),
+            logo.heightAnchor.constraint(equalToConstant: 26),
+
+            title.leadingAnchor.constraint(equalTo: logo.trailingAnchor, constant: 10),
             title.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
-            title.trailingAnchor.constraint(lessThanOrEqualTo: searchSpinner.leadingAnchor, constant: -4),
+            title.trailingAnchor.constraint(lessThanOrEqualTo: addButton.leadingAnchor, constant: -8),
 
-            addButton.trailingAnchor.constraint(equalTo: headerView.trailingAnchor, constant: -8),
+            addButton.trailingAnchor.constraint(equalTo: headerView.trailingAnchor, constant: -14),
             addButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
-            addButton.widthAnchor.constraint(equalToConstant: 22),
-            addButton.heightAnchor.constraint(equalToConstant: 22),
+            addButton.widthAnchor.constraint(equalToConstant: 24),
+            addButton.heightAnchor.constraint(equalToConstant: 24),
 
-            newFolderButton.trailingAnchor.constraint(equalTo: addButton.leadingAnchor, constant: -4),
-            newFolderButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
-            newFolderButton.widthAnchor.constraint(equalToConstant: 22),
-            newFolderButton.heightAnchor.constraint(equalToConstant: 22),
-
-            newDocumentButton.trailingAnchor.constraint(equalTo: newFolderButton.leadingAnchor, constant: -4),
-            newDocumentButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
-            newDocumentButton.widthAnchor.constraint(equalToConstant: 22),
-            newDocumentButton.heightAnchor.constraint(equalToConstant: 22),
-
-            sortButton.trailingAnchor.constraint(equalTo: newDocumentButton.leadingAnchor, constant: -4),
-            sortButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
-            sortButton.widthAnchor.constraint(equalToConstant: 22),
-            sortButton.heightAnchor.constraint(equalToConstant: 22),
-
-            searchSpinner.trailingAnchor.constraint(equalTo: sortButton.leadingAnchor, constant: -4),
-            searchSpinner.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
-            searchSpinner.widthAnchor.constraint(equalToConstant: 16),
-            searchSpinner.heightAnchor.constraint(equalToConstant: 16)
-        ])
-    }
-
-    private func setupTab(in container: NSView) {
-        tabControl = NSSegmentedControl(labels: [L10n.tr("sidebar.tab.folders"), L10n.tr("sidebar.tab.images")],
-                                        trackingMode: .selectOne, target: self, action: #selector(tabChanged(_:)))
-        tabControl.segmentStyle = .automatic
-        tabControl.selectedSegment = 0
-        tabControl.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(tabControl)
-
-        NSLayoutConstraint.activate([
-            tabControl.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 2),
-            tabControl.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
-            tabControl.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
-            tabControl.heightAnchor.constraint(equalToConstant: 24)
+            hairline.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 16),
+            hairline.trailingAnchor.constraint(equalTo: headerView.trailingAnchor, constant: -16),
+            hairline.bottomAnchor.constraint(equalTo: headerView.bottomAnchor),
+            hairline.heightAnchor.constraint(equalToConstant: 1)
         ])
     }
 
@@ -253,15 +184,94 @@ final class SidebarViewController: NSViewController {
         searchField = NSSearchField()
         searchField.placeholderString = L10n.tr("sidebar.search.placeholder")
         searchField.font = NSFont.systemFont(ofSize: 12)
+        searchField.controlSize = .large
+        searchField.focusRingType = .none
         searchField.delegate = self
         searchField.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(searchField)
 
         NSLayoutConstraint.activate([
-            searchField.topAnchor.constraint(equalTo: tabControl.bottomAnchor, constant: 6),
-            searchField.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 8),
-            searchField.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8)
+            searchField.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 12),
+            searchField.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 14),
+            searchField.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -14)
         ])
+    }
+
+    /// 섹션 머리 — "폴더 3" 라벨 + 오른쪽 도구(검색 진행, 정렬, 새 문서, 새 폴더).
+    private func setupSection(in container: NSView) {
+        sectionView = NSView()
+        sectionView.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(sectionView)
+
+        sectionLabel = NSTextField(labelWithString: "")
+        sectionLabel.lineBreakMode = .byTruncatingTail
+        sectionLabel.translatesAutoresizingMaskIntoConstraints = false
+        sectionLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        sectionView.addSubview(sectionLabel)
+
+        newFolderButton = SidebarIconButton(symbol: "folder.badge.plus", tooltip: L10n.tr("sidebar.create.folder"),
+                                            target: self, action: #selector(createFolder(_:)))
+        newDocumentButton = SidebarIconButton(symbol: "square.and.pencil", tooltip: L10n.tr("sidebar.create.document"),
+                                              target: self, action: #selector(createDocument(_:)))
+        sortButton = SidebarIconButton(symbol: "arrow.up.arrow.down", tooltip: L10n.tr("sidebar.sort.tooltip"),
+                                       target: self, action: #selector(showSortMenu(_:)))
+
+        searchSpinner = NSProgressIndicator()
+        searchSpinner.style = .spinning
+        searchSpinner.controlSize = .small
+        searchSpinner.isDisplayedWhenStopped = false
+        searchSpinner.translatesAutoresizingMaskIntoConstraints = false
+
+        for view in [newFolderButton!, newDocumentButton!, sortButton!, searchSpinner!] as [NSView] {
+            sectionView.addSubview(view)
+        }
+
+        var constraints: [NSLayoutConstraint] = [
+            sectionView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 16),
+            sectionView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            sectionView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            sectionView.heightAnchor.constraint(equalToConstant: 24),
+
+            sectionLabel.leadingAnchor.constraint(equalTo: sectionView.leadingAnchor, constant: 20),
+            sectionLabel.centerYAnchor.constraint(equalTo: sectionView.centerYAnchor),
+            sectionLabel.trailingAnchor.constraint(lessThanOrEqualTo: searchSpinner.leadingAnchor, constant: -6),
+
+            searchSpinner.trailingAnchor.constraint(equalTo: sortButton.leadingAnchor, constant: -4),
+            searchSpinner.centerYAnchor.constraint(equalTo: sectionView.centerYAnchor),
+            searchSpinner.widthAnchor.constraint(equalToConstant: 14),
+            searchSpinner.heightAnchor.constraint(equalToConstant: 14)
+        ]
+        var trailing = sectionView.trailingAnchor
+        var gap: CGFloat = -14
+        for button in [newFolderButton!, newDocumentButton!, sortButton!] {
+            constraints += [
+                button.trailingAnchor.constraint(equalTo: trailing, constant: gap),
+                button.centerYAnchor.constraint(equalTo: sectionView.centerYAnchor),
+                button.widthAnchor.constraint(equalToConstant: 24),
+                button.heightAnchor.constraint(equalToConstant: 24)
+            ]
+            trailing = button.leadingAnchor
+            gap = -2
+        }
+        NSLayoutConstraint.activate(constraints)
+    }
+
+    /// 섹션 라벨: "폴더" + 등록된 최상위 폴더 수.
+    private func updateSectionLabel() {
+        guard let sectionLabel = sectionLabel else { return }
+        let name = L10n.tr("sidebar.title")
+        let text = NSMutableAttributedString(string: name, attributes: [
+            .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
+            .foregroundColor: SidebarStyle.secondaryText
+        ])
+        let count = store.folders.count
+        if count > 0 {
+            text.append(NSAttributedString(string: "  \(count)", attributes: [
+                .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium),
+                .foregroundColor: NSColor.tertiaryLabelColor
+            ]))
+        }
+        sectionLabel.attributedStringValue = text
     }
 
     private func setupOutline(in container: NSView) {
@@ -270,18 +280,14 @@ final class SidebarViewController: NSViewController {
         scrollView.hasHorizontalScroller = false
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = false
+        scrollView.automaticallyAdjustsContentInsets = false
+        scrollView.contentInsets = NSEdgeInsets(top: 0, left: 0, bottom: 12, right: 0)
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(scrollView)
 
-        outlineView = NSOutlineView()
-        outlineView.headerView = nil
-        outlineView.indentationPerLevel = 14
-        outlineView.rowSizeStyle = .default
-        outlineView.style = .sourceList
-        outlineView.allowsMultipleSelection = false
-        outlineView.autoresizesOutlineColumn = false
-        outlineView.usesAutomaticRowHeights = false
-        outlineView.rowHeight = 22
+        let tree = SidebarOutlineView()
+        tree.configureSidebarAppearance()
+        outlineView = tree
         outlineView.target = self
         outlineView.action = #selector(outlineRowClicked(_:))
         outlineView.doubleAction = #selector(renameDoubleClicked(_:))
@@ -299,65 +305,10 @@ final class SidebarViewController: NSViewController {
         scrollView.documentView = outlineView
 
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 4),
+            scrollView.topAnchor.constraint(equalTo: sectionView.bottomAnchor, constant: 4),
             scrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor)
-        ])
-    }
-
-    private func setupImageList(in container: NSView) {
-        imageScrollView = NSScrollView()
-        imageScrollView.hasVerticalScroller = true
-        imageScrollView.hasHorizontalScroller = false
-        imageScrollView.borderType = .noBorder
-        imageScrollView.drawsBackground = false
-        imageScrollView.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(imageScrollView)
-
-        imageOutlineView = ImagePreviewOutlineView()
-        imageOutlineView.headerView = nil
-        imageOutlineView.indentationPerLevel = 14
-        imageOutlineView.rowSizeStyle = .default
-        imageOutlineView.style = .sourceList
-        imageOutlineView.allowsMultipleSelection = false
-        imageOutlineView.autoresizesOutlineColumn = false
-        imageOutlineView.usesAutomaticRowHeights = false
-        imageOutlineView.rowHeight = 24
-        imageOutlineView.target = self
-        imageOutlineView.action = #selector(imageOutlineRowClicked(_:))
-        imageOutlineView.doubleAction = #selector(renameDoubleClicked(_:))
-        imageOutlineView.menu = makeContextMenu()
-        imageOutlineView.setDraggingSourceOperationMask(.copy, forLocal: false)
-
-        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("image"))
-        column.isEditable = false
-        column.resizingMask = .autoresizingMask
-        imageOutlineView.addTableColumn(column)
-        imageOutlineView.outlineTableColumn = column
-        imageOutlineView.dataSource = self
-        imageOutlineView.delegate = self
-
-        imageScrollView.documentView = imageOutlineView
-
-        imageEmptyLabel = NSTextField(labelWithString: L10n.tr("sidebar.images.empty"))
-        imageEmptyLabel.font = NSFont.systemFont(ofSize: 12)
-        imageEmptyLabel.textColor = NSColor.secondaryLabelColor
-        imageEmptyLabel.alignment = .center
-        imageEmptyLabel.lineBreakMode = .byWordWrapping
-        imageEmptyLabel.maximumNumberOfLines = 0
-        imageEmptyLabel.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(imageEmptyLabel)
-
-        NSLayoutConstraint.activate([
-            imageScrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 4),
-            imageScrollView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            imageScrollView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            imageScrollView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-
-            imageEmptyLabel.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 60),
-            imageEmptyLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
-            imageEmptyLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16)
         ])
     }
 
@@ -366,31 +317,39 @@ final class SidebarViewController: NSViewController {
         emptyStateView.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(emptyStateView)
 
+        let icon = NSImageView()
+        icon.image = SidebarStyle.symbol("folder", size: 26, weight: .light)
+        icon.contentTintColor = NSColor.tertiaryLabelColor
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        emptyStateView.addSubview(icon)
+
         let message = NSTextField(labelWithString: L10n.tr("sidebar.empty.message"))
         message.font = NSFont.systemFont(ofSize: 12)
-        message.textColor = NSColor.secondaryLabelColor
+        message.textColor = SidebarStyle.secondaryText
         message.alignment = .center
         message.lineBreakMode = .byWordWrapping
         message.maximumNumberOfLines = 0
         message.translatesAutoresizingMaskIntoConstraints = false
         emptyStateView.addSubview(message)
 
-        let button = NSButton(title: L10n.tr("sidebar.empty.button"), target: self, action: #selector(showAddFolderPanel(_:)))
-        button.bezelStyle = .rounded
-        button.translatesAutoresizingMaskIntoConstraints = false
+        let button = SidebarPillButton(title: L10n.tr("sidebar.empty.button"),
+                                       target: self, action: #selector(showAddFolderPanel(_:)))
         emptyStateView.addSubview(button)
 
         NSLayoutConstraint.activate([
-            emptyStateView.topAnchor.constraint(equalTo: searchField.bottomAnchor),
+            emptyStateView.topAnchor.constraint(equalTo: sectionView.bottomAnchor),
             emptyStateView.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
             emptyStateView.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
             emptyStateView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
 
-            message.topAnchor.constraint(equalTo: emptyStateView.topAnchor, constant: 60),
+            icon.topAnchor.constraint(equalTo: emptyStateView.topAnchor, constant: 48),
+            icon.centerXAnchor.constraint(equalTo: emptyStateView.centerXAnchor),
+
+            message.topAnchor.constraint(equalTo: icon.bottomAnchor, constant: 12),
             message.leadingAnchor.constraint(equalTo: emptyStateView.leadingAnchor),
             message.trailingAnchor.constraint(equalTo: emptyStateView.trailingAnchor),
 
-            button.topAnchor.constraint(equalTo: message.bottomAnchor, constant: 12),
+            button.topAnchor.constraint(equalTo: message.bottomAnchor, constant: 14),
             button.centerXAnchor.constraint(equalTo: emptyStateView.centerXAnchor)
         ])
 
@@ -453,6 +412,7 @@ final class SidebarViewController: NSViewController {
             highlightCurrentFile()
         }
         updateCreationButtons()
+        updateSectionLabel()
 
         scrollView.contentView.scroll(to: savedOrigin)
         scrollView.reflectScrolledClipView(scrollView.contentView)
@@ -550,132 +510,9 @@ final class SidebarViewController: NSViewController {
     }
 
     private func updateEmptyState() {
-        guard selectedTab == .folders else {
-            scrollView.isHidden = true
-            emptyStateView.isHidden = true
-            return
-        }
         let isEmpty = roots.isEmpty && !isSearching
         emptyStateView.isHidden = !isEmpty
         scrollView.isHidden = isEmpty
-    }
-
-    // MARK: - Tab Switching
-
-    @objc private func tabChanged(_ sender: NSSegmentedControl) {
-        selectedTab = Tab(rawValue: sender.selectedSegment) ?? .folders
-        if selectedTab == .images {
-            reloadImageTree()
-        }
-        updateTabVisibility()
-        updateCreationButtons()
-    }
-
-    private func updateTabVisibility() {
-        let showImages = selectedTab == .images
-        imageScrollView.isHidden = !showImages
-        imageEmptyLabel.isHidden = !showImages || !isImageTreeEmpty
-        if showImages {
-            scrollView.isHidden = true
-            emptyStateView.isHidden = true
-        } else {
-            updateEmptyState()
-        }
-    }
-
-    // MARK: - Image Scanning
-
-    private func reloadImageTree() {
-        let savedOrigin = imageScrollView.contentView.bounds.origin
-        imageRoots = store.folders.map { url -> SidebarNode in
-            let accessible = store.isAccessible(url)
-            let node = SidebarNode(url: url, isDirectory: true, isRoot: true, isMissing: !accessible)
-            node.children = accessible ? scanImageTree(url) : []
-            return node
-        }
-        imageOutlineView.reloadData()
-        for root in imageRoots { imageOutlineView.expandItem(root) }
-        if selectedTab == .images {
-            imageEmptyLabel.isHidden = !isImageTreeEmpty
-        }
-        imageScrollView.contentView.scroll(to: savedOrigin)
-        imageScrollView.reflectScrolledClipView(imageScrollView.contentView)
-    }
-
-    /// 모든 루트의 트리에 이미지가 하나도 없으면 true.
-    private var isImageTreeEmpty: Bool {
-        imageRoots.allSatisfy { ($0.children?.isEmpty ?? true) }
-    }
-
-    /// 폴더를 재귀 스캔해 이미지 파일과 (이미지를 포함한) 하위 폴더만 트리로 구성한다.
-    private func scanImageTree(_ url: URL) -> [SidebarNode] {
-        let fm = FileManager.default
-        let keys: [URLResourceKey] = [.isDirectoryKey, .contentModificationDateKey]
-        guard let entries = try? fm.contentsOfDirectory(at: url,
-                                                        includingPropertiesForKeys: keys,
-                                                        options: [.skipsHiddenFiles]) else { return [] }
-        var subdirs: [SidebarNode] = []
-        var files: [SidebarNode] = []
-
-        for entry in entries {
-            let values = try? entry.resourceValues(forKeys: Set(keys))
-            let isDir = values?.isDirectory ?? false
-            let modDate = values?.contentModificationDate ?? .distantPast
-            if isDir {
-                let children = scanImageTree(entry)
-                if !children.isEmpty {
-                    let node = SidebarNode(url: entry, isDirectory: true, isRoot: false, modificationDate: modDate)
-                    node.children = children
-                    subdirs.append(node)
-                }
-            } else if sidebarImageExtensions.contains(entry.pathExtension.lowercased()) {
-                files.append(SidebarNode(url: entry, isDirectory: false, isRoot: false, modificationDate: modDate))
-            }
-        }
-
-        sortNodes(&subdirs)
-        sortNodes(&files)
-        return subdirs + files
-    }
-
-    /// 캐시된 썸네일을 반환하거나 새로 다운샘플링한다.
-    private func thumbnail(for url: URL) -> NSImage? {
-        let key = url.path
-        if let cached = thumbnailCache[key] { return cached }
-        guard let img = SidebarViewController.downsampledImage(at: url, maxPixel: 72) else { return nil }
-        thumbnailCache[key] = img
-        return img
-    }
-
-    /// ImageIO로 최대 변 maxPixel 이하 썸네일을 만든다 (메모리 절약).
-    static func downsampledImage(at url: URL, maxPixel: CGFloat) -> NSImage? {
-        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-        let opts: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
-            kCGImageSourceCreateThumbnailWithTransform: true
-        ]
-        guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return nil }
-        return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
-    }
-
-    @objc private func imageOutlineRowClicked(_ sender: Any?) {
-        let row = imageOutlineView.clickedRow
-        guard row >= 0, let node = imageOutlineView.item(atRow: row) as? SidebarNode else { return }
-        pendingRowClick?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.toggleImageFolder(node) }
-        pendingRowClick = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + NSEvent.doubleClickInterval, execute: work)
-    }
-
-    private func toggleImageFolder(_ node: SidebarNode) {
-        // 폴더는 펼침/접기만. 이미지는 드래그로 본문에 삽입(클릭 동작 없음 — 미리보기는 hover 팝업).
-        guard node.isDirectory else { return }
-        if imageOutlineView.isItemExpanded(node) {
-            imageOutlineView.collapseItem(node)
-        } else {
-            imageOutlineView.expandItem(node)
-        }
     }
 
     private func highlightCurrentFile() {
@@ -714,19 +551,16 @@ final class SidebarViewController: NSViewController {
     @objc private func handleBookmarksChange() {
         startWatching()
         reloadTree()
-        if selectedTab == .images { reloadImageTree() }
     }
 
     @objc private func handleContentsChange() {
         reloadTree()
-        if selectedTab == .images { reloadImageTree() }
     }
 
     // MARK: - Actions
 
     private var creationDirectory: URL? {
-        let outline = selectedTab == .images ? imageOutlineView : outlineView
-        guard let outline = outline, outline.selectedRow >= 0,
+        guard let outline = outlineView, outline.selectedRow >= 0,
               let node = outline.item(atRow: outline.selectedRow) as? SidebarNode,
               !node.isMissing else { return nil }
         let url = node.isDirectory ? node.url : node.url.deletingLastPathComponent()
@@ -758,10 +592,6 @@ final class SidebarViewController: NSViewController {
             guard response == .alertFirstButtonReturn, let self = self else { return }
             do {
                 let url = try SidebarItemCreation.create(named: name.stringValue, in: parent, isDirectory: isDirectory)
-                if self.selectedTab != .folders {
-                    self.tabControl.selectedSegment = Tab.folders.rawValue
-                    self.tabChanged(self.tabControl)
-                }
                 self.searchField.stringValue = ""
                 self.exitSearch()
                 self.reloadTree()
@@ -961,7 +791,6 @@ final class SidebarViewController: NSViewController {
                     SidebarItemOperations.relocatedURL(URL(fileURLWithPath: $0), from: node.url, to: destination)?.path ?? $0
                 })
                 self.reloadTree(capture: false)
-                if self.selectedTab == .images { self.reloadImageTree() }
                 self.selectCreatedOrRenamedItem(destination)
             } catch {
                 self.presentError(error, modalFor: window, delegate: nil, didPresent: nil, contextInfo: nil)
@@ -970,7 +799,7 @@ final class SidebarViewController: NSViewController {
     }
 
     private func selectCreatedOrRenamedItem(_ url: URL) {
-        let outline = selectedTab == .images ? imageOutlineView! : outlineView!
+        let outline = outlineView!
         for row in 0..<outline.numberOfRows {
             if let node = outline.item(atRow: row) as? SidebarNode, node.url.standardizedFileURL == url.standardizedFileURL {
                 outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
@@ -1001,7 +830,6 @@ final class SidebarViewController: NSViewController {
                     for document in documents { document.close() }
                     self.store.removeFolders(inside: node.url)
                     self.reloadTree()
-                    if self.selectedTab == .images { self.reloadImageTree() }
                 } catch {
                     self.presentError(error, modalFor: window, delegate: nil, didPresent: nil, contextInfo: nil)
                 }
@@ -1026,12 +854,8 @@ final class SidebarViewController: NSViewController {
 
     // MARK: - 전체 검색 (Full-Text Search)
 
-    /// ⇧⌘F — 폴더 탭으로 전환하고 검색 필드에 포커스.
+    /// ⇧⌘F — 검색 필드에 포커스.
     func focusSearchField() {
-        if selectedTab != .folders {
-            tabControl.selectedSegment = Tab.folders.rawValue
-            tabChanged(tabControl)
-        }
         view.window?.makeFirstResponder(searchField)
     }
 
@@ -1052,10 +876,6 @@ final class SidebarViewController: NSViewController {
         // 펼침 상태를 스냅샷해 둔다 — 검색 종료 시 reloadTree(capture: false)가 복원한다.
         // 결과 모드에서의 재검색(키 입력 연타)에서는 이미 검색 행이라 캡처하지 않는다.
         if !isSearching { captureExpansionState() }
-        if selectedTab != .folders {
-            tabControl.selectedSegment = Tab.folders.rawValue
-            tabChanged(tabControl)
-        }
         guard !store.folders.isEmpty else {
             searchResults = []
             searchNotice = SearchNotice(L10n.tr("sidebar.empty.message"))
@@ -1101,6 +921,15 @@ final class SidebarViewController: NSViewController {
 
     // MARK: - Public API
 
+    /// 사이드바는 창 맨 위(신호등 줄)까지 바탕을 깔고, 내용은 헤더 줄 아래부터 시작한다.
+    func alignContentTop(to guide: NSLayoutGuide) {
+        _ = view
+        headerTopConstraint?.isActive = false
+        let top = headerView.topAnchor.constraint(equalTo: guide.topAnchor)
+        top.isActive = true
+        headerTopConstraint = top
+    }
+
     func setCurrentFileURL(_ url: URL?) {
         currentFileURL = url
         highlightCurrentFile()
@@ -1111,24 +940,19 @@ final class SidebarViewController: NSViewController {
 
 extension SidebarViewController: NSOutlineViewDataSource {
 
-    /// 폴더 탭과 이미지 탭이 같은 dataSource를 공유 — outline 인스턴스로 루트를 가른다.
-    private func roots(for outlineView: NSOutlineView) -> [SidebarNode] {
-        outlineView === imageOutlineView ? imageRoots : roots
-    }
-
     func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
-        if outlineView !== imageOutlineView, let results = searchResults {
+        if let results = searchResults {
             if item == nil { return (searchNotice != nil ? 1 : 0) + results.count }
             if let result = item as? FileSearchResult { return result.hits.count }
             return 0
         }
-        if item == nil { return roots(for: outlineView).count }
+        if item == nil { return roots.count }
         guard let node = item as? SidebarNode else { return 0 }
         return node.children?.count ?? 0
     }
 
     func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
-        if outlineView !== imageOutlineView, let results = searchResults {
+        if let results = searchResults {
             if item == nil {
                 if let notice = searchNotice {
                     return index == 0 ? notice : results[index - 1]
@@ -1137,7 +961,7 @@ extension SidebarViewController: NSOutlineViewDataSource {
             }
             if let result = item as? FileSearchResult { return result.hits[index] }
         }
-        if item == nil { return roots(for: outlineView)[index] }
+        if item == nil { return roots[index] }
         guard let node = item as? SidebarNode, let children = node.children else { return SidebarNode(url: URL(fileURLWithPath: "/"), isDirectory: false, isRoot: false) }
         return children[index]
     }
@@ -1148,13 +972,6 @@ extension SidebarViewController: NSOutlineViewDataSource {
         guard let node = item as? SidebarNode else { return false }
         return node.isDirectory && !(node.children?.isEmpty ?? true)
     }
-
-    /// 이미지 노드를 본문으로 드래그할 수 있도록 파일 URL을 pasteboard에 싣는다 (드롭 삽입과 연동).
-    func outlineView(_ outlineView: NSOutlineView, pasteboardWriterForItem item: Any) -> NSPasteboardWriting? {
-        guard outlineView === imageOutlineView,
-              let node = item as? SidebarNode, !node.isDirectory else { return nil }
-        return node.url as NSURL
-    }
 }
 
 // MARK: - Delegate
@@ -1162,63 +979,68 @@ extension SidebarViewController: NSOutlineViewDataSource {
 extension SidebarViewController: NSOutlineViewDelegate {
 
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
+        let identifier = NSUserInterfaceItemIdentifier("SidebarCell")
+        let cell = (outlineView.makeView(withIdentifier: identifier, owner: self) as? SidebarCellView)
+            ?? SidebarCellView(identifier: identifier)
+
         if let notice = item as? SearchNotice {
-            let identifier = NSUserInterfaceItemIdentifier("SidebarCell")
-            let cell: NSTableCellView = (outlineView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView) ?? makeCell(identifier: identifier)
-            cell.textField?.stringValue = notice.text
-            cell.textField?.font = NSFont.systemFont(ofSize: 11)
-            cell.textField?.textColor = NSColor.secondaryLabelColor
-            cell.imageView?.image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)
+            cell.configure(text: notice.text, font: NSFont.systemFont(ofSize: 11),
+                           textColor: SidebarStyle.secondaryText,
+                           icon: SidebarStyle.symbol("info.circle", size: 12))
             return cell
         }
         if let result = item as? FileSearchResult {
-            let identifier = NSUserInterfaceItemIdentifier("SidebarCell")
-            let cell: NSTableCellView = (outlineView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView) ?? makeCell(identifier: identifier)
-            cell.textField?.stringValue = "\(result.fileURL.lastPathComponent) (\(result.hits.count))"
-            cell.textField?.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
-            cell.textField?.textColor = NSColor.labelColor
-            cell.imageView?.image = NSImage(systemSymbolName: "doc.text", accessibilityDescription: nil)
+            cell.configure(text: "\(result.fileURL.lastPathComponent)  \(result.hits.count)",
+                           font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+                           textColor: SidebarStyle.text,
+                           icon: SidebarStyle.symbol("doc.text", size: 13))
+            configureChevron(cell, for: item, in: outlineView)
             return cell
         }
         if let hit = item as? FileSearchHit {
-            let identifier = NSUserInterfaceItemIdentifier("SidebarCell")
-            let cell: NSTableCellView = (outlineView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView) ?? makeCell(identifier: identifier)
             let snippet = FileSearcher.makeSnippet(lineText: hit.lineText, matchRange: hit.matchRangeInLine)
             let attr = NSMutableAttributedString(
                 string: snippet.text,
                 attributes: [.font: NSFont.systemFont(ofSize: 12),
-                             .foregroundColor: NSColor.secondaryLabelColor])
-            attr.addAttributes([.font: NSFont.boldSystemFont(ofSize: 12),
-                                .foregroundColor: NSColor.labelColor],
+                             .foregroundColor: SidebarStyle.secondaryText])
+            attr.addAttributes([.font: NSFont.systemFont(ofSize: 12, weight: .semibold),
+                                .foregroundColor: SidebarStyle.text],
                                range: snippet.highlight)
-            cell.textField?.attributedStringValue = attr
-            cell.imageView?.image = nil
+            cell.configure(attributed: attr, icon: nil)
             return cell
         }
         guard let node = item as? SidebarNode else { return nil }
 
-        // 이미지 탭 트리: 폴더 아이콘 / 작은 썸네일 + 파일명
-        if outlineView === imageOutlineView {
-            let identifier = NSUserInterfaceItemIdentifier("ImageTreeCell")
-            let cell: NSTableCellView = (outlineView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView) ?? makeCell(identifier: identifier)
-            cell.textField?.stringValue = displayName(for: node)
-            if node.isDirectory {
-                cell.imageView?.image = icon(for: node)
-            } else {
-                cell.imageView?.image = thumbnail(for: node.url)
-                    ?? NSImage(systemSymbolName: "photo", accessibilityDescription: nil)
-            }
-            cell.textField?.textColor = node.isMissing ? NSColor.systemOrange : NSColor.labelColor
-            return cell
-        }
-
-        let identifier = NSUserInterfaceItemIdentifier("SidebarCell")
-        let cell: NSTableCellView = (outlineView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView) ?? makeCell(identifier: identifier)
-        cell.textField?.font = NSFont.systemFont(ofSize: 13)
-        cell.textField?.stringValue = displayName(for: node)
-        cell.imageView?.image = icon(for: node)
-        cell.textField?.textColor = node.isMissing ? NSColor.systemOrange : NSColor.labelColor
+        let textColor = node.isMissing ? NSColor.systemOrange : SidebarStyle.text
+        // 등록된 최상위 폴더는 한 단계 굵게 — 트리의 뼈대가 먼저 읽히도록
+        let font = NSFont.systemFont(ofSize: 13, weight: node.isRoot ? .semibold : .regular)
+        cell.configure(text: displayName(for: node), font: font, textColor: textColor,
+                       icon: icon(for: node),
+                       iconColor: node.isMissing ? NSColor.systemOrange : SidebarStyle.icon)
+        configureChevron(cell, for: item, in: outlineView)
         return cell
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
+        let row = SidebarRowView()
+        row.level = max(0, outlineView.level(forItem: item))
+        return row
+    }
+
+    func outlineViewItemDidExpand(_ notification: Notification) { refreshChevron(notification) }
+    func outlineViewItemDidCollapse(_ notification: Notification) { refreshChevron(notification) }
+
+    private func refreshChevron(_ notification: Notification) {
+        guard let outline = notification.object as? NSOutlineView,
+              let item = notification.userInfo?["NSObject"] else { return }
+        let row = outline.row(forItem: item)
+        guard row >= 0, let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarCellView else { return }
+        configureChevron(cell, for: item, in: outline)
+    }
+
+    private func configureChevron(_ cell: SidebarCellView, for item: Any, in outline: NSOutlineView) {
+        guard outline.isExpandable(item) else { cell.setChevron(nil); return }
+        cell.setChevron(outline.isItemExpanded(item))
     }
 
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
@@ -1228,36 +1050,6 @@ extension SidebarViewController: NSOutlineViewDelegate {
     func outlineViewSelectionDidChange(_ notification: Notification) {
         updateCreationButtons()
         // 실제 파일 열기는 click action에서 처리한다.
-    }
-
-    private func makeCell(identifier: NSUserInterfaceItemIdentifier) -> NSTableCellView {
-        let cell = NSTableCellView()
-        cell.identifier = identifier
-
-        let imageView = NSImageView()
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-        cell.imageView = imageView
-        cell.addSubview(imageView)
-
-        let textField = NSTextField(labelWithString: "")
-        textField.font = NSFont.systemFont(ofSize: 13)
-        textField.lineBreakMode = .byTruncatingTail
-        textField.translatesAutoresizingMaskIntoConstraints = false
-        cell.textField = textField
-        cell.addSubview(textField)
-
-        NSLayoutConstraint.activate([
-            imageView.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
-            imageView.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-            imageView.widthAnchor.constraint(equalToConstant: 16),
-            imageView.heightAnchor.constraint(equalToConstant: 16),
-
-            textField.leadingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: 6),
-            textField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -6),
-            textField.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
-        ])
-
-        return cell
     }
 
     private func displayName(for node: SidebarNode) -> String {
@@ -1270,12 +1062,12 @@ extension SidebarViewController: NSOutlineViewDelegate {
 
     private func icon(for node: SidebarNode) -> NSImage? {
         if node.isMissing {
-            return NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: nil)
+            return SidebarStyle.symbol("exclamationmark.triangle", size: 13)
         }
         if node.isDirectory {
-            return NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
+            return SidebarStyle.symbol("folder", size: 13)
         }
-        return NSImage(systemSymbolName: "doc.text", accessibilityDescription: nil)
+        return SidebarStyle.symbol("doc.text", size: 13)
     }
 }
 
@@ -1285,7 +1077,7 @@ extension SidebarViewController: NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         pendingRowClick?.cancel()
-        let outline = menu === imageOutlineView.menu ? imageOutlineView! : outlineView!
+        let outline = outlineView!
         let row = outline.clickedRow
         contextNode = row >= 0 ? outline.item(atRow: row) as? SidebarNode : nil
         let node = contextNode

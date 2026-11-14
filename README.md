@@ -53,14 +53,16 @@ The built-in macOS editors (TextEdit, Notes) cannot save formatting as `.md`, wh
 ## Screenshots
 
 <p align="center">
-  <img src="assets/01-editor.png" alt="Folder sidebar and WYSIWYG editor" width="900">
+  <img src="assets/v2.1.0/01-editor.png" alt="Folder sidebar and WYSIWYG editor" width="900">
 </p>
 
 | Proofreading candidates | Two-page spread |
 |---|---|
 | <img src="assets/02-proofreading.png" alt="Suggestion tooltip shown when hovering a proofreading candidate" width="440"> | <img src="assets/03-book.png" alt="A novel manuscript laid out as a two-page spread" width="440"> |
 | **View settings** | **AI chat** |
-| <img src="assets/04-view-settings.png" alt="View settings for page size, width, font, weight and line spacing" width="440"> | <img src="assets/05-ai-chat.png" alt="Guide reply in the per-document AI chat" width="440"> |
+| <img src="assets/04-view-settings.png" alt="View settings for page size, width, font, weight and line spacing" width="440"> | <img src="assets/v2.1.0/05-ai-chat.png" alt="Guide reply in the per-document AI chat" width="440"> |
+
+<p align="center"><img src="assets/v2.1.0/06-settings.png" alt="JenaNote 2.1 settings" width="760"></p>
 
 ### Demo
 

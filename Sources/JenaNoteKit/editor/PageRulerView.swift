@@ -8,6 +8,19 @@ import AppKit
 /// 치수자를 따라 움직이게 하고, 손을 놓는 순간 `onCommitted` 로 한 번만 알린다
 /// (매 픽셀마다 재조판하지 않기 위해). 눈금 0 은 왼쪽 여백이 끝나는 자리다(워드와 같다).
 final class PageRulerView: NSView {
+    /// 마우스가 올라와 있으면 눈금·핸들을 진하게 — 조절할 수 있다는 걸 그때 알려준다.
+    private var isRulerHovered = false { didSet { if oldValue != isRulerHovered { needsDisplay = true } } }
+    private var emphasis: Bool { isRulerHovered || dragging != nil }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas where area.owner === self && area.userInfo?["rulerHover"] != nil { removeTrackingArea(area) }
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+                                       owner: self, userInfo: ["rulerHover": true]))
+    }
+    override func mouseEntered(with event: NSEvent) { super.mouseEntered(with: event); isRulerHovered = true }
+    override func mouseExited(with event: NSEvent) { super.mouseExited(with: event); isRulerHovered = false }
+
 
     static let height: CGFloat = 18
     /// 핸들을 잡을 수 있는 좌우 범위. 삼각형보다 넉넉히 둔다 — 눈으로 보는 것보다
@@ -92,10 +105,11 @@ final class PageRulerView: NSView {
     private func drawTicks(in b: NSRect, origin: CGFloat) {
         let cm = ReaderMetrics.pointsPerCentimeter
         let quarter = cm / 4
-        let tickColor = NSColor.secondaryLabelColor
+        // 평소엔 옅게 — 글보다 앞에 나서지 않는다. 마우스를 올리거나 끄는 동안만 진하게.
+        let tickColor = emphasis ? NSColor.secondaryLabelColor : NSColor.tertiaryLabelColor
         let labelAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 8, weight: .regular),
-            .foregroundColor: NSColor.secondaryLabelColor
+            .foregroundColor: tickColor
         ]
         let midY = b.midY
         var i = Int(floor(-origin / quarter))
@@ -131,7 +145,8 @@ final class PageRulerView: NSView {
         path.line(to: NSPoint(x: x + w / 2, y: 0))
         path.line(to: NSPoint(x: x, y: h))
         path.close()
-        (dragging == side ? NSColor.controlAccentColor : NSColor.labelColor).setFill()
+        (dragging == side ? SidebarStyle.selectionFill
+            : emphasis ? NSColor.secondaryLabelColor : NSColor.tertiaryLabelColor).setFill()
         path.fill()
 
         guard dragging == side else { return }
@@ -140,7 +155,7 @@ final class PageRulerView: NSView {
                           pageWidth / ReaderMetrics.pointsPerCentimeter) as NSString
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 9, weight: .medium),
-            .foregroundColor: NSColor.controlAccentColor
+            .foregroundColor: NSColor.labelColor
         ]
         let size = text.size(withAttributes: attrs)
         var lx = side == .left ? x + 8 : x - 8 - size.width

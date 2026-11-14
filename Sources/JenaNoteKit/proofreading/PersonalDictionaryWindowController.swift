@@ -7,13 +7,13 @@ final class PersonalDictionaryWindowController: NSWindowController, NSWindowDele
     private let initialTerm: String?
     private let table = NSTableView()
     private let search = NSSearchField()
-    private let deleteButton = NSButton()
+    private let deleteButton = SettingsButton(title: "", target: nil, action: nil, primary: false)
     private let selectAll = NSButton(checkboxWithTitle: L10n.tr("dictionary.selectAll"), target: nil, action: nil)
     private var checkedIDs = Set<UUID>()
     private let termField = NSTextField(string: "")
-    private let scopePopup = NSPopUpButton()
-    private let saveButton = NSButton()
-    private let newButton = NSButton()
+    private let scopePopup = JenaPopUpButton(frame: .zero, pullsDown: false)
+    private let saveButton = SettingsButton(title: "", target: nil, action: nil, primary: true)
+    private let newButton = SettingsButton(title: "", target: nil, action: nil, primary: false)
     private let heading = NSTextField(labelWithString: "")
     private let status = NSTextField(wrappingLabelWithString: "")
     private let emptyState = NSTextField(labelWithString: "")
@@ -31,9 +31,10 @@ final class PersonalDictionaryWindowController: NSWindowController, NSWindowDele
     }
     init(context: DictionaryWorkContext?, term: String? = nil, store: PersonalDictionaryStore = .shared) {
         self.context = context; self.initialTerm = term; self.store = store
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 740, height: 470), styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 560), styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
         super.init(window: window)
         window.title = L10n.tr("dictionary.title")
+        SettingsText.applyToolWindowChrome(window)
         window.isReleasedWhenClosed = false; window.delegate = self; window.center()
         workOptions = store.works
         if let context { include(store.work(for: context)) }
@@ -48,46 +49,64 @@ final class PersonalDictionaryWindowController: NSWindowController, NSWindowDele
 
     private func build() {
         guard let content = window?.contentView else { return }
-        let root = NSStackView(); root.orientation = .vertical; root.alignment = .leading; root.spacing = 14
+        let root = NSStackView(); root.orientation = .vertical; root.alignment = .leading; root.spacing = 10
         root.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(root)
         NSLayoutConstraint.activate([
-            root.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
-            root.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
-            root.topAnchor.constraint(equalTo: content.topAnchor, constant: 22),
-            root.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -22)
+            root.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: SettingsStyle.contentInset),
+            root.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -SettingsStyle.contentInset),
+            root.topAnchor.constraint(equalTo: content.topAnchor, constant: 44),
+            root.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -SettingsStyle.contentInset)
         ])
-        heading.font = .boldSystemFont(ofSize: 15)
+        let title = SettingsText.heading(L10n.tr("dictionary.title"))
+        root.addArrangedSubview(title)
+        root.setCustomSpacing(18, after: title)
+
+        // 등록 — "단어 추가 / 수정" 머리말과 새로 쓰기
+        heading.font = .systemFont(ofSize: 12, weight: .semibold)
+        heading.textColor = .secondaryLabelColor
         newButton.title = L10n.tr("dictionary.newAction")
-        newButton.target = self; newButton.action = #selector(startNew(_:)); newButton.bezelStyle = .rounded
-        root.addArrangedSubview(NSStackView(views: [heading, newButton]))
+        newButton.target = self; newButton.action = #selector(startNew(_:))
+        let formHeader = NSStackView(views: [heading, newButton]); formHeader.spacing = 10; formHeader.alignment = .centerY
+        root.addArrangedSubview(formHeader)
         termField.placeholderString = L10n.tr("dictionary.input")
         termField.identifier = .init("dictionary.term"); termField.delegate = self
         termField.setAccessibilityLabel(L10n.tr("dictionary.term"))
-        termField.setContentHuggingPriority(.defaultLow, for: .horizontal)
         scopePopup.identifier = .init("dictionary.scope")
         scopePopup.setAccessibilityLabel(L10n.tr("dictionary.scope"))
         scopePopup.target = self; scopePopup.action = #selector(scopeChanged(_:))
+        scopePopup.isFilled = true
+        scopePopup.font = .systemFont(ofSize: 13)
         scopePopup.widthAnchor.constraint(equalToConstant: 210).isActive = true
         scopePopup.cell?.lineBreakMode = .byTruncatingTail
         saveButton.identifier = .init("dictionary.save")
-        saveButton.target = self; saveButton.action = #selector(saveEntry(_:)); saveButton.bezelStyle = .rounded
+        saveButton.target = self; saveButton.action = #selector(saveEntry(_:))
         saveButton.keyEquivalent = "\r"
-        let input = NSStackView(views: [termField, scopePopup, saveButton]); input.spacing = 10
-        root.addArrangedSubview(input)
-        input.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
-        termField.widthAnchor.constraint(greaterThanOrEqualToConstant: 220).isActive = true
+        let termBox = SettingsFieldContainer(termField)
+        termBox.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let input = NSStackView(views: [termBox, scopePopup, saveButton]); input.spacing = 8; input.alignment = .centerY
+        input.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        let form = SettingsPanelView(content: input)
+        root.addArrangedSubview(form)
+        form.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+        termBox.widthAnchor.constraint(greaterThanOrEqualToConstant: 220).isActive = true
         status.textColor = .systemRed; status.font = .systemFont(ofSize: 12); status.isHidden = true
         root.addArrangedSubview(status)
         status.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+        root.setCustomSpacing(20, after: status)
+        root.setCustomSpacing(20, after: form)
+
+        // 목록 — 검색, 고른 항목 지우기, 표
         search.placeholderString = L10n.tr("dictionary.search"); search.delegate = self
         search.setAccessibilityLabel(L10n.tr("dictionary.search"))
-        root.addArrangedSubview(search); search.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+        let searchBox = HeaderFieldContainer(search)
         selectAll.target = self; selectAll.action = #selector(toggleAll(_:))
         selectAll.allowsMixedState = true
-        deleteButton.target = self; deleteButton.action = #selector(deleteChecked(_:)); deleteButton.bezelStyle = .rounded
+        deleteButton.target = self; deleteButton.action = #selector(deleteChecked(_:))
         deleteButton.identifier = .init("dictionary.delete")
-        let selectionActions = NSStackView(views: [selectAll, deleteButton]); selectionActions.spacing = 12
-        root.addArrangedSubview(selectionActions)
+        let listHeader = NSStackView(views: [searchBox, selectAll, deleteButton]); listHeader.spacing = 12; listHeader.alignment = .centerY
+        searchBox.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        root.addArrangedSubview(listHeader)
+        listHeader.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
         let checkColumn = NSTableColumn(identifier: .init("checked"))
         checkColumn.title = ""; checkColumn.width = 30; checkColumn.minWidth = 30; checkColumn.maxWidth = 30
         table.addTableColumn(checkColumn)
@@ -96,10 +115,15 @@ final class PersonalDictionaryWindowController: NSWindowController, NSWindowDele
             table.addTableColumn(column)
         }
         table.delegate = self; table.dataSource = self; table.rowHeight = 30
+        table.backgroundColor = .clear
+        table.style = .plain
+        table.gridStyleMask = []
         let list = NSScrollView(); list.hasVerticalScroller = true; list.documentView = table
-        root.addArrangedSubview(list)
-        list.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
-        list.heightAnchor.constraint(greaterThanOrEqualToConstant: 220).isActive = true
+        list.drawsBackground = false
+        let listPanel = SettingsPanelView(content: list)
+        root.addArrangedSubview(listPanel)
+        listPanel.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+        listPanel.heightAnchor.constraint(greaterThanOrEqualToConstant: 220).isActive = true
         emptyState.textColor = .secondaryLabelColor
         root.addArrangedSubview(emptyState)
     }

@@ -55,7 +55,31 @@ final class AIChatViewController: NSViewController {
     private var abortPreparation: ((_ tokensUsed: Int) -> Void)?
     private var waitingLabel: NSTextField!
     private let selectionLabel = NSTextField(wrappingLabelWithString: "")
-    private(set) var modeControl: NSSegmentedControl!
+    /// 권한 선택 — 승인 요청 / 편집 요청 / 전체 액세스 (이전의 가이드·직접 수정을 대신한다)
+    private(set) var modeControl: NSPopUpButton!
+    /// Claude 가 막힌 도구로 멈췄을 때 띄우는 승인 줄
+    private let approvalBar = NSStackView()
+    private let approvalLabel = NSTextField(wrappingLabelWithString: "")
+    private var pendingApproval: PendingApproval?
+    /// `/` 를 치면 입력창 위에 뜨는 스킬 목록
+    let skillSuggestions = AISkillSuggestionView()
+    /// 대화 전 빈 화면 안내 — 시작 예시와 `/` 스킬 안내
+    let emptyState = AIChatEmptyStateView()
+    /// 지금 고치고 있는 `/단어` 의 범위 — Enter 로 고르면 이 범위를 `/이름 ` 으로 바꾼다.
+    private var slashRange: NSRange?
+    /// Esc·스페이스로 닫은 `/` 의 위치 — 같은 단어를 계속 쳐도 다시 띄우지 않는다.
+    private var dismissedSlashLocation: Int?
+    /// 목록을 연 순간의 스킬 목록 (글자마다 디스크를 다시 읽지 않도록)
+    private var skillCache: [AISkill] = []
+
+    private struct PendingApproval {
+        let session: String
+        let tools: [AIToolRequest]
+        weak var document: MarkdownDocument?
+        let conversation: AIConversation
+        let question: String
+        let provider: AIProvider
+    }
     private(set) var sendButton: NSButton!
     private var conversation: AIConversation?
     private var retrieval: AIWorkRetrieval?
@@ -68,10 +92,8 @@ final class AIChatViewController: NSViewController {
         view = AIChatSurface()
         documentLabel.font = .systemFont(ofSize: 13, weight: .medium)
         documentLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        let settings = NSButton(image: NSImage(systemSymbolName: "ellipsis", accessibilityDescription: L10n.tr("ai.settings"))!,
-                                target: self, action: #selector(showSettings))
-        settings.isBordered = false
-        settings.toolTip = L10n.tr("ai.settings")
+        let settings = HeaderButton(image: HeaderStyle.symbol("ellipsis", label: L10n.tr("ai.settings")),
+                                    label: L10n.tr("ai.settings"), target: self, action: #selector(showSettings), size: 24)
         let top = NSStackView(views: [documentLabel, settings])
         top.orientation = .horizontal
         top.distribution = .equalSpacing
@@ -99,13 +121,18 @@ final class AIChatViewController: NSViewController {
         input.toolTip = L10n.tr("ai.composer.keyboard")
         input.onSubmit = { [weak self] in self?.send() }
         input.canSubmit = { [weak self] in self?.isAwaitingResponse == false }
-        modeControl = NSSegmentedControl(labels: [L10n.tr("ai.guide"), L10n.tr("ai.edit")],
-                                         trackingMode: .selectOne, target: self, action: #selector(modeChanged))
-        modeControl.selectedSegment = 0
+        modeControl = JenaPopUpButton(frame: .zero, pullsDown: false)
         modeControl.controlSize = .small
-        modeControl.segmentStyle = .rounded
         modeControl.font = .systemFont(ofSize: 11)
+        modeControl.target = self
+        modeControl.action = #selector(modeChanged)
+        modeControl.setAccessibilityLabel(L10n.tr("ai.permission"))
+        for permission in AIPermission.allCases {
+            modeControl.addItem(withTitle: permission.title)
+            modeControl.lastItem?.image = NSImage(systemSymbolName: permission.symbol, accessibilityDescription: nil)
+        }
         modeControl.setContentHuggingPriority(.required, for: .horizontal)
+        setupApprovalBar()
         sendButton = NSButton(title: "", target: self, action: #selector(performComposerAction))
         sendButton.isBordered = false
         sendButton.widthAnchor.constraint(equalToConstant: 26).isActive = true
@@ -113,7 +140,7 @@ final class AIChatViewController: NSViewController {
         updateActionButton()
         options.install(modeControl: modeControl, actionButton: sendButton)
         workBar.onPrimaryAction = { [weak self] in self?.openWorkWindow() }
-        let composerContent = NSStackView(views: [workBar, selectionLabel, inputScroll, options])
+        let composerContent = NSStackView(views: [workBar, selectionLabel, approvalBar, inputScroll, options])
         composerContent.orientation = .vertical
         composerContent.alignment = .leading
         composerContent.spacing = 8
@@ -143,6 +170,28 @@ final class AIChatViewController: NSViewController {
             stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -12),
             historyScroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 60)
         ])
+        view.addSubview(emptyState)
+        NSLayoutConstraint.activate([
+            emptyState.leadingAnchor.constraint(equalTo: historyScroll.leadingAnchor, constant: 8),
+            emptyState.trailingAnchor.constraint(equalTo: historyScroll.trailingAnchor, constant: -8),
+            emptyState.topAnchor.constraint(equalTo: historyScroll.topAnchor),
+            emptyState.bottomAnchor.constraint(equalTo: historyScroll.bottomAnchor)
+        ])
+        emptyState.onPick = { [weak self] example in
+            guard let self else { return }
+            self.input.string = example
+            self.conversation?.draft = example
+            self.input.window?.makeFirstResponder(self.input)
+            self.input.setSelectedRange(NSRange(location: (example as NSString).length, length: 0))
+        }
+        view.addSubview(skillSuggestions)
+        NSLayoutConstraint.activate([
+            skillSuggestions.leadingAnchor.constraint(equalTo: composer.leadingAnchor),
+            skillSuggestions.trailingAnchor.constraint(equalTo: composer.trailingAnchor),
+            skillSuggestions.bottomAnchor.constraint(equalTo: composer.topAnchor, constant: -6)
+        ])
+        skillSuggestions.onChoose = { [weak self] in self?.completeSkill($0) }
+        input.keyInterceptor = { [weak self] in self?.handleSuggestionKey($0) ?? false }
         NotificationCenter.default.addObserver(self, selector: #selector(indexChanged),
                                                 name: AIWorkIndexStore.changed, object: nil)
         input.delegate = self
@@ -217,7 +266,9 @@ final class AIChatViewController: NSViewController {
         conversation = AIConversationStore.shared.conversation(for: document)
         input.string = conversation?.draft ?? ""
         input.needsDisplay = true
-        modeControl.selectedSegment = conversation?.mode.rawValue ?? 0
+        modeControl.selectItem(at: conversation?.permission.rawValue ?? 0)
+        updatePermissionHint()
+        hideApproval()
         documentLabel.stringValue = document.displayName
         sendButton.isEnabled = true
         render()
@@ -565,8 +616,142 @@ final class AIChatViewController: NSViewController {
     @objc private func showSettings() { PreferencesWindowController.shared.showAI() }
 
     @objc private func modeChanged() {
-        conversation?.mode = AIChatMode(rawValue: modeControl.selectedSegment) ?? .guide
+        conversation?.permission = AIPermission(rawValue: modeControl.indexOfSelectedItem) ?? .approval
+        updatePermissionHint()
         selectionChanged()
+    }
+
+    /// 지금 AI 에서 이 권한이 실제로 무엇을 뜻하는지 — Codex·Gemini 는 승인을 못 받아 읽기 전용으로 동작한다.
+    private func updatePermissionHint() {
+        let provider = AISettings.provider
+        for (index, permission) in AIPermission.allCases.enumerated() {
+            modeControl.item(at: index)?.toolTip = permission.hint(for: provider)
+        }
+        modeControl.toolTip = (AIPermission(rawValue: modeControl.indexOfSelectedItem) ?? .approval).hint(for: provider)
+    }
+
+    // MARK: - `/` 스킬 목록
+
+    /// 커서 앞의 `/단어` 로 목록을 띄우거나 거른다. 스킬이 없는 AI·선택 중·조합 중에는 띄우지 않는다.
+    func updateSkillSuggestions() {
+        let provider = AISettings.provider
+        let selection = input.selectedRange()
+        guard AISkillCatalog.supportsSkills(provider), selection.length == 0, !input.hasMarkedText(),
+              let active = AISlashCommand.activeQuery(in: input.string, cursor: selection.location) else {
+            dismissedSlashLocation = nil
+            hideSkillSuggestions()
+            return
+        }
+        guard active.range.location != dismissedSlashLocation else { hideSkillSuggestions(); return }
+        if slashRange?.location != active.range.location || skillCache.isEmpty {
+            skillCache = AISkillCatalog.skills(for: provider)
+        }
+        slashRange = active.range
+        let matches = AISlashCommand.filter(skillCache, query: active.query)
+        if matches.isEmpty { skillSuggestions.hide() } else { skillSuggestions.show(matches) }
+    }
+
+    private func hideSkillSuggestions() {
+        slashRange = nil
+        skillSuggestions.hide()
+    }
+
+    /// 목록이 떠 있을 때의 키: ↑↓ 이동, Enter·Tab 고르기, Esc 닫기, 스페이스는 닫고 그대로 입력.
+    private func handleSuggestionKey(_ event: NSEvent) -> Bool {
+        guard !skillSuggestions.isHidden else { return false }
+        let plain = event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty
+        switch event.keyCode {
+        case 125: skillSuggestions.move(by: 1); return true            // ↓
+        case 126: skillSuggestions.move(by: -1); return true           // ↑
+        case 36, 76, 48 where plain:                                     // Return, Enter, Tab
+            if let skill = skillSuggestions.selected { completeSkill(skill) }
+            return true
+        case 53:                                                         // Esc
+            dismissedSlashLocation = slashRange?.location
+            hideSkillSuggestions()
+            return true
+        case 49:                                                         // Space — 닫고 공백은 그대로 친다
+            dismissedSlashLocation = slashRange?.location
+            hideSkillSuggestions()
+            return false
+        default:
+            return false
+        }
+    }
+
+    /// 고른 스킬로 `/단어` 를 `/이름 ` 으로 바꾼다(되돌리기 가능). 보낼 때 이 이름의 스킬을 쓴다.
+    private func completeSkill(_ skill: AISkill) {
+        guard let range = slashRange, NSMaxRange(range) <= (input.string as NSString).length else { return }
+        hideSkillSuggestions()
+        input.insertText("/" + skill.name + " ", replacementRange: range)
+        input.window?.makeFirstResponder(input)
+    }
+
+    // MARK: - 승인 요청
+
+    private func setupApprovalBar() {
+        approvalLabel.font = .systemFont(ofSize: 11)
+        approvalLabel.textColor = .labelColor
+        approvalLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let approve = NSButton(title: L10n.tr("ai.approval.approve"), target: self, action: #selector(approvePending))
+        approve.controlSize = .small
+        approve.bezelColor = .controlAccentColor
+        approve.keyEquivalent = ""
+        let deny = NSButton(title: L10n.tr("ai.approval.deny"), target: self, action: #selector(denyPending))
+        deny.controlSize = .small
+        let buttons = NSStackView(views: [deny, approve])
+        buttons.spacing = 6
+        let icon = NSImageView(image: NSImage(systemSymbolName: "hand.raised.fill", accessibilityDescription: nil) ?? NSImage())
+        icon.contentTintColor = .systemOrange
+        icon.setContentHuggingPriority(.required, for: .horizontal)
+        let text = NSStackView(views: [icon, approvalLabel])
+        text.alignment = .top
+        text.spacing = 6
+        approvalBar.orientation = .vertical
+        approvalBar.alignment = .trailing
+        approvalBar.spacing = 6
+        approvalBar.addArrangedSubview(text)
+        approvalBar.addArrangedSubview(buttons)
+        text.widthAnchor.constraint(equalTo: approvalBar.widthAnchor).isActive = true
+        approvalBar.isHidden = true
+        approvalBar.setAccessibilityLabel(L10n.tr("ai.approval.title"))
+    }
+
+    private func showApproval(_ pending: PendingApproval) {
+        pendingApproval = pending
+        let lines = pending.tools.map { "• \($0.tool)" + ($0.detail.isEmpty ? "" : ": \($0.detail)") }
+        approvalLabel.stringValue = L10n.tr("ai.approval.title") + "\n" + lines.joined(separator: "\n")
+        approvalBar.isHidden = false
+    }
+
+    private func hideApproval() {
+        pendingApproval = nil
+        approvalBar.isHidden = true
+    }
+
+    @objc private func denyPending() {
+        guard let pending = pendingApproval else { return }
+        hideApproval()
+        pending.conversation.messages.append(AIChatMessage(role: "status", text: L10n.tr("ai.approval.denied")))
+        render()
+    }
+
+    /// 승인한 도구만 허용해 같은 Claude 세션을 이어간다. 문서는 지금 상태로 새로 잡는다.
+    @objc private func approvePending() {
+        guard let pending = pendingApproval, request == nil, let document = pending.document,
+              currentDocument?() === document else { hideApproval(); return }
+        hideApproval()
+        let names = pending.tools.map(\.tool)
+        pending.conversation.messages.append(AIChatMessage(role: "status",
+            text: L10n.tr("ai.approval.approved") + " " + Array(Set(names)).sorted().joined(separator: ", ")))
+        let selection = currentSelection?() ?? NSRange(location: 0, length: 0)
+        let snapshot = AIEditSnapshot(document: document, selection: selection)
+        let prompt = "The user approved these blocked actions: "
+            + pending.tools.map { $0.tool + ($0.detail.isEmpty ? "" : " (\($0.detail))") }.joined(separator: "; ")
+            + ". Continue and finish the original request, answering in the same required format."
+        startRequest(prompt: prompt, snapshot: snapshot, document: document, conversation: pending.conversation,
+                     question: pending.question, mode: pending.conversation.mode, provider: pending.provider,
+                     token: UUID(), continuation: (pending.session, Array(Set(pending.tools.map(\.allowRule)))))
     }
 
     @objc private func selectionChanged() {
@@ -575,11 +760,12 @@ final class AIChatViewController: NSViewController {
             let excerpt = doc.content.attributedSubstring(from: range).string.replacingOccurrences(of: "\n", with: " ")
             selectionLabel.stringValue = L10n.tr("ai.selection") + " \(range.length) · " + String(excerpt.prefix(60))
         } else {
-            selectionLabel.stringValue = L10n.tr(modeControl.selectedSegment == 1 ? "ai.wholeEdit" : "ai.wholeContext")
+            selectionLabel.stringValue = L10n.tr(conversation?.mode == .edit ? "ai.wholeEdit" : "ai.wholeContext")
         }
         selectionLabel.isHidden = range.length == 0
-        modeControl.toolTip = selectionLabel.stringValue
+        updatePermissionHint()
         if !isSuspended { options.configure(provider: AISettings.provider, tokens: conversation?.tokenUsage[AISettings.provider]) }
+        options.setContext(conversation?.contextUsage[AISettings.provider])
     }
 
     /// Fix the question → fresh source index → snapshot → evidence → send.
@@ -739,20 +925,39 @@ final class AIChatViewController: NSViewController {
 
     private func startRequest(prompt: String, snapshot: AIEditSnapshot, document: MarkdownDocument,
                               conversation: AIConversation, question: String, mode: AIChatMode,
-                              provider: AIProvider, token: UUID) {
+                              provider: AIProvider, token: UUID,
+                              continuation: (session: String, tools: [String])? = nil) {
+        hideApproval()
         let client = AIClient()
         request = client
         generation = token
         setBusy(true)
         waitingLabel.stringValue = L10n.tr("ai.waiting")
         render()
-        client.send(provider: provider, prompt: prompt, model: self.options.selectedModel) { [weak self, weak document] result in
+        // 스킬·도구는 채팅에서만 연다. 권한 모드만큼, 열린 문서의 폴더 안에서.
+        let permission = conversation.permission
+        var access = AIToolAccess(skills: AISettings.skillMode(for: provider), permission: permission,
+                                  workFolder: document.fileURL?.deletingLastPathComponent())
+        var prompt = prompt
+        if let continuation {
+            access.resume = continuation.session
+            access.approvedTools = continuation.tools
+        } else {
+            // 질문에 적힌 `/이름` 중 실제로 있는 스킬만 쓰라고 일러둔다. 없는 이름은 그냥 글자로 둔다.
+            let available = AISkillCatalog.skills(for: provider).map(\.name)
+            let instructions = AISlashCommand.referencedSkills(in: question, available: available)
+                .compactMap { AISkillCatalog.instruction(for: $0, provider: provider) }
+            if !instructions.isEmpty { prompt = instructions.joined(separator: "\n") + "\n\n" + prompt }
+        }
+        client.send(provider: provider, prompt: prompt, model: self.options.selectedModel,
+                    access: access) { [weak self, weak document] result in
             guard let self = self, self.generation == token else { return }
             self.request = nil
             self.setBusy(false)
             if let tokens = client.tokenUsage {
                 conversation.tokenUsage[provider, default: 0] += tokens
             }
+            if let context = client.contextUsage { conversation.contextUsage[provider] = context }
             self.options.refresh()
             switch result {
             case .failure(let error):
@@ -778,6 +983,12 @@ final class AIChatViewController: NSViewController {
                         conversation.messages.append(AIChatMessage(role: "status", text: error.localizedDescription + "\n\n" + answer))
                     }
                 }
+            }
+            // 막힌 도구가 있으면 승인 줄을 띄운다(Claude, 전체 액세스가 아닐 때).
+            if case .success = result, provider == .claude, permission != .full,
+               !client.deniedTools.isEmpty, let session = client.sessionID {
+                self.showApproval(PendingApproval(session: session, tools: client.deniedTools, document: document,
+                                                  conversation: conversation, question: question, provider: provider))
             }
             self.render()
             self.refreshWorkContext()
@@ -843,11 +1054,22 @@ final class AIChatViewController: NSViewController {
         var messages = conversation?.messages ?? []
         if let status = status { messages.append(AIChatMessage(role: "status", text: status)) }
         transcript.setMessages(messages)
+        emptyState.isHidden = !messages.isEmpty || isAwaitingResponse
         if !isSuspended { options.configure(provider: AISettings.provider, tokens: conversation?.tokenUsage[AISettings.provider]) }
+        options.setContext(conversation?.contextUsage[AISettings.provider])
     }
 }
 
 extension AIChatViewController: NSTextViewDelegate {
     func undoManager(for view: NSTextView) -> UndoManager? { inputUndoManager }
-    func textDidChange(_ notification: Notification) { conversation?.draft = input.string }
+    func textDidChange(_ notification: Notification) {
+        conversation?.draft = input.string
+        updateSkillSuggestions()
+    }
+
+    func textViewDidChangeSelection(_ notification: Notification) {
+        guard (notification.object as? NSTextView) === input else { return }
+        // 커서가 `/단어` 밖으로 나가면 목록을 닫는다.
+        if !skillSuggestions.isHidden || slashRange != nil { updateSkillSuggestions() }
+    }
 }

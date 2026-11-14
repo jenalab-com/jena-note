@@ -1,11 +1,11 @@
 import AppKit
 
 final class AISettingsViewController: NSViewController {
-    private let providerPopup = NSPopUpButton()
+    private let providerPopup = JenaPopUpButton(frame: .zero, pullsDown: false)
     private let pathLabel = NSTextField(labelWithString: "")
     private let pathField = NSTextField()
     private let addressField = NSTextField()
-    private var addressRow: NSStackView!
+    private var addressRow: NSView!
     private let status = NSTextField(wrappingLabelWithString: "")
     private let detail = NSTextField(wrappingLabelWithString: "")
     private var checkButton: NSButton!
@@ -25,56 +25,65 @@ final class AISettingsViewController: NSViewController {
     }
 
     override func loadView() {
-        view = NSView()
-        let title = NSTextField(labelWithString: L10n.tr("ai.settings"))
-        title.font = .boldSystemFont(ofSize: 14)
         providerPopup.addItems(withTitles: AIProvider.allCases.map(\.title))
         providerPopup.selectItem(at: AIProvider.allCases.firstIndex(of: AISettings.provider) ?? 0)
         providerPopup.target = self
         providerPopup.action = #selector(providerChanged)
+        providerPopup.isFilled = true
+        providerPopup.font = .systemFont(ofSize: 13)
+        providerPopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 180).isActive = true
         pathField.placeholderString = L10n.tr("ai.pathPlaceholder")
         pathField.setAccessibilityLabel(L10n.tr("ai.path"))
         pathField.target = self
         pathField.action = #selector(pathChanged)
-        let browse = NSButton(title: L10n.tr("ai.browse"), target: self, action: #selector(browsePath))
-        installButton = NSButton(title: L10n.tr("ai.install"), target: self, action: #selector(install))
-        loginButton = NSButton(title: L10n.tr("ai.login"), target: self, action: #selector(login))
-        checkButton = NSButton(title: L10n.tr("ai.recheck"), target: self, action: #selector(recheck))
-        docsButton = NSButton(title: L10n.tr("ai.instructions"), target: self, action: #selector(openDocs))
-        runButton = NSButton(title: L10n.tr("ai.local.run"), target: self, action: #selector(toggleLocalServer))
+        let browse = SettingsButton(title: L10n.tr("ai.browse"), target: self, action: #selector(browsePath))
+        installButton = SettingsButton(title: L10n.tr("ai.install"), target: self, action: #selector(install), primary: true)
+        loginButton = SettingsButton(title: L10n.tr("ai.login"), target: self, action: #selector(login))
+        checkButton = SettingsButton(title: L10n.tr("ai.recheck"), target: self, action: #selector(recheck))
+        docsButton = SettingsButton(title: L10n.tr("ai.instructions"), target: self, action: #selector(openDocs))
+        runButton = SettingsButton(title: L10n.tr("ai.local.run"), target: self, action: #selector(toggleLocalServer), primary: true)
         addressField.placeholderString = AISettings.defaultLocalServerAddress
         addressField.stringValue = AISettings.localServerAddress
         addressField.setAccessibilityLabel(L10n.tr("ai.local.address"))
         addressField.target = self
         addressField.action = #selector(addressChanged)
-        addressRow = NSStackView(views: [NSTextField(labelWithString: L10n.tr("ai.local.address")), addressField])
-        addressRow.orientation = .horizontal
-        let pathRow = NSStackView(views: [pathField, browse])
-        pathRow.orientation = .horizontal
-        let actions = NSStackView(views: [runButton, installButton, loginButton, checkButton, docsButton])
-        actions.orientation = .horizontal
-        actions.spacing = 8
-        status.font = .systemFont(ofSize: 12)
+
+        // AI 도구 — 무엇을, 어디서 실행할지
+        let pathControl = NSStackView(views: [SettingsFieldContainer(pathField, width: 220), browse])
+        pathControl.spacing = 8
+        addressRow = SettingsRow(title: L10n.tr("ai.local.address"), control: SettingsFieldContainer(addressField, width: 220))
+        let tools = SettingsCard(rows: [
+            SettingsRow(title: L10n.tr("ai.provider"), control: providerPopup),
+            SettingsRow(titleLabel: pathLabel, control: pathControl),
+            addressRow
+        ])
+
+        // 연결 — 지금 상태와 할 수 있는 일
+        status.font = .systemFont(ofSize: 13)
         status.maximumNumberOfLines = 5
         status.lineBreakMode = .byTruncatingTail
         status.setAccessibilityElement(true)
         detail.font = .systemFont(ofSize: 11)
         detail.textColor = .secondaryLabelColor
-        let stack = NSStackView(views: [title, providerPopup, pathLabel, pathRow, addressRow, actions, status, detail])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 12
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-            stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 20),
-            pathRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            addressRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            status.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            detail.widthAnchor.constraint(equalTo: stack.widthAnchor)
-        ])
+        let actions = NSStackView(views: [runButton, installButton, loginButton, checkButton, docsButton])
+        actions.orientation = .horizontal
+        actions.spacing = 8
+        let connection = NSStackView(views: [status, actions])
+        connection.orientation = .vertical
+        connection.alignment = .leading
+        connection.spacing = 12
+        status.widthAnchor.constraint(equalTo: connection.widthAnchor).isActive = true
+
+        let page = SettingsPageView(title: L10n.tr("ai.settings"))
+        page.addSection(L10n.tr("ai.section.tool"), card: tools)
+        page.addSection(L10n.tr("ai.section.connection"), card: SettingsCard(rows: [SettingsRow(content: connection)]))
+        let help = NSStackView(views: [detail])
+        help.orientation = .vertical
+        help.alignment = .leading
+        page.addSection(nil, card: SettingsCard(rows: [SettingsRow(content: help)]))
+        detail.widthAnchor.constraint(equalTo: help.widthAnchor).isActive = true
+        view = page
+
         serverObserver = NotificationCenter.default.addObserver(forName: AILocalServer.stateDidChange, object: AILocalServer.shared,
                                                                 queue: .main) { [weak self] _ in self?.showInstallation() }
         providerChanged()

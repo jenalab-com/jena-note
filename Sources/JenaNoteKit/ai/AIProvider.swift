@@ -93,6 +93,11 @@ enum AISettings {
         UserDefaults.standard.set(path.trimmingCharacters(in: .whitespacesAndNewlines), forKey: "ai.path.\(provider.rawValue)")
     }
 
+    /// 채팅에서는 스킬을 늘 켜 둔다. 특정 스킬은 메시지에 `/이름` 으로 지정한다.
+    static func skillMode(for provider: AIProvider) -> AISkillMode {
+        AISkillCatalog.supportsSkills(provider) ? .auto : .off
+    }
+
     static func model(for provider: AIProvider) -> String {
         UserDefaults.standard.string(forKey: "ai.model.\(provider.rawValue)") ?? ""
     }

@@ -49,8 +49,8 @@ final class AIWorkContextFoldersView: NSView, NSTextFieldDelegate {
         enableSwitch.target = self
         enableSwitch.action = #selector(enableToggled)
 
-        let rootChange = NSButton(title: L10n.tr("ai.work.folders.change"), target: self, action: #selector(chooseRootClicked))
-        let writingChange = NSButton(title: L10n.tr("ai.work.folders.change"), target: self, action: #selector(chooseWritingClicked))
+        let rootChange = SettingsButton(title: L10n.tr("ai.work.folders.change"), target: self, action: #selector(chooseRootClicked), primary: false)
+        let writingChange = SettingsButton(title: L10n.tr("ai.work.folders.change"), target: self, action: #selector(chooseWritingClicked), primary: false)
         for button in [rootChange, writingChange] { button.bezelStyle = .rounded }
 
         let enableLabel = NSTextField(labelWithString: L10n.tr("ai.work.folders.enable"))

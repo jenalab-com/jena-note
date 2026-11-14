@@ -57,12 +57,13 @@ final class AIChatLayoutTests: XCTestCase {
         let split = try XCTUnwrap(chat.parent as? NSSplitViewController)
         let item = try XCTUnwrap(split.splitViewItems.last)
         let initial = chat.view.bounds.width
+        let divider = split.splitViewItems.count - 2
         XCTAssertEqual(initial, AIChatViewController.defaultPanelWidth, accuracy: 2)
         XCTAssertEqual(item.maximumThickness, initial * 2, accuracy: 4)
-        split.splitView.setPosition(split.splitView.bounds.width - 450 - split.splitView.dividerThickness, ofDividerAt: 1)
+        split.splitView.setPosition(split.splitView.bounds.width - 450 - split.splitView.dividerThickness, ofDividerAt: divider)
         window.layoutIfNeeded()
         XCTAssertEqual(chat.view.bounds.width, 450, accuracy: 2, "Dragging the divider must actually change the pane width")
-        split.splitView.setPosition(split.splitView.bounds.width - 900 - split.splitView.dividerThickness, ofDividerAt: 1)
+        split.splitView.setPosition(split.splitView.bounds.width - 900 - split.splitView.dividerThickness, ofDividerAt: divider)
         window.layoutIfNeeded()
         XCTAssertLessThanOrEqual(chat.view.bounds.width, AIChatViewController.maximumPanelWidth + 2)
         let width = chat.view.bounds.width

@@ -26,7 +26,7 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
     private(set) var remakeButtons: [NSButton] = []
 
     let hintLabel = NSTextField(wrappingLabelWithString: "")
-    let refreshButton = NSButton(title: L10n.tr("ai.work.episodes.refreshAll"), target: nil, action: nil)
+    let refreshButton = SettingsButton(title: L10n.tr("ai.work.episodes.refreshAll"), target: nil, action: nil, primary: false)
     let progressLabel = NSTextField(labelWithString: "")
     let lastRefreshLabel = NSTextField(labelWithString: "")
     let otherGeneratingLabel = NSTextField(labelWithString: L10n.tr("ai.work.episodes.otherGenerating"))
@@ -257,7 +257,7 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
             tag = NSView()
         }
 
-        let open = NSButton(title: L10n.tr("ai.work.open"), target: self, action: #selector(openClicked(_:)))
+        let open = SettingsButton(title: L10n.tr("ai.work.open"), target: self, action: #selector(openClicked(_:)), primary: false)
         open.bezelStyle = .rounded
         open.controlSize = .small
         open.tag = index
@@ -265,7 +265,7 @@ final class AIWorkContextEpisodesView: NSView, AIWorkContextRenderable, NSTableV
         open.setAccessibilityLabel(L10n.tr("ai.work.open") + " " + row.file.relativePath)
 
         let remakeTitle = row.state == .missing ? L10n.tr("ai.work.episodes.makeNow") : L10n.tr("ai.work.episodes.remake")
-        let remake = NSButton(title: remakeTitle, target: self, action: #selector(remakeClicked(_:)))
+        let remake = SettingsButton(title: remakeTitle, target: self, action: #selector(remakeClicked(_:)), primary: false)
         remake.bezelStyle = .rounded
         remake.controlSize = .small
         remake.tag = index

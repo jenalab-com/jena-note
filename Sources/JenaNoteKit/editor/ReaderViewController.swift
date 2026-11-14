@@ -9,7 +9,7 @@ final class PagedHostView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         PaperBackground.currentColor.setFill()
-        dirtyRect.fill()
+        bounds.intersection(dirtyRect).fill() // 자기 영역 밖(clipsToBounds=false)은 칠하지 않는다
     }
 
     override func scrollWheel(with event: NSEvent) {

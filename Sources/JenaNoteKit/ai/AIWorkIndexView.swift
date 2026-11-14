@@ -5,8 +5,8 @@ final class AIWorkIndexView: NSView, AIWorkContextRenderable {
     private weak var controller: AIWorkContextWindowController?
     private let status = NSTextField(wrappingLabelWithString: "")
     private let usage = NSTextField(labelWithString: "")
-    private let retry = NSButton(title: L10n.tr("ai.index.retry"), target: nil, action: nil)
-    private let stop = NSButton(title: L10n.tr("ai.stop"), target: nil, action: nil)
+    private let retry = SettingsButton(title: L10n.tr("ai.index.retry"), target: nil, action: nil, primary: false)
+    private let stop = SettingsButton(title: L10n.tr("ai.stop"), target: nil, action: nil, primary: false)
     private let files = NSTextView()
 
     init(controller: AIWorkContextWindowController) {

@@ -108,7 +108,7 @@ final class AIWorkLocalSummarizer {
             let session = LanguageModelSession(instructions: instruction)
             try Task.checkCancellation()
             let response = try await session.respond(to: "SOURCE:\n" + passage.text,
-                options: GenerationOptions(sampling: .greedy, maximumResponseTokens: 512))
+                options: GenerationOptions(samplingMode: .greedy, maximumResponseTokens: 512))
             try Task.checkCancellation()
             return response.content
         }

@@ -58,7 +58,9 @@ class FormatToolbar: NSToolbar {
         let isCode    = attributes[.mdInlineCode] as? Bool == true
         let hasLink   = attributes[.link] != nil
 
-        boldButton?.state       = traits.contains(.bold)         ? .on : .off
+        // 제목은 글꼴 자체가 굵다 — 작가가 굵게 한 게 아니므로 B 를 켜지 않는다.
+        let isHeading = ["h1", "h2", "h3"].contains(blockType)
+        boldButton?.state       = traits.contains(.bold) && !isHeading ? .on : .off
         italicButton?.state     = traits.contains(.italic)       ? .on : .off
         codeButton?.state       = isCode                         ? .on : .off
         h1Button?.state         = (blockType == "h1")            ? .on : .off
@@ -123,11 +125,17 @@ extension FormatToolbar: NSToolbarDelegate {
         case FormatToolbar.itemBold:
             let item = makeItem(itemIdentifier, label: "굵게", systemImage: "bold",
                                 action: #selector(EditorViewController.toggleBold))
-            boldButton = item.view as? NSButton; return item
+            boldButton = item.view as? NSButton
+            // SF Symbols 의 bold 글리프는 비정수 배율 화면에서 옆으로 퍼져 보여, 글꼴의 B 를 쓴다.
+            boldButton?.image = HeaderStyle.letters("B", font: .systemFont(ofSize: HeaderStyle.letterPointSize, weight: .bold), label: "굵게")
+            return item
         case FormatToolbar.itemItalic:
             let item = makeItem(itemIdentifier, label: "기울임", systemImage: "italic",
                                 action: #selector(EditorViewController.toggleItalic))
-            italicButton = item.view as? NSButton; return item
+            italicButton = item.view as? NSButton
+            italicButton?.image = HeaderStyle.letters("I", font: NSFontManager.shared.convert(
+                .systemFont(ofSize: HeaderStyle.letterPointSize, weight: .regular), toHaveTrait: .italicFontMask), label: "기울임")
+            return item
         case FormatToolbar.itemCode:
             let item = makeTextItem(itemIdentifier, label: L10n.tr("toolbar.inlineCode"), text: L10n.tr("toolbar.inlineCode"),
                                     action: #selector(EditorViewController.toggleInlineCode))
@@ -136,7 +144,7 @@ extension FormatToolbar: NSToolbarDelegate {
             codeButton?.toolTip = item.toolTip
             codeButton?.setAccessibilityLabel(item.label)
             codeButton?.isEnabled = hasSelectedText
-            codeButton?.sizeToFit()
+            codeButton?.image = HeaderStyle.symbol("curlybraces", label: item.label)
             return item
         case FormatToolbar.itemH1:
             let item = makeTextItem(itemIdentifier, label: "H1", text: "H1",
@@ -195,18 +203,8 @@ extension FormatToolbar: NSToolbarDelegate {
         item.label = label
         item.paletteLabel = label
         item.toolTip = label
-
-        let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
-        let image = NSImage(systemSymbolName: systemImage, accessibilityDescription: label)?
-            .withSymbolConfiguration(config)
-
-        let button = NSButton(frame: NSRect(x: 0, y: 0, width: 32, height: 26))
-        button.image = image
-        button.bezelStyle = .texturedRounded
-        button.isBordered = true
-        button.setButtonType(.pushOnPushOff)
-        button.action = action
-        button.target = target
+        let button = HeaderButton(image: HeaderStyle.symbol(systemImage, label: label), label: label,
+                                  target: target, action: action, toggles: true)
         item.view = button
         return item
     }
@@ -218,15 +216,7 @@ extension FormatToolbar: NSToolbarDelegate {
         let item = NSToolbarItem(itemIdentifier: identifier)
         item.label = label
         item.toolTip = label
-
-        let button = NSButton(frame: NSRect(x: 0, y: 0, width: 32, height: 26))
-        button.title = text
-        button.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
-        button.bezelStyle = .texturedRounded
-        button.isBordered = true
-        button.setButtonType(.pushOnPushOff)
-        button.action = action
-        button.target = target
+        let button = HeaderButton(image: nil, label: text, target: target, action: action, toggles: true)
         item.view = button
         return item
     }
@@ -237,15 +227,15 @@ extension FormatToolbar: NSToolbarDelegate {
         item.label = label
         item.toolTip = label
 
-        let well = NSColorWell(frame: NSRect(x: 0, y: 0, width: 32, height: 26))
+        let well = CircleColorWell(frame: NSRect(x: 0, y: 0, width: HeaderStyle.height, height: HeaderStyle.height))
         well.color = .labelColor
         // NSColorWell도 NSToolbarItem.view 안에서 책임 체인 디스패치가 불안정 —
         // FormatToolbar.target에 직접 묶는다 (line spacing과 동일한 처방).
         well.target = target
         well.action = #selector(EditorViewController.changeTextColor(_:))
         well.translatesAutoresizingMaskIntoConstraints = false
-        well.widthAnchor.constraint(equalToConstant: 32).isActive = true
-        well.heightAnchor.constraint(equalToConstant: 22).isActive = true
+        well.widthAnchor.constraint(equalToConstant: HeaderStyle.height).isActive = true
+        well.heightAnchor.constraint(equalToConstant: HeaderStyle.height).isActive = true
         item.view = well
         return item
     }
@@ -273,5 +263,21 @@ extension FormatToolbar: NSToolbarDelegate {
         seg.heightAnchor.constraint(equalToConstant: 26).isActive = true
         item.view = seg
         return item
+    }
+}
+
+/// 동그란 글자색 버튼 — 고른 색으로 채운 원 + 얇은 테두리. 누르면 색상 패널이 열린다(NSColorWell 동작 그대로).
+final class CircleColorWell: NSColorWell {
+    override func draw(_ dirtyRect: NSRect) {
+        // 다른 아이콘(약 16pt)과 같은 눈높이의 작은 원 — 28pt 칸 가운데.
+        let side: CGFloat = 15
+        let rect = NSRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2, width: side, height: side)
+        let circle = NSBezierPath(ovalIn: rect)
+        color.setFill()
+        circle.fill()
+        // 흰색·검은색도 배경과 구분되도록 얇은 테두리, 색상 패널과 연결된 동안은 강조색 링.
+        (isActive ? NSColor.controlAccentColor : NSColor.separatorColor).setStroke()
+        circle.lineWidth = isActive ? 2 : 1
+        circle.stroke()
     }
 }

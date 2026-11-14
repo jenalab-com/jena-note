@@ -8,6 +8,14 @@ enum PunctuationKind: String, CaseIterable {
 
     var menuTitle: String { L10n.tr("menu.format.punctuation.\(rawValue)") }
     var shortTitle: String { L10n.tr("punctuation.short.\(rawValue)") }
+    /// 헤더 아이콘 — 대사는 말풍선, 인용은 인용부호, 생각은 말줄임 말풍선.
+    var toolbarSymbol: String {
+        switch self {
+        case .dialogue:  return "text.bubble"
+        case .quotation: return "text.quote"
+        case .thought:   return "ellipsis.bubble"
+        }
+    }
     var shortcutLabel: String { "⌘\((Self.allCases.firstIndex(of: self) ?? 0) + 1)" }
 }
 

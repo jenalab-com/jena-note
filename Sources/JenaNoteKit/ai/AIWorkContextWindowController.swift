@@ -117,18 +117,22 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
     var episodesView: NSView? { didSet { if selectedTab == .episodes { select(.episodes) }; renderTabs() } }
     private(set) var foldersView: AIWorkContextFoldersView!
 
-    private var sidebarRows: [Tab: SidebarRow] = [:]
+    private var sidebarRows: [Tab: SettingsNavItem] = [:]
     private let container = NSView()
 
     private init(context: AIWorkContext, store: AIEpisodeSummaryStore, provisional: Bool) {
         self.context = context
         self.store = store
         self.isProvisional = provisional
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 680, height: 440),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 500),
                               styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: true)
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 560, height: 360)
+        window.minSize = NSSize(width: 620, height: 400)
         super.init(window: window)
+        // 설정 창과 같은 틀 — 신호등 아래까지 목록 바탕, 오른쪽은 문서 바탕
+        SettingsText.applyToolWindowChrome(window)
+        // 작품 이름이 곧 창 제목이고 이름을 바꾸면 따라 바뀐다 — 이 창만 제목을 보인다.
+        window.titleVisibility = .visible
         window.delegate = self
         observeStore()
         sourcesView = AIWorkContextSourcesView(controller: self)
@@ -148,61 +152,62 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
     private func buildUI() {
         guard let content = window?.contentView else { return }
 
+        // 왼쪽 목록 — 설정 창과 같은 바탕·검은 pill 선택
+        let nav = SidebarBackgroundView()
+        nav.translatesAutoresizingMaskIntoConstraints = false
         let sidebar = NSStackView()
         sidebar.orientation = .vertical
         sidebar.alignment = .leading
         sidebar.spacing = 2
-        sidebar.edgeInsets = NSEdgeInsets(top: 12, left: 8, bottom: 12, right: 8)
         sidebar.translatesAutoresizingMaskIntoConstraints = false
-        let titles: [Tab: String] = [.sources: L10n.tr("ai.work.tab.sources"),
-                                     .episodes: L10n.tr("ai.work.tab.episodes"),
-                                     .folders: L10n.tr("ai.work.tab.folders")]
-        for tab in Tab.allCases {
-            let row = SidebarRow(title: titles[tab] ?? "") { [weak self] in self?.select(tab) }
+        nav.addSubview(sidebar)
+        let tabs: [(Tab, String, String)] = [(.sources, "ai.work.tab.sources", "books.vertical"),
+                                             (.episodes, "ai.work.tab.episodes", "list.bullet.rectangle"),
+                                             (.folders, "ai.work.tab.folders", "folder")]
+        for (tab, key, symbol) in tabs {
+            let row = SettingsNavItem(pageID: String(tab.rawValue), symbol: symbol, target: self, action: #selector(tabClicked(_:)))
+            row.title = L10n.tr(key)
             sidebarRows[tab] = row
             sidebar.addArrangedSubview(row)
-            row.widthAnchor.constraint(equalTo: sidebar.widthAnchor, constant: -16).isActive = true
+            row.widthAnchor.constraint(equalTo: sidebar.widthAnchor).isActive = true
         }
 
-        let divider = NSBox()
-        divider.boxType = .separator
+        let divider = SidebarHairlineView()
         divider.translatesAutoresizingMaskIntoConstraints = false
-
         container.translatesAutoresizingMaskIntoConstraints = false
 
-        let bottomDivider = NSBox()
-        bottomDivider.boxType = .separator
-        bottomDivider.translatesAutoresizingMaskIntoConstraints = false
-
-        let close = NSButton(title: L10n.tr("ai.work.close"), target: self, action: #selector(closeWindow))
-        close.bezelStyle = .rounded
+        let close = SettingsButton(title: L10n.tr("ai.work.close"), target: self, action: #selector(closeWindow), primary: true)
         close.keyEquivalent = "\u{1b}"
-        close.translatesAutoresizingMaskIntoConstraints = false
 
-        [sidebar, divider, container, bottomDivider, close].forEach(content.addSubview)
+        [nav, divider, container, close].forEach(content.addSubview)
         NSLayoutConstraint.activate([
-            sidebar.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            sidebar.topAnchor.constraint(equalTo: content.topAnchor),
-            sidebar.bottomAnchor.constraint(equalTo: bottomDivider.topAnchor),
-            sidebar.widthAnchor.constraint(equalToConstant: 150),
+            nav.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            nav.topAnchor.constraint(equalTo: content.topAnchor),
+            nav.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            nav.widthAnchor.constraint(equalToConstant: 180),
+            sidebar.topAnchor.constraint(equalTo: nav.topAnchor, constant: 52),
+            sidebar.leadingAnchor.constraint(equalTo: nav.leadingAnchor, constant: 10),
+            sidebar.trailingAnchor.constraint(equalTo: nav.trailingAnchor, constant: -10),
 
-            divider.leadingAnchor.constraint(equalTo: sidebar.trailingAnchor),
+            divider.leadingAnchor.constraint(equalTo: nav.trailingAnchor),
             divider.topAnchor.constraint(equalTo: content.topAnchor),
-            divider.bottomAnchor.constraint(equalTo: bottomDivider.topAnchor),
+            divider.bottomAnchor.constraint(equalTo: content.bottomAnchor),
             divider.widthAnchor.constraint(equalToConstant: 1),
 
-            container.leadingAnchor.constraint(equalTo: divider.trailingAnchor),
-            container.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            container.topAnchor.constraint(equalTo: content.topAnchor),
-            container.bottomAnchor.constraint(equalTo: bottomDivider.topAnchor),
+            // 탭 내용은 타이틀바 아래부터
+            container.leadingAnchor.constraint(equalTo: divider.trailingAnchor, constant: 8),
+            container.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -8),
+            container.topAnchor.constraint(equalTo: content.topAnchor, constant: 40),
+            container.bottomAnchor.constraint(equalTo: close.topAnchor, constant: -12),
 
-            bottomDivider.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            bottomDivider.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            bottomDivider.bottomAnchor.constraint(equalTo: close.topAnchor, constant: -10),
-
-            close.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
-            close.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -12),
+            close.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -SettingsStyle.contentInset),
+            close.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16),
         ])
+    }
+
+    @objc private func tabClicked(_ sender: SettingsNavItem) {
+        guard let raw = Int(sender.pageID), let tab = Tab(rawValue: raw) else { return }
+        select(tab)
     }
 
     @objc private func closeWindow() { window?.performClose(nil) }
@@ -231,7 +236,7 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
 
     func select(_ tab: Tab) {
         selectedTab = tab
-        for (rowTab, row) in sidebarRows { row.isSelected = rowTab == tab }
+        for (rowTab, row) in sidebarRows { row.isSelectedPage = rowTab == tab }
         container.subviews.forEach { $0.removeFromSuperview() }
         guard let view = view(for: tab) else { return }
         view.translatesAutoresizingMaskIntoConstraints = false
@@ -410,45 +415,4 @@ final class AIWorkContextWindowController: NSWindowController, NSWindowDelegate 
         result.invalidPaths = invalid
         return result
     }
-}
-
-// MARK: - Sidebar row
-
-private final class SidebarRow: NSView {
-    private let label: NSTextField
-    private let action: () -> Void
-
-    var isSelected = false {
-        didSet {
-            layer?.backgroundColor = isSelected
-                ? NSColor.selectedContentBackgroundColor.withAlphaComponent(0.15).cgColor
-                : NSColor.clear.cgColor
-            label.font = isSelected ? .boldSystemFont(ofSize: 13) : .systemFont(ofSize: 13)
-        }
-    }
-
-    init(title: String, action: @escaping () -> Void) {
-        label = NSTextField(labelWithString: title)
-        self.action = action
-        super.init(frame: .zero)
-        wantsLayer = true
-        layer?.cornerRadius = 5
-        translatesAutoresizingMaskIntoConstraints = false
-        label.font = .systemFont(ofSize: 13)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(label)
-        NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: 26),
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -8),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor),
-        ])
-        setAccessibilityRole(.button)
-        setAccessibilityLabel(title)
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-    override func mouseDown(with event: NSEvent) { action() }
-    override func accessibilityPerformPress() -> Bool { action(); return true }
 }

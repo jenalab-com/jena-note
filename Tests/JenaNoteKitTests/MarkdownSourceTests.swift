@@ -40,12 +40,13 @@ final class MarkdownSourceTests: XCTestCase {
     func testToolbarSeparatesSourceAndInlineCodeAndRequiresSelection() throws {
         let toolbar = ReaderToolbar(identifier: .init("SourceTestToolbar"))
         let ids = toolbar.toolbarDefaultItemIdentifiers(toolbar).map(\.rawValue)
-        XCTAssertEqual(ids.filter { $0 == "markdownSource" }.count, 1)
+        XCTAssertFalse(ids.contains("markdownSource"), "원문 보기는 헤더가 아니라 하단 바에 있다")
         XCTAssertEqual(ids.filter { $0 == "inlineCode" }.count, 1)
         let inline = try XCTUnwrap(toolbar.toolbar(toolbar, itemForItemIdentifier: .init("inlineCode"), willBeInsertedIntoToolbar: true))
-        let source = try XCTUnwrap(toolbar.toolbar(toolbar, itemForItemIdentifier: .init("markdownSource"), willBeInsertedIntoToolbar: true))
-        let inlineButton = try XCTUnwrap(inline.view as? NSButton)
-        let sourceButton = try XCTUnwrap(source.view as? NSButton)
+        let inlineButton = try XCTUnwrap(inline.control as? NSButton)
+        let sourceButton = try XCTUnwrap(toolbar.makeStatusBarControls()
+            .compactMap { $0 as? NSButton }
+            .first { $0.title == L10n.tr("source.title") })
         XCTAssertEqual(inlineButton.title, L10n.tr("toolbar.inlineCode"))
         XCTAssertEqual(sourceButton.title, L10n.tr("source.title"))
         XCTAssertNotEqual(inlineButton.action, sourceButton.action)

@@ -63,16 +63,17 @@ final class ReadingSettingsTests: XCTestCase {
     }
 
     func testFontSizeControlStepsToWholeNumbersAndAcceptsTypedValues() throws {
+        _ = NSApplication.shared // sendAction·performClick 은 앱 객체가 있어야 전달된다(단독 실행 대비)
         var sent: [CGFloat] = []
         let control = NumberStepControl(value: 16.5, range: SettingsManager.documentFontSizeRange, unit: "pt")
         control.onChange = { sent.append($0) }
-        let field = try XCTUnwrap(control.arrangedSubviews.first as? NSTextField)
-        let stepper = try XCTUnwrap(control.arrangedSubviews.last as? NSStepper)
+        let field = control.field
         XCTAssertEqual(field.stringValue, "16.5")
 
-        stepper.doubleValue = 17.5
-        stepper.sendAction(stepper.action, to: stepper.target)
+        control.increaseButton.performClick(nil)
         XCTAssertEqual(control.value, 17, "16.5에서 올리면 다음 정수다")
+        control.decreaseButton.performClick(nil)
+        XCTAssertEqual(control.value, 16)
 
         field.stringValue = "11,5"
         field.sendAction(field.action, to: field.target)
@@ -81,7 +82,7 @@ final class ReadingSettingsTests: XCTestCase {
         field.stringValue = "abc"
         field.sendAction(field.action, to: field.target)
         XCTAssertEqual(field.stringValue, "11.5", "숫자가 아니면 원래 값으로 돌아간다")
-        XCTAssertEqual(sent.count, 2)
+        XCTAssertEqual(sent, [17, 16, 11.5], "Each real change is sent once; invalid input sends nothing")
     }
 
     func testLetterSpacingIsWholePercentWithinRange() {
